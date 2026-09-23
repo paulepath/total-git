@@ -10,5 +10,9 @@
   </Application.Resources>
   <Application.Styles>
     <FluentTheme />
+    <!-- Every window, dialogs included, uses the app icon in its title bar and the taskbar. -->
+    <Style Selector="Window">
+      <Setter Property="Icon" Value="/Assets/totalgit.ico" />
+    </Style>
   </Application.Styles>
 </Application>
