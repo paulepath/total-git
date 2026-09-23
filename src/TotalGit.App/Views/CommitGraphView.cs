@@ -634,6 +634,7 @@ public sealed class CommitGraphView : Control
     private const double PillHeight = 20;
     private const double PillIconSize = 12;
     private const double PillGap = 4;
+    private const double KindIconSize = 14;
 
     /// <summary>Lays out a row's first ref pill (at y = 0): its icons, trimmed name, rectangle and "+N".</summary>
     private (List<Geometry> Icons, FormattedText Name, Rect Pill, FormattedText? More) LayoutBadges(List<RefBadge> badges)
@@ -647,7 +648,7 @@ public sealed class CommitGraphView : Control
         if (badge.HasLocal) icons.Add(LaptopIcon);
         if (badge.HasRemote) icons.Add(Data?.GitHubRepo is not null ? GitHubIcon : CloudIcon);
         if (badge.HasWorktree) icons.Add(WorktreeIcon);
-        var leading = badge.IsCurrent ? PillIconSize + PillGap : 0;
+        var leading = (badge.IsCurrent ? PillIconSize + PillGap : 0) + (badge.KindIcon is not null ? KindIconSize + PillGap : 0);
         var trailing = icons.Count * (PillIconSize + PillGap);
 
         var name = Text(badge.Name, 12, Brushes.White, badge.IsCurrent ? _boldTypeface : _typeface,
@@ -684,6 +685,11 @@ public sealed class CommitGraphView : Control
         {
             DrawIcon(ctx, CheckIcon, x, top + (pillHeight - iconSize) / 2, iconSize);
             x += iconSize + gap;
+        }
+        if (badge.KindIcon is { } kindIcon)
+        {
+            ctx.DrawImage(kindIcon, new Rect(x, top + (pillHeight - KindIconSize) / 2, KindIconSize, KindIconSize));
+            x += KindIconSize + gap;
         }
         ctx.DrawText(name, new Point(x, top + (pillHeight - name.Height) / 2));
         x += name.Width + gap;
@@ -732,6 +738,15 @@ public sealed class CommitGraphView : Control
     /// <summary>One pill in the branch/tag column; local and remote branches with the same name share a pill.</summary>
     private sealed record RefBadge(string Name, bool IsCurrent, bool HasLocal, bool HasRemote, bool IsTag, bool HasWorktree = false)
     {
+        /// <summary>Icon replacing a feature/, bug/ or hot-fix/ prefix; Name is then shown without it.</summary>
+        public Bitmap? KindIcon { get; init; }
+
+        private static RefBadge Branch(string fullName, bool isCurrent, bool hasLocal, bool hasRemote, bool hasWorktree = false)
+        {
+            var (kind, shortName) = BranchCategory.Classify(fullName);
+            return new RefBadge(shortName, isCurrent, hasLocal, hasRemote, false, hasWorktree) { KindIcon = BranchIcons.For(kind) };
+        }
+
         public static Dictionary<string, List<RefBadge>> Build(GraphData data)
         {
             var refs = data.Refs;
@@ -748,9 +763,9 @@ public sealed class CommitGraphView : Control
                     // Worktree icon: the branch is checked out in a worktree other than the one being viewed.
                     var inOtherWorktree = data.WorktreesByBranch.TryGetValue(local.Name, out var wt)
                         && !string.Equals(wt.Path, data.CurrentWorktreePath, StringComparison.OrdinalIgnoreCase);
-                    badges.Add(new RefBadge(local.Name, local.IsCurrent, true, match is not null, false, inOtherWorktree));
+                    badges.Add(Branch(local.Name, local.IsCurrent, true, match is not null, inOtherWorktree));
                 }
-                badges.AddRange(remotes.Select(r => new RefBadge(ShortRemoteName(r.Name), false, false, true, false)));
+                badges.AddRange(remotes.Select(r => Branch(ShortRemoteName(r.Name), false, false, true)));
                 badges.AddRange(group.Where(r => r.Kind == RefKind.Tag).Select(r => new RefBadge(r.Name, false, false, false, true)));
 
                 result[group.Key] = badges

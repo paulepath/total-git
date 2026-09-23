@@ -70,7 +70,13 @@ public partial class MainWindowViewModel : ObservableObject
     public partial string? WorktreeName { get; set; }
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CurrentBranchDisplay), nameof(CurrentBranchIcon), nameof(HasCurrentBranchIcon))]
     public partial string CurrentBranch { get; set; } = "-";
+
+    /// <summary>The branch name with a feature/, bug/ or hot-fix/ prefix replaced by <see cref="CurrentBranchIcon"/>.</summary>
+    public string CurrentBranchDisplay => BranchCategory.Classify(CurrentBranch).ShortName;
+    public Avalonia.Media.Imaging.Bitmap? CurrentBranchIcon => BranchIcons.ForBranch(CurrentBranch);
+    public bool HasCurrentBranchIcon => CurrentBranchIcon is not null;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowEmptyState))]

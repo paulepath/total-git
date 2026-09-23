@@ -1,5 +1,7 @@
 using System.Collections.ObjectModel;
+using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
+using TotalGit.App.Services;
 using TotalGit.Core.Git;
 using TotalGit.Core.Worktrees;
 
@@ -51,6 +53,13 @@ public partial class SidebarNode : ObservableObject
     public bool HasSubtitle => Subtitle is not null;
     public bool HasWorktree { get; init; }
     public bool IsDimmed { get; init; }
+
+    /// <summary>feature/bug/hot-fix icon, shown instead of the plain branch/folder/worktree glyph.</summary>
+    public Bitmap? KindIcon { get; init; }
+    public bool HasKindIcon => KindIcon is not null;
+    public bool ShowBranchGlyph => IsBranch && KindIcon is null;
+    public bool ShowFolderGlyph => IsFolder && KindIcon is null;
+    public bool ShowWorktreeGlyph => IsWorktree && KindIcon is null;
 
     public bool IsSection => Kind == SidebarNodeKind.Section;
     public bool IsFolder => Kind == SidebarNodeKind.Folder;
@@ -119,8 +128,9 @@ public partial class SidebarViewModel : ObservableObject
         {
             worktreeByBranch.TryGetValue(r.Name, out var wt);
             var otherWorktree = wt is not null && !WorktreeService.SamePath(wt.Path, _currentWorktree ?? "") ? wt : null;
-            AddPath(local, r.Name, leaf => new SidebarNode(SidebarNodeKind.LocalBranch, leaf)
+            AddPath(local, r.Name, 0, leaf => new SidebarNode(SidebarNodeKind.LocalBranch, leaf)
             {
+                KindIcon = BranchIcons.ForBranch(r.Name),
                 Target = BranchTarget.From(r, wt),
                 IsCurrent = r.IsCurrent,
                 Ahead = r.Ahead > 0 ? $"{r.Ahead}↑" : null,
@@ -135,8 +145,10 @@ public partial class SidebarViewModel : ObservableObject
         var remote = Section("REMOTE", remotes.Count);
         foreach (var r in remotes)
         {
-            AddPath(remote, r.Name, leaf => new SidebarNode(SidebarNodeKind.RemoteBranch, leaf)
+            // Remote names start with the remote ("origin/feature/x"), so the category folder is one level down.
+            AddPath(remote, r.Name, 1, leaf => new SidebarNode(SidebarNodeKind.RemoteBranch, leaf)
             {
+                KindIcon = BranchIcons.ForBranch(r.ShortName),
                 Target = BranchTarget.From(r, null),
                 ToolTip = r.Name,
             });
@@ -165,6 +177,7 @@ public partial class SidebarViewModel : ObservableObject
             wtSection.Children.Add(new SidebarNode(SidebarNodeKind.Worktree, w.IsMain ? $"{w.Name} (main)" : w.Name)
             {
                 Worktree = w,
+                KindIcon = BranchIcons.ForBranch(w.Branch),
                 Target = branchRef is not null ? BranchTarget.From(branchRef, w) : w.HeadSha is not null ? new BranchTarget(RefKind.DetachedHead, "HEAD", w.HeadSha, Worktree: w) : null,
                 IsCurrent = isCurrent,
                 IsDimmed = w.IsPrunable || w.IsLocked,
@@ -193,7 +206,7 @@ public partial class SidebarViewModel : ObservableObject
     };
 
     /// <summary>Adds a leaf under nested folders for each '/' in the name (feature/x → feature › x).</summary>
-    private void AddPath(SidebarNode section, string name, Func<string, SidebarNode> leafFactory)
+    private void AddPath(SidebarNode section, string name, int categoryDepth, Func<string, SidebarNode> leafFactory)
     {
         var parts = name.Split('/');
         var parent = section;
@@ -208,6 +221,7 @@ public partial class SidebarViewModel : ObservableObject
             {
                 folder = new SidebarNode(SidebarNodeKind.Folder, parts[i])
                 {
+                    KindIcon = i == categoryDepth ? BranchIcons.For(BranchCategory.ForFolder(parts[i])) : null,
                     IsExpanded = !_collapsed.Contains(key) || Filter.Trim().Length > 0,
                     ToolTip = key,
                 };

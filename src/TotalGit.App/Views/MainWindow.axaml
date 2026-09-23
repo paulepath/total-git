@@ -86,12 +86,18 @@
                     IsVisible="{Binding HasWorktreeName}" />
           <StackPanel IsVisible="{Binding HasWorktreeName}">
             <TextBlock Text="worktree" FontSize="11" Foreground="{StaticResource MutedTextBrush}" />
-            <TextBlock Text="{Binding WorktreeName}" FontSize="16" FontWeight="SemiBold" Foreground="#B084F5" />
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <Image Source="{Binding CurrentBranchIcon}" IsVisible="{Binding HasCurrentBranchIcon}" Width="16" Height="16" VerticalAlignment="Center" />
+              <TextBlock Text="{Binding WorktreeName}" FontSize="16" FontWeight="SemiBold" Foreground="#B084F5" />
+            </StackPanel>
           </StackPanel>
           <PathIcon Width="10" Height="10" Margin="14,14,14,0" Foreground="{StaticResource MutedTextBrush}" Data="{StaticResource ChevronIcon}" />
           <StackPanel>
             <TextBlock Text="branch" FontSize="11" Foreground="{StaticResource MutedTextBrush}" />
-            <TextBlock Text="{Binding CurrentBranch}" FontSize="16" FontWeight="SemiBold" Foreground="{StaticResource PrimaryTextBrush}" />
+            <StackPanel Orientation="Horizontal" Spacing="6" ToolTip.Tip="{Binding CurrentBranch}">
+              <Image Source="{Binding CurrentBranchIcon}" IsVisible="{Binding HasCurrentBranchIcon}" Width="16" Height="16" VerticalAlignment="Center" />
+              <TextBlock Text="{Binding CurrentBranchDisplay}" FontSize="16" FontWeight="SemiBold" Foreground="{StaticResource PrimaryTextBrush}" />
+            </StackPanel>
           </StackPanel>
         </StackPanel>
 
