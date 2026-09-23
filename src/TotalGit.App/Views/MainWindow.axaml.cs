@@ -16,6 +16,7 @@ public partial class MainWindow : Window, IDialogService
     public MainWindow()
     {
         InitializeComponent();
+        Opened += (_, _) => Avalonia.Threading.Dispatcher.UIThread.Post(HideDrawnTitle, Avalonia.Threading.DispatcherPriority.Loaded);
 
         KeyDown += (_, e) =>
         {
@@ -36,6 +37,22 @@ public partial class MainWindow : Window, IDialogService
                 e.Handled = true;
             }
         }, RoutingStrategies.Tunnel);
+    }
+
+    /// <summary>
+    /// The window extends into the title bar so it can show a larger app icon (see the title row in
+    /// MainWindow.axaml). Avalonia still draws its own title text there, and a full-screen button;
+    /// they live outside the styled tree, so hide them here.
+    /// </summary>
+    private void HideDrawnTitle()
+    {
+        Visual root = this;
+        while (root.GetVisualParent() is { } parent) root = parent;
+        foreach (var control in root.GetVisualDescendants().OfType<Control>())
+        {
+            if (control.Name is "PART_TitleTextPanel" or "PART_FullScreenButton" or "PART_PopoverFullScreenButton")
+                control.IsVisible = false;
+        }
     }
 
     protected override void OnDataContextChanged(EventArgs e)
