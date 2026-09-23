@@ -17,7 +17,11 @@ public class BranchCategoryTests
     [InlineData("main", BranchKind.Main, "main")]
     [InlineData("master", BranchKind.Main, "master")]
     [InlineData("mainline", BranchKind.Other, "mainline")]
-    [InlineData("features", BranchKind.Other, "features")]
+    [InlineData("features", BranchKind.Features, "features")]
+    [InlineData("bugs", BranchKind.Bugs, "bugs")]
+    [InlineData("feature", BranchKind.Feature, "feature")]
+    [InlineData("hot-fix", BranchKind.HotFix, "hot-fix")]
+    [InlineData("featureless", BranchKind.Other, "featureless")]
     [InlineData("backup/e4-1", BranchKind.Other, "backup/e4-1")]
     [InlineData("feature/", BranchKind.Other, "feature/")]
     public void Classifies_by_prefix(string name, BranchKind kind, string shortName)

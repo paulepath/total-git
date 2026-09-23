@@ -37,6 +37,9 @@ public static class BranchCategory
         {
             if (name.Length > prefix.Length && name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
                 return (kind, name[prefix.Length..]);
+            // A branch named just "bugs" or "features" gets the icon too, keeping its name (like main).
+            if (name.Length == prefix.Length - 1 && prefix.StartsWith(name, StringComparison.OrdinalIgnoreCase))
+                return (kind, name);
         }
         return (BranchKind.Other, name);
     }
