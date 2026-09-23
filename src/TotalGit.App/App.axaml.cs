@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using TotalGit.App.Services;
@@ -16,6 +17,9 @@ public partial class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
+            // Dark-tile icon in every window's title bar; the taskbar keeps the transparent one.
+            Window.WindowOpenedEvent.AddClassHandler<Window>((w, _) => TitleBarIcon.Apply(w));
+
             var avatars = new AvatarService(Path.Combine(AppSettings.DataDirectory, "avatars"));
             var settings = AppSettings.Load();
             var updates = new UpdateService();
