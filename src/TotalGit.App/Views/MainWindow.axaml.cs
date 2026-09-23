@@ -19,6 +19,7 @@ public partial class MainWindow : Window, IDialogService
         DiffView.AttachScrollBar(DiffScrollBar);
 
         Graph.NearEnd += () => _ = _vm?.LoadMoreAsync();
+        Graph.ColumnsChanged += SaveGraphColumns;
         Graph.CommitContextRequested += (commit, _) =>
         {
             if (_vm is not null) ShowMenu(Graph, _vm.ActionsForCommit(commit));
@@ -59,6 +60,17 @@ public partial class MainWindow : Window, IDialogService
         _vm.ScrollToShaRequested += Graph.ScrollToSha;
         MainGrid.ColumnDefinitions[0].Width = new GridLength(_vm.Settings.SidebarWidth);
         MainGrid.ColumnDefinitions[4].Width = new GridLength(_vm.Settings.DetailsWidth);
+        var s = _vm.Settings;
+        Graph.Columns = new GraphColumns(s.RefColumnWidth, s.GraphColumnWidth, s.AuthorColumnWidth, s.DateColumnWidth);
+    }
+
+    private void SaveGraphColumns()
+    {
+        if (_vm is null) return;
+        var c = Graph.Columns;
+        (_vm.Settings.RefColumnWidth, _vm.Settings.GraphColumnWidth, _vm.Settings.AuthorColumnWidth, _vm.Settings.DateColumnWidth) =
+            (c.Ref, c.Graph, c.Author, c.Date);
+        _vm.Settings.Save();
     }
 
     protected override void OnClosing(WindowClosingEventArgs e)

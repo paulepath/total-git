@@ -27,6 +27,12 @@ public sealed class AppSettings
     public double SidebarWidth { get; set; } = 240;
     public double DetailsWidth { get; set; } = 380;
 
+    // Commit graph columns; a null graph width means sized to the lanes.
+    public double RefColumnWidth { get; set; } = 170;
+    public double? GraphColumnWidth { get; set; }
+    public double AuthorColumnWidth { get; set; } = 160;
+    public double DateColumnWidth { get; set; } = 140;
+
     /// <summary>"Inline" or "Split".</summary>
     public string DiffMode { get; set; } = "Inline";
 

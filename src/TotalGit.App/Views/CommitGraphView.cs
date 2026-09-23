@@ -29,13 +29,12 @@ public sealed class CommitGraphView : Control
 
     private const double HeaderHeight = 26;
     private const double RowHeight = 28;
-    private const double RefColumnWidth = 170;
     private const double LaneWidth = 28;
     private const double GraphPadding = 10;
     private const double NodeRadius = 13; // fills the 26px row band
     private const double MergeDotRadius = 6;
-    private const double AuthorColumnWidth = 160;
-    private const double DateColumnWidth = 140;
+    private const double SplitterGrab = 4;
+    private const double MinColumnWidth = 50;
     private const double CornerRadius = 8;
 
     private static readonly Color[] LanePalette =
@@ -94,6 +93,17 @@ public sealed class CommitGraphView : Control
     private ScrollBar? _scrollBar;
     private bool _syncingScrollBar;
 
+    // Column widths; a null graph width means "fit the lanes".
+    private double _refWidth = 170;
+    private double? _graphWidth;
+    private double _authorWidth = 160;
+    private double _dateWidth = 140;
+    private Splitter _drag;
+    private double _dragStartX;
+    private GraphColumns _dragStart;
+
+    private enum Splitter { None, Ref, Graph, Author, Date }
+
     static CommitGraphView()
     {
         AffectsRender<CommitGraphView>(DataProperty, SelectedShaProperty);
@@ -119,13 +129,35 @@ public sealed class CommitGraphView : Control
     /// <summary>Raised on right-click with the commit under the pointer.</summary>
     public event Action<CommitInfo, Point>? CommitContextRequested;
 
+    /// <summary>Raised when the user finishes resizing a column.</summary>
+    public event Action? ColumnsChanged;
+
+    /// <summary>Current column widths (graph null = sized to the lanes), for saving and restoring.</summary>
+    public GraphColumns Columns
+    {
+        get => new(_refWidth, _graphWidth, _authorWidth, _dateWidth);
+        set
+        {
+            _refWidth = Math.Max(MinColumnWidth, value.Ref);
+            _graphWidth = value.Graph is { } g ? Math.Max(MinColumnWidth, g) : null;
+            _authorWidth = Math.Max(MinColumnWidth, value.Author);
+            _dateWidth = Math.Max(MinColumnWidth, value.Date);
+            InvalidateVisual();
+        }
+    }
+
     private IReadOnlyList<GraphRow> Rows => Data?.Layout.Rows ?? [];
     private double BodyHeight => Math.Max(0, Bounds.Height - HeaderHeight);
     private double MaxOffset => Math.Max(0, Rows.Count * RowHeight - BodyHeight);
-    private double GraphColumnWidth => Math.Clamp((Data?.Layout.LaneCount ?? 1) * LaneWidth + GraphPadding * 2, 80, 420);
+    private double GraphColumnWidth => _graphWidth ?? Math.Clamp((Data?.Layout.LaneCount ?? 1) * LaneWidth + GraphPadding * 2, 80, 420);
+    private double RefColumnWidth => _refWidth;
+    private double AuthorColumnWidth => _authorWidth;
+    private double DateColumnWidth => _dateWidth;
     private double GraphLeft => RefColumnWidth;
     private double MessageLeft => GraphLeft + GraphColumnWidth + 10;
-    private bool ShowMetaColumns => Bounds.Width - MessageLeft > 420;
+    private bool ShowMetaColumns => Bounds.Width - MessageLeft - AuthorColumnWidth - DateColumnWidth > 120;
+    private double AuthorLeft => Bounds.Width - DateColumnWidth - AuthorColumnWidth;
+    private double DateLeft => Bounds.Width - DateColumnWidth;
 
     public void AttachScrollBar(ScrollBar scrollBar)
     {
@@ -222,7 +254,61 @@ public sealed class CommitGraphView : Control
     protected override void OnPointerMoved(PointerEventArgs e)
     {
         base.OnPointerMoved(e);
-        UpdateHover(e.GetPosition(this));
+        var p = e.GetPosition(this);
+        if (_drag != Splitter.None)
+        {
+            DragSplitter(p.X - _dragStartX);
+            return;
+        }
+        Cursor = SplitterAt(p) != Splitter.None ? new Cursor(StandardCursorType.SizeWestEast) : Cursor.Default;
+        UpdateHover(p);
+    }
+
+    protected override void OnPointerReleased(PointerReleasedEventArgs e)
+    {
+        base.OnPointerReleased(e);
+        if (_drag == Splitter.None) return;
+        _drag = Splitter.None;
+        e.Pointer.Capture(null);
+        ColumnsChanged?.Invoke();
+    }
+
+    /// <summary>The column edge under the pointer; only the header row is a resize handle.</summary>
+    private Splitter SplitterAt(Point p)
+    {
+        if (p.Y < 0 || p.Y >= HeaderHeight) return Splitter.None;
+        if (Math.Abs(p.X - GraphLeft) <= SplitterGrab) return Splitter.Ref;
+        if (Math.Abs(p.X - (MessageLeft - 10)) <= SplitterGrab) return Splitter.Graph;
+        if (ShowMetaColumns)
+        {
+            if (Math.Abs(p.X - (AuthorLeft - 8)) <= SplitterGrab) return Splitter.Author;
+            if (Math.Abs(p.X - (DateLeft - 8)) <= SplitterGrab) return Splitter.Date;
+        }
+        return Splitter.None;
+    }
+
+    private void DragSplitter(double dx)
+    {
+        var start = _dragStart;
+        switch (_drag)
+        {
+            case Splitter.Ref:
+                _refWidth = Math.Clamp(start.Ref + dx, MinColumnWidth, 600);
+                break;
+            case Splitter.Graph:
+                _graphWidth = Math.Clamp(start.Graph!.Value + dx, MinColumnWidth, 1200);
+                break;
+            case Splitter.Author:
+                _authorWidth = Math.Clamp(start.Author - dx, MinColumnWidth, 600);
+                break;
+            case Splitter.Date:
+                // Moves only the author/date edge; the message/author edge stays put.
+                var d = Math.Clamp(dx, MinColumnWidth - start.Author, start.Date - MinColumnWidth);
+                _authorWidth = start.Author + d;
+                _dateWidth = start.Date - d;
+                break;
+        }
+        InvalidateVisual();
     }
 
     protected override void OnPointerExited(PointerEventArgs e)
@@ -238,6 +324,26 @@ public sealed class CommitGraphView : Control
         base.OnPointerPressed(e);
         Focus();
         var point = e.GetCurrentPoint(this);
+        var splitter = SplitterAt(point.Position);
+        if (splitter != Splitter.None && point.Properties.IsLeftButtonPressed)
+        {
+            if (e.ClickCount == 2 && splitter == Splitter.Graph)
+            {
+                // Double-click the graph edge to fit it to the lanes again.
+                _graphWidth = null;
+                InvalidateVisual();
+                ColumnsChanged?.Invoke();
+            }
+            else
+            {
+                _drag = splitter;
+                _dragStartX = point.Position.X;
+                _dragStart = new GraphColumns(_refWidth, GraphColumnWidth, _authorWidth, _dateWidth);
+                e.Pointer.Capture(this);
+            }
+            e.Handled = true;
+            return;
+        }
         var row = RowAt(point.Position.Y);
         if (row >= 0)
         {
@@ -364,8 +470,10 @@ public sealed class CommitGraphView : Control
         Title("COMMIT MESSAGE", MessageLeft);
         if (ShowMetaColumns)
         {
-            Title("AUTHOR", width - DateColumnWidth - AuthorColumnWidth);
-            Title("DATE", width - DateColumnWidth);
+            ctx.DrawLine(SeparatorPen, new Point(AuthorLeft - 8, 4), new Point(AuthorLeft - 8, HeaderHeight - 4));
+            Title("AUTHOR", AuthorLeft);
+            ctx.DrawLine(SeparatorPen, new Point(DateLeft - 8, 4), new Point(DateLeft - 8, HeaderHeight - 4));
+            Title("DATE", DateLeft);
         }
     }
 
@@ -402,9 +510,12 @@ public sealed class CommitGraphView : Control
     private void DrawConnector(DrawingContext ctx, int i)
     {
         var row = Rows[i];
-        if (!_badgesBySha.ContainsKey(row.Commit.Sha)) return;
+        if (!_badgesBySha.TryGetValue(row.Commit.Sha, out var badges)) return;
         var y = RowTop(i) + RowHeight / 2;
-        ctx.DrawLine(_connectorPens[row.ColorIndex], new Point(8, y), new Point(LaneX(row.Lane), y));
+        // Start after the pill so the line doesn't show through its translucent fill.
+        var start = Math.Min(BadgeRight(badges), RefColumnWidth);
+        var end = LaneX(row.Lane);
+        if (end > start) ctx.DrawLine(_connectorPens[row.ColorIndex], new Point(start, y), new Point(end, y));
     }
 
     private void DrawSegments(DrawingContext ctx, int i)
@@ -500,8 +611,7 @@ public sealed class CommitGraphView : Control
     {
         var c = Rows[i].Commit;
         var top = RowTop(i);
-        var metaWidth = ShowMetaColumns ? AuthorColumnWidth + DateColumnWidth : 0;
-        var messageWidth = Math.Max(0, width - MessageLeft - metaWidth - 12);
+        var messageWidth = Math.Max(0, (ShowMetaColumns ? AuthorLeft : width) - MessageLeft - 12);
 
         if (c.IsWorkingTree)
         {
@@ -516,9 +626,41 @@ public sealed class CommitGraphView : Control
 
         if (!ShowMetaColumns) return;
         var author = Text(c.AuthorName, 12, MutedTextBrush, _typeface, AuthorColumnWidth - 12);
-        ctx.DrawText(author, new Point(width - DateColumnWidth - AuthorColumnWidth, top + (RowHeight - author.Height) / 2));
+        ctx.DrawText(author, new Point(AuthorLeft, top + (RowHeight - author.Height) / 2));
         var date = Text(FormatDate(c.AuthorDate), 12, MutedTextBrush, _typeface, DateColumnWidth - 12);
-        ctx.DrawText(date, new Point(width - DateColumnWidth, top + (RowHeight - date.Height) / 2));
+        ctx.DrawText(date, new Point(DateLeft, top + (RowHeight - date.Height) / 2));
+    }
+
+    private const double PillHeight = 20;
+    private const double PillIconSize = 12;
+    private const double PillGap = 4;
+
+    /// <summary>Lays out a row's first ref pill (at y = 0): its icons, trimmed name, rectangle and "+N".</summary>
+    private (List<Geometry> Icons, FormattedText Name, Rect Pill, FormattedText? More) LayoutBadges(List<RefBadge> badges)
+    {
+        var badge = badges[0];
+        var more = badges.Count > 1 ? Text($"+{badges.Count - 1}", 11, MutedTextBrush, _typeface) : null;
+        var maxWidth = RefColumnWidth - 12 - (more is not null ? more.Width + 8 : 0);
+
+        var icons = new List<Geometry>();
+        if (badge.IsTag) icons.Add(TagIcon);
+        if (badge.HasLocal) icons.Add(LaptopIcon);
+        if (badge.HasRemote) icons.Add(Data?.GitHubRepo is not null ? GitHubIcon : CloudIcon);
+        if (badge.HasWorktree) icons.Add(WorktreeIcon);
+        var leading = badge.IsCurrent ? PillIconSize + PillGap : 0;
+        var trailing = icons.Count * (PillIconSize + PillGap);
+
+        var name = Text(badge.Name, 12, Brushes.White, badge.IsCurrent ? _boldTypeface : _typeface,
+            Math.Max(10, maxWidth - 12 - leading - trailing));
+        var pillWidth = Math.Max(0, Math.Min(maxWidth, 12 + leading + name.Width + trailing));
+        return (icons, name, new Rect(6, 0, pillWidth, PillHeight), more);
+    }
+
+    /// <summary>Where a row's pill (and its "+N") ends, so the connector can start there.</summary>
+    private double BadgeRight(List<RefBadge> badges)
+    {
+        var (_, _, pill, more) = LayoutBadges(badges);
+        return pill.Right + (more is not null ? 4 + more.Width : 0) + 4;
     }
 
     private void DrawBadges(DrawingContext ctx, int i)
@@ -526,25 +668,13 @@ public sealed class CommitGraphView : Control
         var row = Rows[i];
         if (!_badgesBySha.TryGetValue(row.Commit.Sha, out var badges)) return;
 
-        const double pillHeight = 20;
-        const double iconSize = 12;
-        const double gap = 4;
+        const double pillHeight = PillHeight;
+        const double iconSize = PillIconSize;
+        const double gap = PillGap;
         var badge = badges[0];
         var top = RowTop(i) + (RowHeight - pillHeight) / 2;
-        var maxWidth = RefColumnWidth - 12 - (badges.Count > 1 ? 22 : 0);
-
-        var icons = new List<Geometry>();
-        if (badge.IsTag) icons.Add(TagIcon);
-        if (badge.HasLocal) icons.Add(LaptopIcon);
-        if (badge.HasRemote) icons.Add(Data?.GitHubRepo is not null ? GitHubIcon : CloudIcon);
-        if (badge.HasWorktree) icons.Add(WorktreeIcon);
-        var leading = badge.IsCurrent ? iconSize + gap : 0;
-        var trailing = icons.Count * (iconSize + gap);
-
-        var name = Text(badge.Name, 12, Brushes.White, badge.IsCurrent ? _boldTypeface : _typeface,
-            Math.Max(10, maxWidth - 12 - leading - trailing));
-        var pillWidth = Math.Min(maxWidth, 12 + leading + name.Width + trailing);
-        var pill = new Rect(6, top, pillWidth, pillHeight);
+        var (icons, name, layoutPill, moreText) = LayoutBadges(badges);
+        var pill = layoutPill.WithY(top);
 
         ctx.DrawRectangle(badge.IsCurrent ? _laneBrushes[row.ColorIndex] : _pillBrushes[row.ColorIndex],
             null, pill, 3, 3);
@@ -563,11 +693,8 @@ public sealed class CommitGraphView : Control
             x += iconSize + gap;
         }
 
-        if (badges.Count > 1)
-        {
-            var more = Text($"+{badges.Count - 1}", 11, MutedTextBrush, _typeface);
-            ctx.DrawText(more, new Point(pill.Right + 4, top + (pillHeight - more.Height) / 2));
-        }
+        if (moreText is not null)
+            ctx.DrawText(moreText, new Point(pill.Right + 4, top + (pillHeight - moreText.Height) / 2));
     }
 
     private static void DrawIcon(DrawingContext ctx, Geometry icon, double x, double y, double size, IBrush? brush = null)
@@ -642,3 +769,6 @@ public sealed class CommitGraphView : Control
         }
     }
 }
+
+/// <summary>Saved commit-graph column widths; a null graph width means sized to the lanes.</summary>
+public readonly record struct GraphColumns(double Ref, double? Graph, double Author, double Date);
