@@ -37,6 +37,14 @@ public sealed record WorktreeCreateResult(
     IReadOnlyList<string> SkippedFiles,
     IReadOnlyList<string> LinkedFolders);
 
+/// <summary>A file or folder in the worktree is held open by another program and couldn't be deleted.</summary>
+public sealed class WorktreeLockedException(string path, string lockedPath)
+    : Exception($"Couldn't delete '{lockedPath}' because it is in use by another program.")
+{
+    public string Path { get; } = path;
+    public string LockedPath { get; } = lockedPath;
+}
+
 public sealed class WorktreeDirtyException(string path, IReadOnlyList<string> changes)
     : Exception($"The worktree at '{path}' has uncommitted changes.")
 {
@@ -85,25 +93,148 @@ public static class WorktreeProvisioner
     }
 
     /// <summary>
-    /// Removes a worktree. Links created by <see cref="LinkNodeModules"/> are unlinked first so
-    /// nothing is ever deleted through them. Throws <see cref="WorktreeDirtyException"/> when the
-    /// worktree has changes and <paramref name="force"/> is false.
+    /// Removes a worktree, or a leftover folder under <c>.worktrees</c> that git no longer tracks.
+    /// Links created by <see cref="LinkNodeModules"/> are unlinked first so nothing is ever deleted
+    /// through them. Throws <see cref="WorktreeDirtyException"/> when the worktree has changes and
+    /// <paramref name="force"/> is false, and <see cref="WorktreeLockedException"/> when a file stays
+    /// in use (Windows) after retrying; calling again once it is released finishes the removal.
     /// </summary>
-    public static async Task RemoveAsync(string mainRoot, string worktreePath, bool force = false)
+    public static async Task RemoveAsync(string mainRoot, string worktreePath, bool force = false, TimeSpan? retryDelay = null)
     {
+        var delay = retryDelay ?? TimeSpan.FromMilliseconds(400);
+        var registered = await IsRegisteredAsync(mainRoot, worktreePath);
+
         if (Directory.Exists(worktreePath))
         {
-            if (!force)
-            {
-                var status = await GitCli.RunAsync(worktreePath, "status", "--porcelain");
-                var changes = status.StdOut.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-                if (changes.Length > 0) throw new WorktreeDirtyException(worktreePath, changes);
-            }
+            if (registered && !force) await EnsureCleanAsync(worktreePath, delay);
             RemoveLinks(worktreePath);
         }
 
-        string[] args = force ? ["worktree", "remove", "--force", worktreePath] : ["worktree", "remove", worktreePath];
-        await GitCli.RunAsync(mainRoot, args);
+        if (registered)
+        {
+            // Git stops at the first file it can't delete; on Windows that is usually a short-lived
+            // lock (editor, indexer, antivirus), so retry before deleting the rest ourselves.
+            string[] args = ["worktree", "remove", "--force", worktreePath];
+            for (var attempt = 0; attempt < 3; attempt++)
+            {
+                var result = await GitCli.RunAsync(mainRoot, args, throwOnError: false);
+                if (result.ExitCode == 0) return;
+                if (!Directory.Exists(worktreePath) || !IsDeleteFailure(result.StdErr))
+                    throw new GitCommandException(string.Join(' ', args), result);
+                await Task.Delay(delay);
+                if (!await IsRegisteredAsync(mainRoot, worktreePath)) break;
+            }
+        }
+
+        if (Directory.Exists(worktreePath)) await DeleteDirectoryAsync(worktreePath, delay);
+        await PruneAsync(mainRoot);
+    }
+
+    /// <summary>
+    /// Throws <see cref="WorktreeDirtyException"/> if the worktree has changes. Git can't read a
+    /// locked file, so it reports it as modified; such files are retried and then reported as
+    /// <see cref="WorktreeLockedException"/> rather than as uncommitted work.
+    /// </summary>
+    private static async Task EnsureCleanAsync(string worktreePath, TimeSpan delay)
+    {
+        string? locked = null;
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            var status = await GitCli.RunAsync(worktreePath, "status", "--porcelain");
+            // Porcelain lines are "XY path" where X or Y may be a space, so don't trim them.
+            var changes = status.StdOut.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                .Select(l => l.TrimEnd('\r'))
+                .Where(l => l.Length > 3)
+                .ToArray();
+            if (changes.Length == 0) return;
+
+            locked = changes
+                .Select(line => Path.Combine(worktreePath, line[3..].Split(" -> ")[^1].Trim('"')))
+                .FirstOrDefault(IsLocked);
+            if (locked is null) throw new WorktreeDirtyException(worktreePath, changes);
+            await Task.Delay(delay);
+        }
+        throw new WorktreeLockedException(worktreePath, locked!);
+    }
+
+    private static bool IsLocked(string file)
+    {
+        if (!File.Exists(file)) return false;
+        try
+        {
+            using var _ = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            return false;
+        }
+        catch (IOException)
+        {
+            return true;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    private static bool IsDeleteFailure(string stderr) =>
+        stderr.Contains("failed to delete", StringComparison.OrdinalIgnoreCase)
+        || stderr.Contains("Permission denied", StringComparison.OrdinalIgnoreCase)
+        || stderr.Contains("Directory not empty", StringComparison.OrdinalIgnoreCase);
+
+    private static async Task<bool> IsRegisteredAsync(string mainRoot, string worktreePath) =>
+        (await WorktreeService.ListAsync(mainRoot)).Any(w => !w.IsMain && WorktreeService.SamePath(w.Path, worktreePath));
+
+    /// <summary>
+    /// Deletes a folder tree, clearing read-only flags, removing links without following them, and
+    /// retrying items that are briefly in use. Throws <see cref="WorktreeLockedException"/> naming
+    /// the first item still locked after the last attempt.
+    /// </summary>
+    public static async Task DeleteDirectoryAsync(string root, TimeSpan retryDelay, int attempts = 5)
+    {
+        string? locked = null;
+        for (var attempt = 0; attempt < attempts; attempt++)
+        {
+            locked = TryDeleteTree(root);
+            if (locked is null) return;
+            await Task.Delay(retryDelay);
+        }
+        throw new WorktreeLockedException(root, locked!);
+    }
+
+    /// <summary>Deletes as much of the tree as possible; returns the first path that couldn't be deleted.</summary>
+    private static string? TryDeleteTree(string dir)
+    {
+        if (!Directory.Exists(dir)) return null;
+        string? firstFailure = null;
+
+        foreach (var sub in SafeDirectories(dir))
+        {
+            var failed = IsLink(sub) ? TryDelete(() => Directory.Delete(sub), sub) : TryDeleteTree(sub);
+            firstFailure ??= failed;
+        }
+        foreach (var file in SafeFiles(dir))
+        {
+            var failed = TryDelete(() =>
+            {
+                var attributes = File.GetAttributes(file);
+                if (attributes.HasFlag(FileAttributes.ReadOnly)) File.SetAttributes(file, attributes & ~FileAttributes.ReadOnly);
+                File.Delete(file);
+            }, file);
+            firstFailure ??= failed;
+        }
+        return firstFailure ?? TryDelete(() => Directory.Delete(dir), dir);
+    }
+
+    private static string? TryDelete(Action delete, string path)
+    {
+        try
+        {
+            delete();
+            return null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return path;
+        }
     }
 
     public static Task PruneAsync(string mainRoot) => GitCli.RunAsync(mainRoot, "worktree", "prune");

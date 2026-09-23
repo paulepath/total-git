@@ -189,6 +189,87 @@ public sealed class WorktreeTests : IDisposable
     }
 
     [Fact]
+    public async Task Remove_reports_a_locked_file_and_can_be_retried_after_it_is_released()
+    {
+        var result = await WorktreeProvisioner.CreateAsync(new WorktreeCreateRequest(
+            _repo.Root, "locked", WorktreeSource.NewBranch, "locked"));
+        var file = Path.Combine(result.Path, "file.txt");
+
+        using (File.Open(file, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            var ex = await Assert.ThrowsAsync<WorktreeLockedException>(() =>
+                WorktreeProvisioner.RemoveAsync(_repo.Root, result.Path, retryDelay: TimeSpan.FromMilliseconds(50)));
+            Assert.Equal(Path.GetFullPath(file), Path.GetFullPath(ex.LockedPath), ignoreCase: true);
+        }
+
+        // Git may already have unregistered it; a second attempt must still finish the job.
+        await WorktreeProvisioner.RemoveAsync(_repo.Root, result.Path);
+
+        Assert.False(Directory.Exists(result.Path));
+        Assert.DoesNotContain("locked", _repo.Git("worktree", "list"));
+    }
+
+    [Fact]
+    public async Task Remove_finishes_after_git_fails_on_a_locked_ignored_file()
+    {
+        _repo.Write(".gitignore", "bin/\n");
+        _repo.Git("add", ".gitignore");
+        _repo.Git("commit", "-q", "-m", "ignore bin");
+        var result = await WorktreeProvisioner.CreateAsync(new WorktreeCreateRequest(
+            _repo.Root, "build", WorktreeSource.NewBranch, "build"));
+        var dll = Path.Combine(result.Path, "bin", "app.dll");
+        Directory.CreateDirectory(Path.GetDirectoryName(dll)!);
+        File.WriteAllText(dll, "binary");
+
+        using (File.Open(dll, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            var ex = await Assert.ThrowsAsync<WorktreeLockedException>(() =>
+                WorktreeProvisioner.RemoveAsync(_repo.Root, result.Path, retryDelay: TimeSpan.FromMilliseconds(50)));
+            Assert.Equal(Path.GetFullPath(dll), Path.GetFullPath(ex.LockedPath), ignoreCase: true);
+        }
+
+        await WorktreeProvisioner.RemoveAsync(_repo.Root, result.Path);
+
+        Assert.False(Directory.Exists(result.Path));
+        Assert.DoesNotContain("build", _repo.Git("worktree", "list"));
+    }
+
+    [Fact]
+    public async Task Remove_waits_out_a_brief_lock()
+    {
+        var result = await WorktreeProvisioner.CreateAsync(new WorktreeCreateRequest(
+            _repo.Root, "brief", WorktreeSource.NewBranch, "brief"));
+        var stream = File.Open(Path.Combine(result.Path, "file.txt"), FileMode.Open, FileAccess.Read, FileShare.None);
+        _ = Task.Delay(400).ContinueWith(_ => stream.Dispose());
+
+        await WorktreeProvisioner.RemoveAsync(_repo.Root, result.Path);
+
+        Assert.False(Directory.Exists(result.Path));
+    }
+
+    [Fact]
+    public async Task Finds_and_deletes_leftover_folders_without_following_links()
+    {
+        await WorktreeProvisioner.CreateAsync(new WorktreeCreateRequest(
+            _repo.Root, "registered", WorktreeSource.NewBranch, "registered", CopyLocalFiles: false, LinkNodeModules: false));
+        var sentinel = _repo.Write("web/node_modules/pkg/index.js", "keep me");
+        var leftover = Path.Combine(_repo.Root, ".worktrees", "leftover");
+        Directory.CreateDirectory(Path.Combine(leftover, "web"));
+        File.WriteAllText(Path.Combine(leftover, "a.txt"), "x");
+        File.SetAttributes(Path.Combine(leftover, "a.txt"), FileAttributes.ReadOnly);
+        WorktreeProvisioner.LinkNodeModules(_repo.Root, leftover);
+
+        var found = WorktreeService.FindLeftovers(_repo.Root, await WorktreeService.ListAsync(_repo.Root));
+        Assert.Equal(["leftover"], found.Select(Path.GetFileName));
+
+        await WorktreeProvisioner.RemoveAsync(_repo.Root, leftover);
+
+        Assert.False(Directory.Exists(leftover));
+        Assert.Equal("keep me", File.ReadAllText(sentinel));
+        Assert.Empty(WorktreeService.FindLeftovers(_repo.Root, await WorktreeService.ListAsync(_repo.Root)));
+    }
+
+    [Fact]
     public async Task Removing_dirty_worktree_requires_force()
     {
         var result = await WorktreeProvisioner.CreateAsync(new WorktreeCreateRequest(

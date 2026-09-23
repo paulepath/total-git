@@ -68,6 +68,20 @@ public static partial class WorktreeService
         return name.Length == 0 ? "worktree" : name;
     }
 
+    /// <summary>
+    /// Folders under <c>.worktrees</c> that git no longer tracks, e.g. left behind when a removal
+    /// was interrupted by a locked file.
+    /// </summary>
+    public static IReadOnlyList<string> FindLeftovers(string mainWorktreeRoot, IReadOnlyList<WorktreeInfo> worktrees)
+    {
+        var folder = Path.Combine(mainWorktreeRoot, WorktreesFolder);
+        if (!Directory.Exists(folder)) return [];
+        return Directory.GetDirectories(folder)
+            .Where(d => !worktrees.Any(w => SamePath(w.Path, d)))
+            .OrderBy(d => d, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
     public static string PathFor(string mainWorktreeRoot, string name) =>
         Path.Combine(mainWorktreeRoot, WorktreesFolder, name);
 

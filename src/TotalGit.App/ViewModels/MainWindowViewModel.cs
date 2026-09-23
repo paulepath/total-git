@@ -319,7 +319,7 @@ public partial class MainWindowViewModel : ObservableObject
         AheadText = current is { Ahead: > 0 } ? current.Ahead.ToString() : null;
         BehindText = current is { Behind: > 0 } ? current.Behind.ToString() : null;
 
-        Sidebar.Update(state.Refs, _worktrees, state.WorkingDirectory);
+        Sidebar.Update(state.Refs, _worktrees, WorktreeService.FindLeftovers(state.MainWorkingDirectory, _worktrees), state.WorkingDirectory);
     }
 
     private void RebuildGraph()
@@ -694,8 +694,31 @@ public partial class MainWindowViewModel : ObservableObject
                 [worktree.Path], "Remove"))
             return;
 
+        await RemoveWorktreeFolderAsync(worktree.Path);
+    }
+
+    /// <summary>Deletes a leftover folder under .worktrees that git no longer tracks.</summary>
+    [RelayCommand]
+    private async Task DeleteLeftoverAsync(string path)
+    {
+        if (_state is null || Dialogs is null) return;
+        if (!await Dialogs.ConfirmAsync("Delete leftover folder",
+                $"'{Path.GetFileName(path)}' is no longer a registered worktree. Delete the folder and everything in it?",
+                [path], "Delete"))
+            return;
+        await RemoveWorktreeFolderAsync(path);
+    }
+
+    /// <summary>Retries a removal that was blocked by a locked file (the user already confirmed it).</summary>
+    [RelayCommand]
+    private Task RetryRemoveAsync(string path) => RemoveWorktreeFolderAsync(path);
+
+    private async Task RemoveWorktreeFolderAsync(string path)
+    {
+        if (_state is null || Dialogs is null) return;
+        var name = Path.GetFileName(path.TrimEnd('\\', '/'));
         var mainRoot = _state.MainWorkingDirectory;
-        if (WorktreeService.SamePath(worktree.Path, _state.WorkingDirectory))
+        if (WorktreeService.SamePath(path, _state.WorkingDirectory))
             await LoadAsync(mainRoot);
 
         var force = false;
@@ -704,18 +727,28 @@ public partial class MainWindowViewModel : ObservableObject
             try
             {
                 IsBusy = true;
-                BusyText = $"Removing worktree {worktree.Name}…";
-                await Task.Run(() => WorktreeProvisioner.RemoveAsync(mainRoot, worktree.Path, force));
-                ShowInfo($"Removed worktree {worktree.Name}.");
+                BusyText = $"Removing worktree {name}…";
+                await Task.Run(() => WorktreeProvisioner.RemoveAsync(mainRoot, path, force));
+                ShowInfo($"Removed worktree {name}.");
                 break;
             }
             catch (WorktreeDirtyException ex)
             {
                 IsBusy = false;
                 if (!await Dialogs.ConfirmAsync("Worktree has changes",
-                        $"'{worktree.Name}' has uncommitted changes that will be lost:", ex.Changes.Take(50).ToArray(), "Force remove"))
+                        $"'{name}' has uncommitted changes that will be lost:", ex.Changes.Take(50).ToArray(), "Force remove"))
                     break;
                 force = true;
+            }
+            catch (WorktreeLockedException ex)
+            {
+                var relative = Path.GetRelativePath(path, ex.LockedPath);
+                Banner = new Banner(
+                    $"Couldn't finish removing '{name}': {relative} is in use by another program. " +
+                    "Close any VS Code window, terminal or dev server using this worktree, then try again.",
+                    true,
+                    [new MenuAction("Try again", RetryRemoveCommand, path), new MenuAction("Reveal folder", RevealCommand, path)]);
+                break;
             }
             catch (Exception ex) when (ex is GitCommandException or IOException or UnauthorizedAccessException)
             {
@@ -823,6 +856,16 @@ public partial class MainWindowViewModel : ObservableObject
             [
                 new MenuAction("Create worktree with new branch…", CreateWorktreeCommand),
                 new MenuAction("Prune stale worktrees", PruneWorktreesCommand),
+            ];
+        }
+        if (node.LeftoverPath is { } leftover)
+        {
+            return
+            [
+                new MenuAction("Delete leftover folder…", DeleteLeftoverCommand, leftover),
+                new MenuAction("Reveal folder", RevealCommand, leftover),
+                MenuAction.Separator,
+                new MenuAction("Copy path", CopyCommand, leftover),
             ];
         }
         if (node.IsWorktree && node.Worktree is { } wt)

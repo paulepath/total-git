@@ -32,6 +32,9 @@ public partial class SidebarNode : ObservableObject
 
     public BranchTarget? Target { get; init; }
     public WorktreeInfo? Worktree { get; init; }
+
+    /// <summary>Set for a folder under .worktrees that git no longer tracks.</summary>
+    public string? LeftoverPath { get; init; }
     public bool IsCurrent { get; init; }
     public int Count { get; init; }
     public string? Ahead { get; init; }
@@ -58,6 +61,7 @@ public partial class SidebarViewModel : ObservableObject
 {
     private IReadOnlyList<RefInfo> _refs = [];
     private IReadOnlyList<WorktreeInfo> _worktrees = [];
+    private IReadOnlyList<string> _leftovers = [];
     private string? _currentWorktree;
     private readonly HashSet<string> _collapsed = ["REMOTE", "TAGS"];
 
@@ -71,10 +75,11 @@ public partial class SidebarViewModel : ObservableObject
 
     partial void OnFilterChanged(string value) => Rebuild();
 
-    public void Update(IReadOnlyList<RefInfo> refs, IReadOnlyList<WorktreeInfo> worktrees, string currentWorktree)
+    public void Update(IReadOnlyList<RefInfo> refs, IReadOnlyList<WorktreeInfo> worktrees, IReadOnlyList<string> leftovers, string currentWorktree)
     {
         _refs = refs;
         _worktrees = worktrees;
+        _leftovers = leftovers;
         _currentWorktree = currentWorktree;
         Rebuild();
     }
@@ -83,6 +88,7 @@ public partial class SidebarViewModel : ObservableObject
     {
         _refs = [];
         _worktrees = [];
+        _leftovers = [];
         Nodes.Clear();
     }
 
@@ -137,6 +143,7 @@ public partial class SidebarViewModel : ObservableObject
         Nodes.Add(tagSection);
 
         var worktrees = _worktrees.Where(w => Match(w.Name) || Match(w.Branch ?? "")).ToList();
+        var leftovers = _leftovers.Where(p => Match(Path.GetFileName(p))).ToList();
         var wtSection = new SidebarNode(SidebarNodeKind.Section, "WORKTREES")
         {
             Count = worktrees.Count,
@@ -156,6 +163,16 @@ public partial class SidebarViewModel : ObservableObject
                 IsDimmed = w.IsPrunable || w.IsLocked,
                 Subtitle = w.Branch ?? (w.IsDetached ? "detached" : null),
                 ToolTip = $"{w.Path}\n{(w.Branch is null ? "detached HEAD" : w.Branch)}{state}",
+            });
+        }
+        foreach (var path in leftovers)
+        {
+            wtSection.Children.Add(new SidebarNode(SidebarNodeKind.Worktree, Path.GetFileName(path))
+            {
+                LeftoverPath = path,
+                IsDimmed = true,
+                Subtitle = "leftover",
+                ToolTip = $"{path}\nNot a registered worktree any more (removal was interrupted). Right-click to delete it.",
             });
         }
         Nodes.Add(wtSection);
