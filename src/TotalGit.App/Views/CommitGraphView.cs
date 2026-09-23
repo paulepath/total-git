@@ -470,6 +470,8 @@ public sealed class CommitGraphView : Control
 
         if (_avatarCache?.TryGet(row.Commit.AuthorEmail, Data?.GitHubRepo, row.Commit.Sha) is { } bitmap)
         {
+            // Black behind the avatar so transparent logos don't pick up the lane colour.
+            ctx.DrawEllipse(Brushes.Black, null, center, inner, inner);
             using (ctx.PushGeometryClip(new EllipseGeometry(rect)))
                 ctx.DrawImage(bitmap, rect);
         }
