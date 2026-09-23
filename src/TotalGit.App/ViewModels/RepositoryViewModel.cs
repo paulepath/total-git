@@ -891,6 +891,11 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
                 if (wt is null) actions.Add(new MenuAction("Create worktree…", CreateWorktreeCommand, target));
                 if (isCheckedOutHere && wt is null) actions.Add(new MenuAction("Open in VS Code", OpenInVsCodeCommand, current));
                 actions.Add(new MenuAction("Copy branch name", CopyCommand, target.Name));
+                if (!isCheckedOutHere && wt is null)
+                {
+                    actions.Add(MenuAction.Separator);
+                    actions.Add(new MenuAction("Delete branch…", DeleteBranchCommand, target));
+                }
                 break;
             case RefKind.RemoteBranch:
                 actions.Add(new MenuAction($"Checkout {target.ShortName}", CheckoutCommand, target));
@@ -936,6 +941,11 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
                 new MenuAction("Create worktree with new branch…", CreateWorktreeCommand),
                 new MenuAction("Prune stale worktrees", PruneWorktreesCommand),
             ];
+        }
+        if (node.IsSection && node.Label == "LOCAL")
+        {
+            var gone = GoneBranches().Count;
+            return [new MenuAction($"Delete branches whose remote is gone ({gone})…", DeleteGoneBranchesCommand, IsEnabled: gone > 0)];
         }
         if (node.LeftoverPath is { } leftover)
         {

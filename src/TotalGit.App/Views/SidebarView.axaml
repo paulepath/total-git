@@ -85,6 +85,8 @@
                        ToolTip.Tip="Contains the current branch" />
               <TextBlock Text="{Binding Ahead}" FontSize="11" Foreground="#4CC38A" IsVisible="{Binding HasAhead}" />
               <TextBlock Text="{Binding Behind}" FontSize="11" Foreground="#E8B339" IsVisible="{Binding HasBehind}" />
+              <PathIcon Data="{StaticResource CloseIcon}" Width="9" Height="9" Foreground="#E5484D" VerticalAlignment="Center"
+                        IsVisible="{Binding IsUpstreamGone}" ToolTip.Tip="Deleted on the remote" />
               <TextBlock Text="{Binding Count}" FontSize="11" Foreground="#5AA9F2" IsVisible="{Binding ShowCount}" />
               <Button Content="+" IsVisible="{Binding IsWorktreesSection}" Padding="6,0" MinHeight="0" Height="18" FontSize="12"
                       ToolTip.Tip="Create worktree with new branch" Click="OnAddWorktreeClick" />

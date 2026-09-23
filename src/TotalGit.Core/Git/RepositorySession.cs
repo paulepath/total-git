@@ -310,14 +310,17 @@ public sealed class RepositorySession : IDisposable
             }
 
             var tracking = branch.IsTracking ? branch.TrackingDetails : null;
+            var upstreamGone = branch.UpstreamBranchCanonicalName is not null && branch.TrackedBranch?.Tip is null;
             result.Add(new RefInfo(
                 branch.FriendlyName,
                 RefKind.LocalBranch,
                 branch.Tip.Sha,
                 branch.IsCurrentRepositoryHead,
-                Upstream: branch.IsTracking ? branch.TrackedBranch?.FriendlyName : null,
+                Upstream: branch.IsTracking ? branch.TrackedBranch?.FriendlyName
+                    : upstreamGone ? $"{branch.RemoteName}/{branch.UpstreamBranchCanonicalName!.Replace("refs/heads/", "")}" : null,
                 Ahead: tracking?.AheadBy ?? 0,
-                Behind: tracking?.BehindBy ?? 0));
+                Behind: tracking?.BehindBy ?? 0,
+                UpstreamGone: upstreamGone));
         }
 
         foreach (var tag in _repo.Tags)

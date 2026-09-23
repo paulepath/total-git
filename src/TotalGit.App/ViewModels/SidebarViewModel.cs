@@ -70,6 +70,9 @@ public partial class SidebarNode : ObservableObject
     public bool ShowCount => IsSection;
     public bool HasAhead => Ahead is not null;
     public bool HasBehind => Behind is not null;
+
+    /// <summary>The branch's remote branch was deleted (shown as a ✕ instead of ahead/behind).</summary>
+    public bool IsUpstreamGone { get; init; }
 }
 
 /// <summary>GitKraken-style left panel: LOCAL, REMOTE, TAGS and WORKTREES with a filter.</summary>
@@ -135,8 +138,11 @@ public partial class SidebarViewModel : ObservableObject
                 IsCurrent = r.IsCurrent,
                 Ahead = r.Ahead > 0 ? $"{r.Ahead}↑" : null,
                 Behind = r.Behind > 0 ? $"{r.Behind}↓" : null,
+                IsUpstreamGone = r.UpstreamGone,
                 HasWorktree = otherWorktree is not null,
-                ToolTip = otherWorktree is not null ? $"{r.Name}\nChecked out in worktree {otherWorktree.Path}" : r.Name,
+                ToolTip = r.Name
+                    + (otherWorktree is not null ? $"\nChecked out in worktree {otherWorktree.Path}" : "")
+                    + (r.UpstreamGone ? $"\n{r.Upstream} was deleted on the remote" : ""),
             });
         }
         Nodes.Add(local);

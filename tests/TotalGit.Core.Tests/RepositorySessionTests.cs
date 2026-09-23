@@ -37,6 +37,27 @@ public sealed class RepositorySessionTests : IDisposable
     }
 
     [Fact]
+    public void Flags_local_branches_whose_remote_branch_was_deleted()
+    {
+        using var remote = new TestRepo(bare: true);
+        _repo.Commit("base");
+        _repo.Git("remote", "add", "origin", remote.Root);
+        _repo.Git("push", "-q", "-u", "origin", "main");
+        _repo.Git("push", "-q", "origin", "main:feature/x");
+        _repo.Git("branch", "--track", "feature/x", "origin/feature/x");
+        remote.Git("branch", "-D", "feature/x");
+        _repo.Git("fetch", "-q", "--prune");
+
+        using var session = RepositorySession.Open(_repo.Root);
+        var refs = session.LoadState().Refs;
+
+        var gone = refs.Single(r => r is { Kind: RefKind.LocalBranch, Name: "feature/x" });
+        Assert.True(gone.UpstreamGone);
+        Assert.Equal("origin/feature/x", gone.Upstream);
+        Assert.False(refs.Single(r => r is { Kind: RefKind.LocalBranch, Name: "main" }).UpstreamGone);
+    }
+
+    [Fact]
     public void Status_separates_staged_unstaged_and_untracked()
     {
         _repo.Commit("base", "a.txt", "a");

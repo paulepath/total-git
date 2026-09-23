@@ -46,6 +46,10 @@ public static class GitActions
         return branch;
     }
 
+    /// <summary>Deletes a local branch. Without <paramref name="force"/> git refuses unmerged branches.</summary>
+    public static Task DeleteBranchAsync(string worktree, string branch, bool force = false) =>
+        GitCli.RunAsync(worktree, "branch", force ? "-D" : "-d", branch);
+
     public static Task FetchAsync(string worktree) => GitCli.RunAsync(worktree, "fetch", "--all", "--prune");
 
     public static Task PullAsync(string worktree) => GitCli.RunAsync(worktree, "pull");
