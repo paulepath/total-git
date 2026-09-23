@@ -58,6 +58,33 @@ public sealed class RepositorySessionTests : IDisposable
     }
 
     [Fact]
+    public void Linked_worktree_sees_shared_config()
+    {
+        _repo.Commit("base");
+        _repo.Git("branch", "gone-branch");
+        _repo.Git("remote", "add", "origin", "https://github.com/example/demo.git");
+        _repo.Git("config", "branch.gone-branch.remote", "origin");
+        _repo.Git("config", "branch.gone-branch.merge", "refs/heads/gone-branch");
+        var wt = Path.Combine(_repo.Root, ".worktrees", "wt");
+        _repo.Git("worktree", "add", "-q", "-b", "wt-branch", wt);
+        // main is one ahead of a (faked) origin/main.
+        _repo.Git("update-ref", "refs/remotes/origin/main", "HEAD");
+        _repo.Git("config", "branch.main.remote", "origin");
+        _repo.Git("config", "branch.main.merge", "refs/heads/main");
+        _repo.Commit("ahead");
+
+        using var session = RepositorySession.Open(wt);
+        for (var i = 0; i < 2; i++)
+        {
+            var state = session.LoadState();
+            Assert.Equal("https://github.com/example/demo.git", state.OriginUrl);
+            Assert.True(state.Refs.Single(r => r is { Kind: RefKind.LocalBranch, Name: "gone-branch" }).UpstreamGone);
+            var main = state.Refs.Single(r => r is { Kind: RefKind.LocalBranch, Name: "main" });
+            Assert.Equal(("origin/main", 1, 0, false), (main.Upstream, main.Ahead, main.Behind, main.UpstreamGone));
+        }
+    }
+
+    [Fact]
     public void Status_separates_staged_unstaged_and_untracked()
     {
         _repo.Commit("base", "a.txt", "a");

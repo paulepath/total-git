@@ -12,6 +12,10 @@ public sealed class RepositorySession : IDisposable
     public const int PageSize = 2000;
 
     private readonly Repository _repo;
+
+    // LibGit2Sharp doesn't load the repository's config file when opened from a linked worktree's git
+    // dir (only system/global), so branch tracking config is read from the shared file directly.
+    private readonly Configuration? _sharedConfig;
     private readonly Lock _lock = new();
     private IEnumerator<Commit>? _history;
     private bool _hasMore = true;
@@ -41,6 +45,9 @@ public sealed class RepositorySession : IDisposable
         MainWorkingDirectory = Path.GetFileName(CommonGitDirectory) == ".git"
             ? Path.GetDirectoryName(CommonGitDirectory)!
             : CommonGitDirectory;
+
+        var sharedConfig = Path.Combine(CommonGitDirectory, "config");
+        if (IsLinkedWorktree && File.Exists(sharedConfig)) _sharedConfig = Configuration.BuildFrom(sharedConfig);
     }
 
     public string WorkingDirectory { get; }
@@ -82,7 +89,7 @@ public sealed class RepositorySession : IDisposable
                 IsLinkedWorktree,
                 current,
                 _repo.Head.Tip?.Sha,
-                _repo.Network.Remotes["origin"]?.Url,
+                (_sharedConfig ?? _repo.Config).Get<string>("remote.origin.url")?.Value ?? _repo.Network.Remotes["origin"]?.Url,
                 ReadRefs(),
                 ReadStashes(),
                 ReadOperation(info.CurrentOperation),
@@ -331,6 +338,27 @@ public sealed class RepositorySession : IDisposable
         })
         .ToList();
 
+    /// <summary>
+    /// The branch's upstream from its <c>branch.&lt;name&gt;.remote/merge</c> config. Read directly because
+    /// LibGit2Sharp doesn't see the (shared) branch config when the repository is opened from a linked worktree.
+    /// </summary>
+    private (string? Upstream, int Ahead, int Behind, bool Gone) ReadTracking(Branch branch)
+    {
+        var name = branch.FriendlyName;
+        var config = _sharedConfig ?? _repo.Config;
+        var remote = config.Get<string>($"branch.{name}.remote")?.Value;
+        var merge = config.Get<string>($"branch.{name}.merge")?.Value;
+        if (remote is null or "." || merge is null || !merge.StartsWith("refs/heads/", StringComparison.Ordinal))
+            return (null, 0, 0, false);
+
+        var upstreamName = $"{remote}/{merge["refs/heads/".Length..]}";
+        if (_repo.Refs[$"refs/remotes/{upstreamName}"]?.ResolveToDirectReference()?.Target is not Commit upstreamTip)
+            return (upstreamName, 0, 0, true);
+
+        var divergence = _repo.ObjectDatabase.CalculateHistoryDivergence(branch.Tip, upstreamTip);
+        return (upstreamName, divergence.AheadBy ?? 0, divergence.BehindBy ?? 0, false);
+    }
+
     private List<RefInfo> ReadRefs()
     {
         var result = new List<RefInfo>();
@@ -347,18 +375,16 @@ public sealed class RepositorySession : IDisposable
                 continue;
             }
 
-            var tracking = branch.IsTracking ? branch.TrackingDetails : null;
-            var upstreamGone = branch.UpstreamBranchCanonicalName is not null && branch.TrackedBranch?.Tip is null;
+            var (upstream, ahead, behind, gone) = ReadTracking(branch);
             result.Add(new RefInfo(
                 branch.FriendlyName,
                 RefKind.LocalBranch,
                 branch.Tip.Sha,
                 branch.IsCurrentRepositoryHead,
-                Upstream: branch.IsTracking ? branch.TrackedBranch?.FriendlyName
-                    : upstreamGone ? $"{branch.RemoteName}/{branch.UpstreamBranchCanonicalName!.Replace("refs/heads/", "")}" : null,
-                Ahead: tracking?.AheadBy ?? 0,
-                Behind: tracking?.BehindBy ?? 0,
-                UpstreamGone: upstreamGone));
+                Upstream: upstream,
+                Ahead: ahead,
+                Behind: behind,
+                UpstreamGone: gone));
         }
 
         foreach (var tag in _repo.Tags)
@@ -379,6 +405,7 @@ public sealed class RepositorySession : IDisposable
         lock (_lock)
         {
             _history?.Dispose();
+            _sharedConfig?.Dispose();
             _repo.Dispose();
         }
     }
