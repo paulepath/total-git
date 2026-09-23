@@ -30,10 +30,10 @@ public sealed class CommitGraphView : Control
     private const double HeaderHeight = 26;
     private const double RowHeight = 28;
     private const double RefColumnWidth = 170;
-    private const double LaneWidth = 22;
+    private const double LaneWidth = 28;
     private const double GraphPadding = 10;
-    private const double NodeRadius = 11;
-    private const double MergeDotRadius = 5;
+    private const double NodeRadius = 13; // fills the 26px row band
+    private const double MergeDotRadius = 6;
     private const double AuthorColumnWidth = 160;
     private const double DateColumnWidth = 140;
     private const double CornerRadius = 8;
@@ -477,7 +477,7 @@ public sealed class CommitGraphView : Control
         {
             var hue = AvatarIdentity.Hue(row.Commit.AuthorEmail);
             ctx.DrawEllipse(new SolidColorBrush(HslColor.FromHsl(hue, 0.45, 0.42).ToRgb()), null, center, inner, inner);
-            var ft = Text(AvatarIdentity.Initials(row.Commit.AuthorName), 8, Brushes.White, _boldTypeface);
+            var ft = Text(AvatarIdentity.Initials(row.Commit.AuthorName), 9.5, Brushes.White, _boldTypeface);
             ctx.DrawText(ft, new Point(center.X - ft.Width / 2, center.Y - ft.Height / 2));
         }
     }
