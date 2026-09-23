@@ -60,6 +60,151 @@ public partial class RepositoryViewModel
         }, $"Deleted {gone.Count} branch{(gone.Count == 1 ? "" : "es")}.");
     }
 
+    // ------------------------------------------------------------------ merge / rebase
+
+    /// <summary>Shown while a merge or rebase is stopped (usually on conflicts), until it's continued or aborted.</summary>
+    [ObservableProperty]
+    public partial Banner? OperationBanner { get; set; }
+
+    private bool IsOperationInProgress => _state is { Operation: not RepoOperation.None };
+
+    /// <summary>Merge/rebase need a clean working tree (untracked files are fine).</summary>
+    private bool EnsureCleanFor(string what)
+    {
+        if (!_status.Staged.Any() && _status.Unstaged.All(f => f.Kind == ChangeKind.Untracked)) return true;
+        Banner = new Banner($"Commit or stash your changes before you {what}.", true, [new MenuAction("Stash changes…", StashCommand)]);
+        return false;
+    }
+
+    private void UpdateOperationBanner()
+    {
+        var state = _state;
+        if (state is null || state.Operation == RepoOperation.None)
+        {
+            OperationBanner = null;
+            return;
+        }
+
+        var conflicts = _status.Unstaged.Count(f => f.Kind == ChangeKind.Conflicted);
+        var conflictText = conflicts switch
+        {
+            0 => "No conflicts left.",
+            1 => "1 conflicted file. Select it in the WIP row to resolve it.",
+            _ => $"{conflicts} conflicted files. Select them in the WIP row to resolve them.",
+        };
+        var resolved = conflicts == 0;
+        OperationBanner = state.Operation switch
+        {
+            RepoOperation.Merge => new Banner($"Merge in progress. {conflictText}", false,
+            [
+                new MenuAction("Continue merge", ContinueOperationCommand, IsEnabled: resolved),
+                new MenuAction("Abort merge", AbortOperationCommand),
+            ]),
+            RepoOperation.Rebase => new Banner(
+                $"Rebase paused{(state.OperationProgress is { } p ? $" at commit {p}" : "")}. {conflictText}", false,
+            [
+                new MenuAction("Continue rebase", ContinueOperationCommand, IsEnabled: resolved),
+                new MenuAction("Skip this commit", SkipRebaseCommitCommand),
+                new MenuAction("Abort rebase", AbortOperationCommand),
+            ]),
+            _ => new Banner($"A {(state.Operation == RepoOperation.CherryPick ? "cherry-pick" : "revert")} is in progress. {conflictText} " +
+                            "Finish or abort it from a terminal.", false, []),
+        };
+    }
+
+    /// <summary>After a merge or rebase stops, show the WIP row so the conflicted files are one click away.</summary>
+    private void OnStopped(OperationOutcome outcome)
+    {
+        if (outcome == OperationOutcome.Stopped) SelectedSha = CommitInfo.WorkingTreeSha;
+    }
+
+    [RelayCommand]
+    private async Task MergeAsync(BranchTarget target)
+    {
+        if (_state is null || Dialogs is null || !EnsureCleanFor("merge")) return;
+        var current = _state.CurrentBranch ?? "HEAD";
+        var name = target.Kind == RefKind.DetachedHead ? $"commit {target.Name}" : target.Name;
+        var revision = target.Kind == RefKind.DetachedHead ? target.Sha : target.Name;
+        var noFf = FormField.CheckBox("Always create a merge commit (even when a fast-forward is possible)");
+        if (!await Dialogs.ShowFormAsync(new FormSpec("Merge", $"Merge {name} into {current}.", "Merge", [noFf])))
+            return;
+
+        var wt = _state.WorkingDirectory;
+        var outcome = OperationOutcome.Completed;
+        await RunGitAsync($"Merging {name}…", async () => outcome = await GitActions.MergeAsync(wt, revision, noFf.IsChecked));
+        if (outcome == OperationOutcome.Completed) ShowInfo($"Merged {name} into {current}.");
+        OnStopped(outcome);
+    }
+
+    [RelayCommand]
+    private async Task RebaseOntoAsync(BranchTarget target)
+    {
+        if (_state is null || Dialogs is null || !EnsureCleanFor("rebase")) return;
+        var current = _state.CurrentBranch ?? "HEAD";
+        if (!await Dialogs.ConfirmAsync("Rebase",
+                $"Rebase {current} onto {target.Name}? The commits on {current} that aren't in {target.Name} are replayed on top of it. " +
+                "This rewrites their history; if they were already pushed you'll need to force-push.",
+                null, "Rebase"))
+            return;
+
+        var wt = _state.WorkingDirectory;
+        var onto = target.Kind == RefKind.DetachedHead ? target.Sha : target.Name;
+        var outcome = OperationOutcome.Completed;
+        await RunGitAsync($"Rebasing onto {target.Name}…", async () => outcome = await GitActions.RebaseAsync(wt, onto));
+        if (outcome == OperationOutcome.Completed) ShowInfo($"Rebased {current} onto {target.Name}.");
+        OnStopped(outcome);
+    }
+
+    [RelayCommand]
+    private async Task ContinueOperationAsync()
+    {
+        if (_state is null) return;
+        var wt = _state.WorkingDirectory;
+        var op = _state.Operation;
+        var outcome = OperationOutcome.Completed;
+        var ok = await RunGitAsync("Continuing…", async () =>
+        {
+            if (op == RepoOperation.Merge) await GitActions.MergeContinueAsync(wt);
+            else outcome = await GitActions.RebaseContinueAsync(wt);
+        });
+        if (ok && outcome == OperationOutcome.Completed) ShowInfo(op == RepoOperation.Merge ? "Merge completed." : "Rebase completed.");
+        OnStopped(outcome);
+    }
+
+    [RelayCommand]
+    private async Task SkipRebaseCommitAsync()
+    {
+        if (_state is null || Dialogs is null) return;
+        if (!await Dialogs.ConfirmAsync("Skip commit", "Skip the commit being replayed? Its changes are left out of the rebased branch.", null, "Skip commit"))
+            return;
+        var wt = _state.WorkingDirectory;
+        var outcome = OperationOutcome.Completed;
+        var ok = await RunGitAsync("Skipping…", async () => outcome = await GitActions.RebaseSkipAsync(wt));
+        if (ok && outcome == OperationOutcome.Completed) ShowInfo("Rebase completed.");
+        OnStopped(outcome);
+    }
+
+    [RelayCommand]
+    private async Task AbortOperationAsync()
+    {
+        if (_state is null || Dialogs is null) return;
+        var op = _state.Operation;
+        var what = op == RepoOperation.Merge ? "merge" : "rebase";
+        if (!await Dialogs.ConfirmAsync($"Abort {what}", $"Abort the {what} and go back to how things were before it started? Conflict resolutions made so far are lost.", null, $"Abort {what}"))
+            return;
+        var wt = _state.WorkingDirectory;
+        await RunGitAsync($"Aborting {what}…", () => op == RepoOperation.Merge ? GitActions.MergeAbortAsync(wt) : GitActions.RebaseAbortAsync(wt), $"Aborted the {what}.");
+    }
+
+    /// <summary>Merge and rebase entries for a branch, tag or commit menu.</summary>
+    private IEnumerable<MenuAction> MergeRebaseActions(BranchTarget target, bool isCurrentTip)
+    {
+        if (_state?.CurrentBranch is not { } current || IsOperationInProgress || isCurrentTip) yield break;
+        var label = target.Kind == RefKind.DetachedHead ? "this commit" : target.Name;
+        yield return new MenuAction($"Merge {label} into {current}…", MergeCommand, target);
+        yield return new MenuAction($"Rebase {current} onto {label}…", RebaseOntoCommand, target);
+    }
+
     // ------------------------------------------------------------------ stash
 
     [ObservableProperty]

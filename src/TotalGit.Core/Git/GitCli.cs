@@ -36,7 +36,8 @@ public static class GitCli
         IEnumerable<string> args,
         string? stdin = null,
         bool throwOnError = true,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        IReadOnlyDictionary<string, string>? env = null)
     {
         var argList = args.ToList();
         var psi = new ProcessStartInfo(Executable)
@@ -53,6 +54,8 @@ public static class GitCli
         foreach (var a in (string[])["-c", "core.quotepath=off", "-c", "color.ui=false"]) psi.ArgumentList.Add(a);
         foreach (var a in argList) psi.ArgumentList.Add(a);
         psi.Environment["GIT_TERMINAL_PROMPT"] = "0";
+        if (env is not null)
+            foreach (var (key, value) in env) psi.Environment[key] = value;
 
         using var process = Process.Start(psi) ?? throw new InvalidOperationException("Unable to start git.");
 

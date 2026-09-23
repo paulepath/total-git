@@ -14,9 +14,28 @@ public sealed record RepositoryState(
     string? HeadSha,
     string? OriginUrl,
     IReadOnlyList<RefInfo> Refs,
-    IReadOnlyList<StashInfo> Stashes)
+    IReadOnlyList<StashInfo> Stashes,
+    RepoOperation Operation = RepoOperation.None,
+    string? OperationProgress = null)
 {
     public string WorktreeName => Path.GetFileName(WorkingDirectory.TrimEnd('\\', '/'));
+}
+
+/// <summary>A multi-step operation the repository is in the middle of (usually stopped on conflicts).</summary>
+public enum RepoOperation
+{
+    None,
+    Merge,
+    Rebase,
+    CherryPick,
+    Revert,
+}
+
+/// <summary>How a merge or rebase ended: done, or stopped for the user (conflicts, or an edit step).</summary>
+public enum OperationOutcome
+{
+    Completed,
+    Stopped,
 }
 
 /// <param name="Index">Position in the stash list (0 = stash@{0}, the newest).</param>

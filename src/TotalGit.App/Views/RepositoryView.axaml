@@ -109,6 +109,27 @@
       </Grid>
     </Border>
 
+    <!-- Merge / rebase in progress -->
+    <Border DockPanel.Dock="Top" IsVisible="{Binding OperationBanner, Converter={x:Static ObjectConverters.IsNotNull}}"
+            Background="#5B4513" Padding="14,8">
+      <Grid ColumnDefinitions="Auto,*,Auto">
+        <PathIcon Data="{StaticResource MergeIcon}" Width="16" Height="16" Foreground="#F5C26B" Margin="0,0,10,0" />
+        <TextBlock Grid.Column="1" Text="{Binding OperationBanner.Message}" TextWrapping="Wrap" VerticalAlignment="Center" Foreground="#F0F2F5" />
+        <ItemsControl Grid.Column="2" ItemsSource="{Binding OperationBanner.Actions}" Margin="12,0,0,0">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <StackPanel Orientation="Horizontal" Spacing="6" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:MenuAction">
+              <Button Content="{Binding Header}" Command="{Binding Command}" CommandParameter="{Binding Parameter}" IsEnabled="{Binding IsEnabled}" Padding="10,3" />
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </Grid>
+    </Border>
+
     <!-- Banner -->
     <Border DockPanel.Dock="Top" IsVisible="{Binding Banner, Converter={x:Static ObjectConverters.IsNotNull}}"
             Background="{Binding Banner.IsError, Converter={x:Static vm:Converters.ErrorToBackground}, FallbackValue=Transparent}"
@@ -123,7 +144,7 @@
           </ItemsControl.ItemsPanel>
           <ItemsControl.ItemTemplate>
             <DataTemplate x:DataType="vm:MenuAction">
-              <Button Content="{Binding Header}" Command="{Binding Command}" CommandParameter="{Binding Parameter}" Padding="10,3" />
+              <Button Content="{Binding Header}" Command="{Binding Command}" CommandParameter="{Binding Parameter}" IsEnabled="{Binding IsEnabled}" Padding="10,3" />
             </DataTemplate>
           </ItemsControl.ItemTemplate>
         </ItemsControl>

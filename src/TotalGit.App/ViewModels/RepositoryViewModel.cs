@@ -345,6 +345,7 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
             var wasDirty = _status.IsDirty;
             var countChanged = _status.TotalCount != status.TotalCount;
             _status = status;
+            UpdateOperationBanner();
             if (wasDirty != status.IsDirty || countChanged) RebuildGraph();
             Staging?.Update(status);
             if (SelectedSha == CommitInfo.WorkingTreeSha && !status.IsDirty) SelectedSha = null;
@@ -399,6 +400,7 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
         BehindText = current is { Behind: > 0 } ? current.Behind.ToString() : null;
 
         HasStashes = state.Stashes.Count > 0;
+        UpdateOperationBanner();
         Sidebar.Update(state.Refs, state.Stashes, _worktrees, WorktreeService.FindLeftovers(state.MainWorkingDirectory, _worktrees), state.WorkingDirectory);
     }
 
@@ -886,6 +888,16 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
             actions.Add(MenuAction.Separator);
         }
 
+        var isHead = _state?.HeadSha == target.Sha;
+        var mergeRebase = target.Kind == RefKind.LocalBranch && _state?.CurrentBranch == target.Name
+            ? []
+            : MergeRebaseActions(target, isCurrentTip: isHead).ToList();
+        if (mergeRebase.Count > 0)
+        {
+            actions.AddRange(mergeRebase);
+            actions.Add(MenuAction.Separator);
+        }
+
         switch (target.Kind)
         {
             case RefKind.LocalBranch:
@@ -935,6 +947,12 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
         if (actions.Count > 0) actions.Add(MenuAction.Separator);
 
         var here = new BranchTarget(RefKind.DetachedHead, commit.ShortSha, commit.Sha);
+        var mergeRebase = MergeRebaseActions(here, isCurrentTip: _state?.HeadSha == commit.Sha).ToList();
+        if (mergeRebase.Count > 0)
+        {
+            actions.AddRange(mergeRebase);
+            actions.Add(MenuAction.Separator);
+        }
         actions.Add(new MenuAction("Create tag here…", CreateTagCommand, here));
         actions.Add(new MenuAction("Create worktree from this commit…", CreateWorktreeCommand, here));
         actions.Add(new MenuAction("Copy commit SHA", CopyCommand, commit.Sha));

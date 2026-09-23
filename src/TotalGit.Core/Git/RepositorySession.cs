@@ -84,7 +84,9 @@ public sealed class RepositorySession : IDisposable
                 _repo.Head.Tip?.Sha,
                 _repo.Network.Remotes["origin"]?.Url,
                 ReadRefs(),
-                ReadStashes());
+                ReadStashes(),
+                ReadOperation(info.CurrentOperation),
+                ReadRebaseProgress());
         }
     }
 
@@ -293,6 +295,33 @@ public sealed class RepositorySession : IDisposable
         c.Author.Email,
         c.Author.When,
         c.MessageShort);
+
+    private static RepoOperation ReadOperation(CurrentOperation op) => op switch
+    {
+        CurrentOperation.Merge => RepoOperation.Merge,
+        CurrentOperation.Rebase or CurrentOperation.RebaseInteractive or CurrentOperation.RebaseMerge
+            or CurrentOperation.ApplyMailboxOrRebase => RepoOperation.Rebase,
+        CurrentOperation.CherryPick or CurrentOperation.CherryPickSequence => RepoOperation.CherryPick,
+        CurrentOperation.Revert or CurrentOperation.RevertSequence => RepoOperation.Revert,
+        _ => RepoOperation.None,
+    };
+
+    /// <summary>"3/7" while a rebase is stopped at its third of seven steps.</summary>
+    private string? ReadRebaseProgress()
+    {
+        foreach (var dir in (string[])["rebase-merge", "rebase-apply"])
+        {
+            var path = Path.Combine(GitDirectory, dir);
+            var num = Path.Combine(path, dir == "rebase-merge" ? "msgnum" : "next");
+            var end = Path.Combine(path, dir == "rebase-merge" ? "end" : "last");
+            try
+            {
+                if (File.Exists(num) && File.Exists(end)) return $"{File.ReadAllText(num).Trim()}/{File.ReadAllText(end).Trim()}";
+            }
+            catch (IOException) { }
+        }
+        return null;
+    }
 
     private List<StashInfo> ReadStashes() => _repo.Stashes
         .Select((s, i) =>
