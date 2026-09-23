@@ -41,9 +41,15 @@ public partial class MainWindowViewModel : ObservableObject
     private int _detailsRequest;
     private int _diffRequest;
 
-    public MainWindowViewModel(AvatarService avatars, AppSettings settings)
+    private readonly UpdateService? _updates;
+    private DispatcherTimer? _updateTimer;
+
+    public MainWindowViewModel(AvatarService avatars, AppSettings settings, UpdateService? updates = null)
     {
         _settings = settings;
+        _updates = updates;
+        AppVersion = updates?.CurrentVersion ?? "dev";
+        StartUpdateChecks();
         Avatars = new AvatarCache(avatars);
         DiffMode = Enum.TryParse<DiffViewMode>(settings.DiffMode, out var mode) ? mode : DiffViewMode.Inline;
     }
@@ -63,7 +69,18 @@ public partial class MainWindowViewModel : ObservableObject
     public partial GraphData? Graph { get; set; }
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(WindowTitle))]
     public partial string RepositoryName { get; set; } = "No repository";
+
+    public string AppVersion { get; }
+    public string WindowTitle => $"TotalGit {AppVersion} - {RepositoryName}";
+
+    /// <summary>Version of a downloaded update waiting for a restart.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasUpdate))]
+    public partial string? UpdateVersion { get; set; }
+
+    public bool HasUpdate => UpdateVersion is not null;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasWorktreeName))]
@@ -906,6 +923,31 @@ public partial class MainWindowViewModel : ObservableObject
 
     [RelayCommand]
     private void DismissBanner() => Banner = null;
+
+    // ---------------------------------------------------------------- updates
+
+    private void StartUpdateChecks()
+    {
+        if (_updates is not { IsInstalled: true } updates) return;
+        updates.UpdateReady += version => Dispatcher.UIThread.Post(() =>
+        {
+            UpdateVersion = version;
+            Banner = new Banner($"TotalGit {version} is ready.", false,
+                [new MenuAction("Restart to update", RestartToUpdateCommand)]);
+        });
+
+        // First check shortly after start-up, then every few hours.
+        _updateTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+        _updateTimer.Tick += (_, _) =>
+        {
+            _updateTimer.Interval = TimeSpan.FromHours(4);
+            _ = updates.CheckAndDownloadAsync();
+        };
+        _updateTimer.Start();
+    }
+
+    [RelayCommand]
+    private void RestartToUpdate() => _updates?.RestartToUpdate();
 
     private void ShowError(string message) => Banner = new Banner(message, true, []);
 

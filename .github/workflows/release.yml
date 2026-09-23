@@ -1,0 +1,64 @@
+# Builds TotalGit on every push to master and publishes it as a GitHub Release.
+# Installed copies (Velopack) update themselves from these releases.
+name: Release
+
+on:
+  push:
+    branches: [master]
+    paths-ignore: ['**.md']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  REPO_URL: https://github.com/${{ github.repository }}
+  VPK_VERSION: 1.2.158
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Test
+        run: dotnet test -c Release
+
+      - name: Version
+        shell: pwsh
+        run: echo "VERSION=0.3.${{ github.run_number }}" >> $env:GITHUB_ENV
+
+      - name: Publish
+        run: dotnet publish src/TotalGit.App -c Release -r win-x64 --self-contained -p:Version=${{ env.VERSION }} -o publish
+
+      # Native debug symbols from SkiaSharp/HarfBuzz are ~100 MB and not needed by users.
+      - name: Strip debug symbols
+        shell: pwsh
+        run: Remove-Item publish/*.pdb
+
+      - name: Install vpk
+        run: dotnet tool install -g vpk --version ${{ env.VPK_VERSION }}
+
+      # The previous release lets vpk build a small delta package.
+      - name: Download previous release
+        run: vpk download github --repoUrl ${{ env.REPO_URL }} --token ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
+
+      - name: Pack
+        run: >
+          vpk pack --packId TotalGitApp --packVersion ${{ env.VERSION }} --packDir publish
+          --mainExe TotalGit.exe --packTitle TotalGit --packAuthors paulepath
+          --icon src/TotalGit.App/Assets/totalgit.ico
+
+      - name: Upload release
+        run: >
+          vpk upload github --repoUrl ${{ env.REPO_URL }} --token ${{ secrets.GITHUB_TOKEN }}
+          --publish --tag v${{ env.VERSION }} --releaseName "TotalGit ${{ env.VERSION }}"

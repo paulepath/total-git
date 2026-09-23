@@ -18,9 +18,14 @@ public partial class App : Application
         {
             var avatars = new AvatarService(Path.Combine(AppSettings.DataDirectory, "avatars"));
             var settings = AppSettings.Load();
-            var vm = new MainWindowViewModel(avatars, settings);
+            var updates = new UpdateService();
+            var vm = new MainWindowViewModel(avatars, settings, updates);
             desktop.MainWindow = new MainWindow { DataContext = vm };
-            desktop.Exit += (_, _) => avatars.Dispose();
+            desktop.Exit += (_, _) =>
+            {
+                avatars.Dispose();
+                updates.ApplyOnExit(); // a downloaded update the user didn't restart for
+            };
 
             var startPath = desktop.Args is [var first, ..] ? first : settings.LastRepository;
             if (!string.IsNullOrEmpty(startPath) && Directory.Exists(startPath))
