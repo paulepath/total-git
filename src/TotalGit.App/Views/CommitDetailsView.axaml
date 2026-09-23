@@ -60,13 +60,12 @@
       </ListBox.Styles>
       <ListBox.ItemTemplate>
         <DataTemplate x:DataType="vm:FileChangeItem">
-          <Grid ColumnDefinitions="18,*,Auto" ToolTip.Tip="{Binding ToolTip}">
+          <Grid ColumnDefinitions="18,Auto,*,Auto" ToolTip.Tip="{Binding ToolTip}">
             <TextBlock Text="{Binding StatusLetter}" Foreground="{Binding StatusBrush}" FontWeight="Bold" FontSize="12" VerticalAlignment="Center" />
-            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-              <TextBlock Text="{Binding FileName}" FontSize="12" Foreground="#E6E8EB" />
-              <TextBlock Text="{Binding Folder}" FontSize="11" Foreground="#6B727C" IsVisible="{Binding HasFolder}" TextTrimming="CharacterEllipsis" />
-            </StackPanel>
-            <TextBlock Grid.Column="2" Text="{Binding Stats}" FontSize="11" Foreground="#8A9099" IsVisible="{Binding HasStats}" VerticalAlignment="Center" Margin="8,0,0,0" />
+            <TextBlock Grid.Column="1" Text="{Binding FileName}" FontSize="12" Foreground="#E6E8EB" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="2" Text="{Binding Folder}" FontSize="11" Foreground="#6B727C" IsVisible="{Binding HasFolder}"
+                       TextTrimming="LeadingCharacterEllipsis" VerticalAlignment="Center" Margin="6,0,0,0" />
+            <TextBlock Grid.Column="3" Text="{Binding Stats}" FontSize="11" Foreground="#8A9099" IsVisible="{Binding HasStats}" VerticalAlignment="Center" Margin="8,0,0,0" />
           </Grid>
         </DataTemplate>
       </ListBox.ItemTemplate>
