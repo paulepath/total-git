@@ -50,6 +50,30 @@ public static class GitActions
     public static Task DeleteBranchAsync(string worktree, string branch, bool force = false) =>
         GitCli.RunAsync(worktree, "branch", force ? "-D" : "-d", branch);
 
+    /// <summary>Creates a tag at <paramref name="sha"/>: annotated when a message is given, else lightweight.</summary>
+    public static Task CreateTagAsync(string worktree, string name, string sha, string? message = null) =>
+        string.IsNullOrWhiteSpace(message)
+            ? GitCli.RunAsync(worktree, "tag", name, sha)
+            : GitCli.RunAsync(worktree, ["tag", "-a", name, sha, "--cleanup=strip", "-F", "-"], stdin: message);
+
+    public static Task DeleteTagAsync(string worktree, string name) => GitCli.RunAsync(worktree, "tag", "-d", name);
+
+    public static Task PushTagAsync(string worktree, string remote, string name) =>
+        GitCli.RunAsync(worktree, "push", remote, $"refs/tags/{name}");
+
+    public static Task DeleteRemoteTagAsync(string worktree, string remote, string name) =>
+        GitCli.RunAsync(worktree, "push", remote, $":refs/tags/{name}");
+
+    /// <summary>The rules of <c>git check-ref-format</c> for a branch or tag name.</summary>
+    public static bool IsValidRefName(string name)
+    {
+        if (name.Length == 0 || name == "@" || name.StartsWith('-') || name.StartsWith('/') || name.EndsWith('/')
+            || name.EndsWith('.') || name.Contains("..") || name.Contains("@{") || name.Contains("//"))
+            return false;
+        if (name.Any(c => c < 32 || c == 127 || " ~^:?*[\\".Contains(c))) return false;
+        return name.Split('/').All(part => !part.StartsWith('.') && !part.EndsWith(".lock", StringComparison.Ordinal));
+    }
+
     public static Task FetchAsync(string worktree) => GitCli.RunAsync(worktree, "fetch", "--all", "--prune");
 
     public static Task PullAsync(string worktree) => GitCli.RunAsync(worktree, "pull");

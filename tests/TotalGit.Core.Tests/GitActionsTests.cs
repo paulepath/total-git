@@ -28,6 +28,36 @@ public sealed class GitActionsTests : IDisposable
     }
 
     [Fact]
+    public async Task Creates_lightweight_and_annotated_tags()
+    {
+        var first = _repo.Commit("one");
+        _repo.Commit("two");
+
+        await GitActions.CreateTagAsync(_repo.Root, "v1", first);
+        await GitActions.CreateTagAsync(_repo.Root, "v2", "HEAD", "Release two\n\nNotes");
+
+        Assert.Equal("commit", _repo.Git("cat-file", "-t", "v1"));
+        Assert.Equal(first, _repo.Git("rev-parse", "v1"));
+        Assert.Equal("tag", _repo.Git("cat-file", "-t", "v2"));
+        Assert.Equal("Release two", _repo.Git("tag", "-l", "--format=%(contents:subject)", "v2"));
+
+        await GitActions.DeleteTagAsync(_repo.Root, "v1");
+        Assert.Equal("v2", _repo.Git("tag", "-l"));
+    }
+
+    [Theory]
+    [InlineData("v1.2.3", true)]
+    [InlineData("release/2026-09", true)]
+    [InlineData("has space", false)]
+    [InlineData("a..b", false)]
+    [InlineData("-x", false)]
+    [InlineData("x.lock", false)]
+    [InlineData("x/.hidden", false)]
+    [InlineData("x~1", false)]
+    [InlineData("", false)]
+    public void Validates_ref_names(string name, bool valid) => Assert.Equal(valid, GitActions.IsValidRefName(name));
+
+    [Fact]
     public async Task Stage_and_unstage_all_before_first_commit()
     {
         _repo.Write("a.txt", "a");

@@ -44,6 +44,7 @@ public interface IDialogService
     Task<string?> PickFolderAsync();
     Task<bool> ConfirmAsync(string title, string message, IReadOnlyList<string>? details = null, string confirmText = "OK");
     Task<bool> ShowCreateWorktreeAsync(CreateWorktreeViewModel viewModel);
+    Task<bool> ShowFormAsync(FormSpec spec);
     Task CopyToClipboardAsync(string text);
     Task RevealFolderAsync(string path);
 }

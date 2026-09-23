@@ -890,6 +890,7 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
                 if (!isCheckedOutHere && wt is null) actions.Add(new MenuAction($"Checkout {target.Name}", CheckoutCommand, target));
                 if (wt is null) actions.Add(new MenuAction("Create worktree…", CreateWorktreeCommand, target));
                 if (isCheckedOutHere && wt is null) actions.Add(new MenuAction("Open in VS Code", OpenInVsCodeCommand, current));
+                actions.Add(new MenuAction("Create tag here…", CreateTagCommand, target));
                 actions.Add(new MenuAction("Copy branch name", CopyCommand, target.Name));
                 if (!isCheckedOutHere && wt is null)
                 {
@@ -900,11 +901,16 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
             case RefKind.RemoteBranch:
                 actions.Add(new MenuAction($"Checkout {target.ShortName}", CheckoutCommand, target));
                 actions.Add(new MenuAction("Create worktree…", CreateWorktreeCommand, target));
+                actions.Add(new MenuAction("Create tag here…", CreateTagCommand, target));
                 actions.Add(new MenuAction("Copy branch name", CopyCommand, target.Name));
                 break;
             case RefKind.Tag:
                 actions.Add(new MenuAction("Create worktree from tag…", CreateWorktreeCommand, target));
+                actions.Add(new MenuAction("Push tag", PushTagCommand, target));
                 actions.Add(new MenuAction("Copy tag name", CopyCommand, target.Name));
+                actions.Add(MenuAction.Separator);
+                actions.Add(new MenuAction("Delete tag…", DeleteTagCommand, target));
+                actions.Add(new MenuAction("Delete tag from remote…", DeleteRemoteTagCommand, target));
                 break;
         }
         return actions;
@@ -925,8 +931,9 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
         }
         if (actions.Count > 0) actions.Add(MenuAction.Separator);
 
-        actions.Add(new MenuAction("Create worktree from this commit…", CreateWorktreeCommand,
-            new BranchTarget(RefKind.DetachedHead, commit.ShortSha, commit.Sha)));
+        var here = new BranchTarget(RefKind.DetachedHead, commit.ShortSha, commit.Sha);
+        actions.Add(new MenuAction("Create tag here…", CreateTagCommand, here));
+        actions.Add(new MenuAction("Create worktree from this commit…", CreateWorktreeCommand, here));
         actions.Add(new MenuAction("Copy commit SHA", CopyCommand, commit.Sha));
         actions.Add(new MenuAction("Copy commit message", CopyCommand, commit.MessageShort));
         return actions;
