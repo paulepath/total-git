@@ -108,6 +108,13 @@ public static class GitActions
     public static Task<OperationOutcome> MergeAsync(string worktree, string revision, bool noFastForward = false) =>
         RunStoppableAsync(worktree, ["merge", "--no-edit", noFastForward ? "--no-ff" : "--ff", revision]);
 
+    /// <summary>Resolves a conflicted file with one side's whole version and stages it.</summary>
+    public static async Task TakeSideAsync(string worktree, string path, bool ours)
+    {
+        await GitCli.RunAsync(worktree, "checkout", ours ? "--ours" : "--theirs", "--", path);
+        await GitCli.RunAsync(worktree, "add", "--", path);
+    }
+
     public static Task MergeAbortAsync(string worktree) => GitCli.RunAsync(worktree, "merge", "--abort");
 
     /// <summary>Concludes a merge whose conflicts are resolved and staged.</summary>

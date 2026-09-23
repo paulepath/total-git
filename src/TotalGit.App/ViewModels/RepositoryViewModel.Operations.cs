@@ -118,6 +118,54 @@ public partial class RepositoryViewModel
         if (outcome == OperationOutcome.Stopped) SelectedSha = CommitInfo.WorkingTreeSha;
     }
 
+    // ------------------------------------------------------------------ merge tool
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasMergeTool))]
+    public partial MergeToolViewModel? MergeTool { get; set; }
+
+    public bool HasMergeTool => MergeTool is not null;
+
+    private void OpenMergeTool(string path)
+    {
+        if (_state is null) return;
+        var wt = _state.WorkingDirectory;
+        try
+        {
+            MergeTool = new MergeToolViewModel(wt, path,
+                markResolved: async p =>
+                {
+                    var ok = await RunGitAsync("Marking resolved…", () => GitActions.StageAsync(wt, [p]), $"Resolved {p}.", Refresh.Status);
+                    if (ok) SelectNextConflict();
+                    return ok;
+                },
+                takeWholeFile: async (p, ours) =>
+                {
+                    if (await RunGitAsync("Resolving…", () => GitActions.TakeSideAsync(wt, p, ours), $"Resolved {p}.", Refresh.Status))
+                        SelectNextConflict();
+                },
+                confirm: (title, message) => Dialogs?.ConfirmAsync(title, message, null, "Save anyway") ?? Task.FromResult(false),
+                close: () =>
+                {
+                    if (Staging is not null) Staging.SelectedFile = null;
+                    MergeTool = null;
+                });
+        }
+        catch (IOException ex)
+        {
+            ShowError(ex.Message);
+        }
+    }
+
+    /// <summary>After resolving a file, open the next conflicted one (or close the tool when none are left).</summary>
+    private void SelectNextConflict()
+    {
+        if (Staging is null) return;
+        var next = Staging.Unstaged.FirstOrDefault(f => f.Change.Kind == ChangeKind.Conflicted);
+        MergeTool = null;
+        Staging.SelectedFile = next;
+    }
+
     [RelayCommand]
     private async Task MergeAsync(BranchTarget target)
     {

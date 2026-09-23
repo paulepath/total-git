@@ -164,6 +164,11 @@
           <ScrollBar Grid.Column="1" x:Name="GraphScrollBar" Orientation="Vertical" AllowAutoHide="False" />
         </Grid>
 
+        <!-- Conflicted files open the merge tool over the graph. -->
+        <Panel IsVisible="{Binding HasMergeTool}" ZIndex="1">
+          <views:MergeToolView DataContext="{Binding MergeTool}" />
+        </Panel>
+
         <!-- Diff replaces the graph while a file is open, like GitKraken. -->
         <DockPanel IsVisible="{Binding HasDiff}" Background="#1C1F24">
           <Border DockPanel.Dock="Top" Background="#23272D" Padding="12,6" BorderBrush="#30353C" BorderThickness="0,0,0,1">

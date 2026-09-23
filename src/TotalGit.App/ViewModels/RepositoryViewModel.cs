@@ -510,6 +510,15 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
         FileChangeItem? file;
         Func<FileDiff> load;
         string title;
+        if (Staging is { SelectedFile: { Change.Kind: ChangeKind.Conflicted } conflicted } && SelectedSha == CommitInfo.WorkingTreeSha)
+        {
+            Diff = null;
+            // Status refreshes reselect the same file; keep the open tool (and the user's choices).
+            if (MergeTool?.Path != conflicted.Path) OpenMergeTool(conflicted.Path);
+            return;
+        }
+        MergeTool = null;
+
         if (Staging is { SelectedFile: { } sf } && SelectedSha == CommitInfo.WorkingTreeSha)
         {
             file = sf;
@@ -544,6 +553,7 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void CloseDiff()
     {
+        MergeTool = null;
         if (Details is not null) Details.SelectedFile = null;
         if (Staging is not null) Staging.SelectedFile = null;
         Diff = null;
