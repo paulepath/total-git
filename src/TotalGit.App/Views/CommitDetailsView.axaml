@@ -8,11 +8,12 @@
       <StackPanel Spacing="10">
         <Grid ColumnDefinitions="Auto,*">
           <Panel Width="40" Height="40" VerticalAlignment="Top">
-            <Border CornerRadius="20" Background="#3A4250">
+            <Border CornerRadius="20" Background="#3A4250" IsVisible="{Binding Avatar, Converter={x:Static ObjectConverters.IsNull}}">
               <TextBlock Text="{Binding Initials}" HorizontalAlignment="Center" VerticalAlignment="Center"
                          FontWeight="SemiBold" Foreground="White" />
             </Border>
-            <Border CornerRadius="20" ClipToBounds="True" IsVisible="{Binding Avatar, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <!-- Black behind the avatar so transparent logos stay clear, as in the graph. -->
+            <Border CornerRadius="20" ClipToBounds="True" Background="Black" IsVisible="{Binding Avatar, Converter={x:Static ObjectConverters.IsNotNull}}">
               <Image Source="{Binding Avatar}" Stretch="UniformToFill" />
             </Border>
           </Panel>
