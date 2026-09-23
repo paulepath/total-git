@@ -1,0 +1,76 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:TotalGit.App.ViewModels"
+        xmlns:views="using:TotalGit.App.Views"
+        x:Class="TotalGit.App.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Title="{Binding RepositoryName, StringFormat='TotalGit - {0}'}"
+        Width="1280" Height="860"
+        Background="{StaticResource WindowBackgroundBrush}">
+  <Window.KeyBindings>
+    <KeyBinding Gesture="F5" Command="{Binding RefreshCommand}" />
+    <KeyBinding Gesture="Ctrl+O" Command="{Binding OpenRepositoryCommand}" />
+  </Window.KeyBindings>
+
+  <DockPanel>
+    <!-- Header bar, modelled on GitKraken's repository / branch breadcrumb. -->
+    <Border DockPanel.Dock="Top" Background="{StaticResource ToolbarBackgroundBrush}" Padding="12,8">
+      <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,*,Auto,Auto">
+        <Button Grid.Column="0" Command="{Binding OpenRepositoryCommand}" ToolTip.Tip="Open repository (Ctrl+O)"
+                VerticalAlignment="Center" Padding="10,6">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <PathIcon Width="16" Height="16"
+                      Data="M10,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V8C22,6.89 21.1,6 20,6H12L10,4Z" />
+            <TextBlock Text="Open" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+
+        <StackPanel Grid.Column="1" Margin="20,0,0,0" VerticalAlignment="Center">
+          <TextBlock Text="repository" FontSize="11" Foreground="{StaticResource MutedTextBrush}" />
+          <TextBlock Text="{Binding RepositoryName}" FontSize="16" FontWeight="SemiBold"
+                     Foreground="{StaticResource PrimaryTextBrush}" />
+        </StackPanel>
+
+        <PathIcon Grid.Column="2" Width="10" Height="10" Margin="16,14,16,0" Foreground="{StaticResource MutedTextBrush}"
+                  Data="M8.59,16.58L13.17,12L8.59,7.41L10,6L16,12L10,18L8.59,16.58Z" />
+
+        <StackPanel Grid.Column="3" VerticalAlignment="Center">
+          <TextBlock Text="branch" FontSize="11" Foreground="{StaticResource MutedTextBrush}" />
+          <TextBlock Text="{Binding CurrentBranch}" FontSize="16" FontWeight="SemiBold"
+                     Foreground="{StaticResource PrimaryTextBrush}" />
+        </StackPanel>
+
+        <TextBlock Grid.Column="5" Text="{Binding CommitCountText}" VerticalAlignment="Center" Margin="0,0,12,0"
+                   Foreground="{StaticResource MutedTextBrush}" />
+
+        <Button Grid.Column="6" Command="{Binding RefreshCommand}" IsEnabled="{Binding HasRepository}"
+                ToolTip.Tip="Refresh (F5)" VerticalAlignment="Center" Padding="8,6">
+          <PathIcon Width="16" Height="16"
+                    Data="M17.65,6.35C16.2,4.9 14.21,4 12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20C15.73,20 18.84,17.45 19.73,14H17.65C16.83,16.33 14.61,18 12,18A6,6 0 0,1 6,12A6,6 0 0,1 12,6C13.66,6 15.14,6.69 16.22,7.78L13,11H20V4L17.65,6.35Z" />
+        </Button>
+      </Grid>
+    </Border>
+
+    <Panel>
+      <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding HasRepository}">
+        <views:CommitGraphView Grid.Column="0" x:Name="Graph" Data="{Binding Graph}"
+                               SelectedSha="{Binding SelectedSha}" />
+        <ScrollBar Grid.Column="1" x:Name="GraphScrollBar" Orientation="Vertical" AllowAutoHide="False" />
+      </Grid>
+
+      <StackPanel IsVisible="{Binding ShowEmptyState}" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12">
+        <TextBlock Text="Open a git repository to view its history" FontSize="16"
+                   Foreground="{StaticResource MutedTextBrush}" HorizontalAlignment="Center" />
+        <Button Content="Open repository..." Command="{Binding OpenRepositoryCommand}" HorizontalAlignment="Center" />
+      </StackPanel>
+
+      <TextBlock IsVisible="{Binding IsLoading}" Text="Loading repository..." FontSize="16"
+                 Foreground="{StaticResource MutedTextBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+
+      <StackPanel IsVisible="{Binding HasError}" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12" MaxWidth="600">
+        <TextBlock Text="{Binding ErrorMessage}" Foreground="#F26B6B" TextWrapping="Wrap" HorizontalAlignment="Center" />
+        <Button Content="Open a different repository..." Command="{Binding OpenRepositoryCommand}" HorizontalAlignment="Center" />
+      </StackPanel>
+    </Panel>
+  </DockPanel>
+</Window>

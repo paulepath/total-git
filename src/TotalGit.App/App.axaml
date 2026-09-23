@@ -1,0 +1,14 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="TotalGit.App.App"
+             RequestedThemeVariant="Dark">
+  <Application.Resources>
+    <SolidColorBrush x:Key="WindowBackgroundBrush" Color="#1C1F24" />
+    <SolidColorBrush x:Key="ToolbarBackgroundBrush" Color="#2B2F36" />
+    <SolidColorBrush x:Key="MutedTextBrush" Color="#8A9099" />
+    <SolidColorBrush x:Key="PrimaryTextBrush" Color="#E6E8EB" />
+  </Application.Resources>
+  <Application.Styles>
+    <FluentTheme />
+  </Application.Styles>
+</Application>

@@ -8,6 +8,14 @@ public static class RepositoryReader
 {
     public const int DefaultMaxCommits = 2000;
 
+    static RepositoryReader()
+    {
+        // libgit2 refuses repos declaring config extensions it doesn't know. These only change how
+        // worktree metadata is stored, which a read-only history viewer never touches.
+        var known = GlobalSettings.GetExtensions();
+        GlobalSettings.SetExtensions([.. known, "relativeworktrees"]);
+    }
+
     /// <summary>Opens the repository containing <paramref name="path"/> and reads its refs and commit history.</summary>
     public static RepositorySnapshot Read(string path, int maxCommits = DefaultMaxCommits)
     {

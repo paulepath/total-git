@@ -64,6 +64,21 @@ public sealed class RepositoryReaderTests : IDisposable
     }
 
     [Fact]
+    public void Opens_repository_using_relative_worktrees_extension()
+    {
+        using (var repo = new Repository(_dir))
+        {
+            CommitFile(repo, "a.txt", "1", "first", DateTimeOffset.Now);
+            repo.Config.Set("core.repositoryformatversion", 1);
+            repo.Config.Set("extensions.relativeworktrees", true);
+        }
+
+        var snap = RepositoryReader.Read(_dir);
+
+        Assert.Single(snap.Commits);
+    }
+
+    [Fact]
     public void Non_repository_throws_friendly_error()
     {
         var plain = Directory.CreateTempSubdirectory("totalgit-plain").FullName;
