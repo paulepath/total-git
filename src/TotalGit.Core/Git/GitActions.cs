@@ -196,6 +196,19 @@ public static class GitActions
         return false;
     }
 
+    public static async Task<bool> IsAncestorAsync(string worktree, string ancestor, string descendant) =>
+        (await GitCli.RunAsync(worktree, ["merge-base", "--is-ancestor", ancestor, descendant], throwOnError: false)).ExitCode == 0;
+
+    /// <summary>Commits after <paramref name="baseSha"/> that the current branch's upstream already has.</summary>
+    public static async Task<IReadOnlySet<string>> PushedCommitsAsync(string worktree, string? baseSha)
+    {
+        var upstream = await GitCli.RunAsync(worktree, ["rev-parse", "--verify", "--quiet", "@{u}"], throwOnError: false);
+        if (upstream.ExitCode != 0) return new HashSet<string>();
+        var range = baseSha is null ? "@{u}" : $"{baseSha}..@{{u}}";
+        var output = (await GitCli.RunAsync(worktree, "rev-list", range)).StdOut;
+        return output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToHashSet();
+    }
+
     /// <summary>Commits in <c>base..HEAD</c> following first parents, oldest first (for an interactive rebase).</summary>
     public static async Task<IReadOnlyList<(string Sha, string Subject, bool IsMerge)>> CommitsSinceAsync(string worktree, string? baseSha)
     {

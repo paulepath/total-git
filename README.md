@@ -2,7 +2,8 @@
 
 A visual git client for Windows, built with .NET and Avalonia: a commit graph with coloured
 lanes and avatars, branch/tag/worktree sidebar, commit details with inline or side-by-side diffs,
-staging and commit, fetch/pull/push, and `.worktrees/<name>` worktree management with VS Code launch.
+staging and commit, fetch/pull/push, merge and rebase (including interactive rebase) with a built-in
+3-pane merge tool, stashes, tags, and `.worktrees/<name>` worktree management with VS Code launch.
 
 ![Commit graph with branches, tags, worktrees and commit details](docs/screenshots/graph.png)
 

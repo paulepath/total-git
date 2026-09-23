@@ -98,6 +98,9 @@ public partial class MainWindow : Window, IDialogService
 
     public Task<bool> ShowFormAsync(FormSpec spec) => new FormDialog(spec).ShowDialog<bool>(this);
 
+    public Task<bool> ShowInteractiveRebaseAsync(InteractiveRebaseViewModel viewModel) =>
+        new InteractiveRebaseDialog { DataContext = viewModel }.ShowDialog<bool>(this);
+
     public async Task CopyToClipboardAsync(string text)
     {
         if (Clipboard is { } clipboard) await clipboard.SetTextAsync(text);

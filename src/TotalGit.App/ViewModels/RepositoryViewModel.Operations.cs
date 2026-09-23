@@ -203,6 +203,43 @@ public partial class RepositoryViewModel
         OnStopped(outcome);
     }
 
+    /// <summary>Rewrites the current branch from <paramref name="commit"/> (included) up to HEAD.</summary>
+    [RelayCommand]
+    private async Task InteractiveRebaseAsync(CommitInfo commit)
+    {
+        if (_state is null || Dialogs is null || !EnsureCleanFor("rebase")) return;
+        var wt = _state.WorkingDirectory;
+        var branch = _state.CurrentBranch ?? "HEAD";
+        if (!await GitActions.IsAncestorAsync(wt, commit.Sha, "HEAD"))
+        {
+            ShowError($"{commit.ShortSha} isn't part of {branch}, so it can't be rebased from here. Check out a branch that contains it first.");
+            return;
+        }
+
+        var baseSha = commit.ParentShas.FirstOrDefault();
+        var commits = await GitActions.CommitsSinceAsync(wt, baseSha);
+        if (commits.Any(c => c.IsMerge))
+        {
+            ShowError("There are merge commits between here and the branch tip. Interactive rebase of merges isn't supported; pick a later commit.");
+            return;
+        }
+        var pushed = await GitActions.PushedCommitsAsync(wt, baseSha);
+        var vm = new InteractiveRebaseViewModel(branch,
+            baseSha is null ? "from its first commit." : $"from {commit.ShortSha} \u201c{commit.MessageShort}\u201d up to its tip.",
+            commits.Select(c => new RebaseRow(c.Sha, c.Subject, pushed.Contains(c.Sha))));
+        if (!await Dialogs.ShowInteractiveRebaseAsync(vm)) return;
+        if (vm.IsUnchanged(commits.Select(c => c.Sha).ToList()))
+        {
+            ShowInfo("Nothing to change.");
+            return;
+        }
+
+        var outcome = OperationOutcome.Completed;
+        var ok = await RunGitAsync($"Rebasing {branch}…", async () => outcome = await GitActions.InteractiveRebaseAsync(wt, baseSha, vm.Steps()));
+        if (ok && outcome == OperationOutcome.Completed) ShowInfo($"Rewrote {branch}.");
+        OnStopped(outcome);
+    }
+
     [RelayCommand]
     private async Task ContinueOperationAsync()
     {

@@ -1,0 +1,78 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:TotalGit.App.ViewModels"
+        x:Class="TotalGit.App.Views.InteractiveRebaseDialog"
+        x:DataType="vm:InteractiveRebaseViewModel"
+        Title="Interactive rebase"
+        Width="820" Height="560" MinWidth="620" MinHeight="360"
+        WindowStartupLocation="CenterOwner"
+        Background="#23272D">
+  <Window.Styles>
+    <Style Selector="Button.move">
+      <Setter Property="Padding" Value="6,2" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="Border.row.dropped > Grid > TextBlock, Border.row.dropped > Grid > TextBox">
+      <Setter Property="Opacity" Value="0.45" />
+    </Style>
+  </Window.Styles>
+
+  <DockPanel Margin="20">
+    <StackPanel DockPanel.Dock="Top" Spacing="6" Margin="0,0,0,12">
+      <TextBlock Text="Interactive rebase" FontSize="18" FontWeight="SemiBold" Foreground="#E6E8EB" />
+      <TextBlock Foreground="#A9AFB8" TextWrapping="Wrap">
+        <Run Text="Rewrites" />
+        <Run Text="{Binding Branch}" FontWeight="SemiBold" />
+        <Run Text="{Binding BaseDescription}" />
+        <Run Text="Oldest commit at the top; they are replayed top to bottom. Reorder them with the arrows." />
+      </TextBlock>
+      <Border Background="#4A3A12" CornerRadius="4" Padding="10,6" IsVisible="{Binding HasPushed}">
+        <TextBlock Foreground="#F5D48B" TextWrapping="Wrap"
+                   Text="Some of these commits (marked 'pushed') are already on the remote. Rewriting them means you'll need to force-push, and anyone who pulled them will have to reconcile." />
+      </Border>
+    </StackPanel>
+
+    <StackPanel DockPanel.Dock="Bottom" Spacing="10" Margin="0,12,0,0">
+      <TextBlock Text="{Binding Error}" Foreground="#F26B6B" TextWrapping="Wrap" IsVisible="{Binding HasError}" />
+      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+        <Button Content="Cancel" IsCancel="True" Click="OnCancel" />
+        <Button Content="Start rebase" IsDefault="True" Classes="accent" IsEnabled="{Binding IsValid}" Click="OnStart" />
+      </StackPanel>
+    </StackPanel>
+
+    <Border Background="#1C1F24" CornerRadius="4">
+      <ScrollViewer>
+        <ItemsControl ItemsSource="{Binding Rows}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:RebaseRow">
+              <Border Classes="row" Classes.dropped="{Binding IsDropped}" Padding="8,6" BorderBrush="#2B2F36" BorderThickness="0,0,0,1">
+                <Grid ColumnDefinitions="Auto,110,70,*,Auto" RowDefinitions="Auto,Auto">
+                  <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Classes="move" Content="▲" ToolTip.Tip="Move up"
+                            Command="{Binding $parent[Window].((vm:InteractiveRebaseViewModel)DataContext).MoveUpCommand}" CommandParameter="{Binding}" />
+                    <Button Classes="move" Content="▼" ToolTip.Tip="Move down"
+                            Command="{Binding $parent[Window].((vm:InteractiveRebaseViewModel)DataContext).MoveDownCommand}" CommandParameter="{Binding}" />
+                  </StackPanel>
+                  <ComboBox Grid.Column="1" ItemsSource="{Binding Actions}" SelectedItem="{Binding Action}" Margin="6,0"
+                            HorizontalAlignment="Stretch" ToolTip.Tip="{Binding ActionHint}" />
+                  <TextBlock Grid.Column="2" Text="{Binding ShortSha}" FontFamily="Cascadia Mono, Consolas, monospace" FontSize="12"
+                             Foreground="#8A9099" VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="3" Text="{Binding Subject}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                             Foreground="#E6E8EB" IsVisible="{Binding !IsReword}" />
+                  <TextBox Grid.Column="3" Grid.RowSpan="2" Text="{Binding Message}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="32"
+                           IsVisible="{Binding IsReword}" />
+                  <Border Grid.Column="4" Background="#3A3F47" CornerRadius="3" Padding="6,1" Margin="8,0,0,0" VerticalAlignment="Center"
+                          IsVisible="{Binding IsPushed}" ToolTip.Tip="Already on the remote">
+                    <TextBlock Text="pushed" FontSize="10" Foreground="#C2C7CE" />
+                  </Border>
+                </Grid>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+    </Border>
+  </DockPanel>
+</Window>

@@ -14,6 +14,9 @@ public sealed class FormDialog : Window
     private readonly TextBlock _error;
     private readonly List<(FormField Field, Control Control)> _controls = [];
 
+    // Errors only show once the user has typed something (or tried to confirm); until then confirm is just disabled.
+    private bool _touched;
+
     public FormDialog(FormSpec spec)
     {
         _spec = spec;
@@ -28,6 +31,7 @@ public sealed class FormDialog : Window
         var cancel = new Button { Content = "Cancel", IsCancel = true };
         _confirm.Click += (_, _) =>
         {
+            _touched = true;
             if (Validate()) Close(true);
         };
         cancel.Click += (_, _) => Close(false);
@@ -70,6 +74,7 @@ public sealed class FormDialog : Window
             box.IsCheckedChanged += (_, _) =>
             {
                 field.IsChecked = box.IsChecked == true;
+                _touched = true;
                 UpdateEnabled();
                 Validate();
             };
@@ -90,6 +95,7 @@ public sealed class FormDialog : Window
         text.TextChanged += (_, _) =>
         {
             field.Text = text.Text ?? "";
+            _touched = true;
             Validate();
         };
         _controls.Add((field, text));
@@ -114,7 +120,7 @@ public sealed class FormDialog : Window
     {
         var error = _spec.Validate?.Invoke();
         _error.Text = error;
-        _error.IsVisible = error is not null;
+        _error.IsVisible = error is not null && _touched;
         _confirm.IsEnabled = error is null;
         return error is null;
     }

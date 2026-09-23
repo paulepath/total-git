@@ -898,30 +898,17 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
             actions.Add(MenuAction.Separator);
         }
 
-        var isHead = _state?.HeadSha == target.Sha;
-        var mergeRebase = target.Kind == RefKind.LocalBranch && _state?.CurrentBranch == target.Name
-            ? []
-            : MergeRebaseActions(target, isCurrentTip: isHead).ToList();
-        if (mergeRebase.Count > 0)
-        {
-            actions.AddRange(mergeRebase);
-            actions.Add(MenuAction.Separator);
-        }
-
+        var isCheckedOutHere = target.Kind == RefKind.LocalBranch && _state?.CurrentBranch == target.Name;
+        var dangerous = new List<MenuAction>();
         switch (target.Kind)
         {
             case RefKind.LocalBranch:
-                var isCheckedOutHere = _state?.CurrentBranch == target.Name;
                 if (!isCheckedOutHere && wt is null) actions.Add(new MenuAction($"Checkout {target.Name}", CheckoutCommand, target));
                 if (wt is null) actions.Add(new MenuAction("Create worktree…", CreateWorktreeCommand, target));
                 if (isCheckedOutHere && wt is null) actions.Add(new MenuAction("Open in VS Code", OpenInVsCodeCommand, current));
                 actions.Add(new MenuAction("Create tag here…", CreateTagCommand, target));
                 actions.Add(new MenuAction("Copy branch name", CopyCommand, target.Name));
-                if (!isCheckedOutHere && wt is null)
-                {
-                    actions.Add(MenuAction.Separator);
-                    actions.Add(new MenuAction("Delete branch…", DeleteBranchCommand, target));
-                }
+                if (!isCheckedOutHere && wt is null) dangerous.Add(new MenuAction("Delete branch…", DeleteBranchCommand, target));
                 break;
             case RefKind.RemoteBranch:
                 actions.Add(new MenuAction($"Checkout {target.ShortName}", CheckoutCommand, target));
@@ -933,10 +920,21 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
                 actions.Add(new MenuAction("Create worktree from tag…", CreateWorktreeCommand, target));
                 actions.Add(new MenuAction("Push tag", PushTagCommand, target));
                 actions.Add(new MenuAction("Copy tag name", CopyCommand, target.Name));
-                actions.Add(MenuAction.Separator);
-                actions.Add(new MenuAction("Delete tag…", DeleteTagCommand, target));
-                actions.Add(new MenuAction("Delete tag from remote…", DeleteRemoteTagCommand, target));
+                dangerous.Add(new MenuAction("Delete tag…", DeleteTagCommand, target));
+                dangerous.Add(new MenuAction("Delete tag from remote…", DeleteRemoteTagCommand, target));
                 break;
+        }
+
+        var mergeRebase = isCheckedOutHere ? [] : MergeRebaseActions(target, isCurrentTip: _state?.HeadSha == target.Sha).ToList();
+        if (mergeRebase.Count > 0)
+        {
+            actions.Add(MenuAction.Separator);
+            actions.AddRange(mergeRebase);
+        }
+        if (dangerous.Count > 0)
+        {
+            actions.Add(MenuAction.Separator);
+            actions.AddRange(dangerous);
         }
         return actions;
     }
@@ -957,16 +955,19 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
         if (actions.Count > 0) actions.Add(MenuAction.Separator);
 
         var here = new BranchTarget(RefKind.DetachedHead, commit.ShortSha, commit.Sha);
-        var mergeRebase = MergeRebaseActions(here, isCurrentTip: _state?.HeadSha == commit.Sha).ToList();
-        if (mergeRebase.Count > 0)
-        {
-            actions.AddRange(mergeRebase);
-            actions.Add(MenuAction.Separator);
-        }
         actions.Add(new MenuAction("Create tag here…", CreateTagCommand, here));
         actions.Add(new MenuAction("Create worktree from this commit…", CreateWorktreeCommand, here));
         actions.Add(new MenuAction("Copy commit SHA", CopyCommand, commit.Sha));
         actions.Add(new MenuAction("Copy commit message", CopyCommand, commit.MessageShort));
+
+        var rewrite = MergeRebaseActions(here, isCurrentTip: _state?.HeadSha == commit.Sha).ToList();
+        if (_state?.CurrentBranch is not null && !IsOperationInProgress)
+            rewrite.Add(new MenuAction("Interactive rebase from here…", InteractiveRebaseCommand, commit));
+        if (rewrite.Count > 0)
+        {
+            actions.Add(MenuAction.Separator);
+            actions.AddRange(rewrite);
+        }
         return actions;
     }
 
