@@ -379,9 +379,21 @@ public sealed class CommitGraphView : Control
         if (i == _hoverRow) ctx.FillRectangle(HoverBrush, new Rect(0, top, width, RowHeight));
 
         var strong = sha == SelectedSha || sha == _headSha;
-        var bandLeft = strong ? LaneX(row.Lane) : LaneX(row.Lane) + NodeRadius;
-        ctx.FillRectangle(strong ? _strongBandBrushes[color] : _bandBrushes[color],
-            new Rect(bandLeft, top + 1, width - bandLeft, RowHeight - 2));
+        // The band starts with a rounded end centred on the node, so it wraps around the circle.
+        var bandTop = top + 1;
+        var bandHeight = RowHeight - 2;
+        var nodeX = LaneX(row.Lane);
+        var band = new StreamGeometry();
+        using (var g = band.Open())
+        {
+            g.BeginFigure(new Point(nodeX, bandTop), true);
+            g.LineTo(new Point(width, bandTop));
+            g.LineTo(new Point(width, bandTop + bandHeight));
+            g.LineTo(new Point(nodeX, bandTop + bandHeight));
+            g.ArcTo(new Point(nodeX, bandTop), new Size(bandHeight / 2, bandHeight / 2), 0, false, SweepDirection.Clockwise);
+            g.EndFigure(true);
+        }
+        ctx.DrawGeometry(strong ? _strongBandBrushes[color] : _bandBrushes[color], null, band);
 
         // Right-edge accent stripe, as in GitKraken.
         ctx.FillRectangle(_laneBrushes[color], new Rect(width - 3, top + 1, 3, RowHeight - 2));

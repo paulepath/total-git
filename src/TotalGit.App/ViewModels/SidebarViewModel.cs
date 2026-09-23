@@ -59,7 +59,7 @@ public partial class SidebarViewModel : ObservableObject
     private IReadOnlyList<RefInfo> _refs = [];
     private IReadOnlyList<WorktreeInfo> _worktrees = [];
     private string? _currentWorktree;
-    private readonly HashSet<string> _collapsed = ["TAGS"];
+    private readonly HashSet<string> _collapsed = ["REMOTE", "TAGS"];
 
     public ObservableCollection<SidebarNode> Nodes { get; } = [];
 

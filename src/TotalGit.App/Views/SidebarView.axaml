@@ -60,7 +60,7 @@
                          Foreground="{Binding IsDimmed, Converter={x:Static vm:Converters.DimmedBrush}}" />
               <PathIcon Grid.Column="1" Data="{StaticResource CheckIcon}" Width="11" Height="11" Margin="6,0,0,0" Foreground="#4CC38A" IsVisible="{Binding IsCurrent}" />
               <PathIcon Grid.Column="2" Data="{StaticResource WorktreeIcon}" Width="11" Height="11" Margin="6,0,0,0" Foreground="#8A9099" IsVisible="{Binding HasWorktree}" />
-              <TextBlock Grid.Column="3" Text="{Binding Subtitle}" FontSize="11" Margin="6,0,0,0" Foreground="#6B727C" IsVisible="{Binding HasSubtitle}"
+              <TextBlock Grid.Column="3" Text="{Binding Subtitle}" FontSize="11" Margin="6,0,0,0" MaxWidth="90" Foreground="#6B727C" IsVisible="{Binding HasSubtitle}"
                          TextTrimming="CharacterEllipsis" />
             </Grid>
 
