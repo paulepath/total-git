@@ -14,8 +14,11 @@ public sealed class AppSettings
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 
+    /// <summary>Settings and avatar cache; TOTALGIT_DATA_DIR overrides it (e.g. for demos or testing).</summary>
     public static string DataDirectory { get; } =
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "TotalGit");
+        Environment.GetEnvironmentVariable("TOTALGIT_DATA_DIR") is { Length: > 0 } dir
+            ? dir
+            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "TotalGit");
 
     private static string FilePath => Path.Combine(DataDirectory, "settings.json");
 

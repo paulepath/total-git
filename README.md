@@ -4,6 +4,14 @@ A visual git client for Windows, built with .NET and Avalonia: a commit graph wi
 lanes and avatars, branch/tag/worktree sidebar, commit details with inline or side-by-side diffs,
 staging and commit, fetch/pull/push, and `.worktrees/<name>` worktree management with VS Code launch.
 
+![Commit graph with branches, tags, worktrees and commit details](docs/screenshots/graph.png)
+
+| Side-by-side diff | Staging and commit |
+| --- | --- |
+| ![Side-by-side diff of a commit](docs/screenshots/side-by-side-diff.png) | ![Staging uncommitted changes with an inline diff](docs/screenshots/staging.png) |
+
+<sub>Screenshots use a made-up demo repository and people.</sub>
+
 ## Install
 
 Download **`TotalGitApp-win-Setup.exe`** from the [latest release](https://github.com/paulepath/total-git/releases/latest)

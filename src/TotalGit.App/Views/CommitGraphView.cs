@@ -739,7 +739,9 @@ public sealed class CommitGraphView : Control
         {
             < 1 => "just now",
             < 60 => $"{(int)age.TotalMinutes} min ago",
+            < 120 => "1 hour ago",
             < 60 * 24 => $"{(int)age.TotalHours} hours ago",
+            < 60 * 24 * 2 => "yesterday",
             < 60 * 24 * 7 => $"{(int)age.TotalDays} days ago",
             _ => when.LocalDateTime.ToString("yyyy-MM-dd HH:mm", CultureInfo.CurrentCulture),
         };
