@@ -8,6 +8,8 @@
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <!-- CI sets the real version (0.3.<run number>) with -p:Version=... -->
     <Version>0.0.0</Version>
+    <Product>Total Git</Product>
+    <AssemblyTitle>Total Git</AssemblyTitle>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="12.1.3" />

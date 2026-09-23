@@ -851,7 +851,7 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
 
     private IReadOnlyList<MenuAction> WorktreeOpenActions(WorktreeInfo wt) =>
     [
-        new("Open in TotalGit", OpenWorktreeCommand, wt),
+        new("Open in Total Git", OpenWorktreeCommand, wt),
         new("Open in VS Code", OpenInVsCodeCommand, wt.Path),
     ];
 
@@ -865,7 +865,7 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
 
         if (wt is not null && (target.Kind == RefKind.LocalBranch || fromWorktreeSection))
         {
-            if (!isCurrentWorktree) actions.Add(new MenuAction("Open worktree in TotalGit", OpenWorktreeCommand, wt, IsEnabled: !wt.IsPrunable));
+            if (!isCurrentWorktree) actions.Add(new MenuAction("Open worktree in Total Git", OpenWorktreeCommand, wt, IsEnabled: !wt.IsPrunable));
             actions.Add(new MenuAction(isCurrentWorktree ? "Open in VS Code" : "Open worktree in VS Code", OpenInVsCodeCommand, wt.Path, IsEnabled: !wt.IsPrunable));
             actions.Add(new MenuAction("Reveal folder", RevealCommand, wt.Path, IsEnabled: !wt.IsPrunable));
             if (!wt.IsMain)

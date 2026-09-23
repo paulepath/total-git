@@ -1,4 +1,4 @@
-# Builds TotalGit on every push to master and publishes it as a GitHub Release.
+# Builds Total Git on every push to master and publishes it as a GitHub Release.
 # Installed copies (Velopack) update themselves from these releases.
 name: Release
 
@@ -55,10 +55,10 @@ jobs:
       - name: Pack
         run: >
           vpk pack --packId TotalGitApp --packVersion ${{ env.VERSION }} --packDir publish
-          --mainExe TotalGit.exe --packTitle TotalGit --packAuthors paulepath
+          --mainExe TotalGit.exe --packTitle "Total Git" --packAuthors paulepath
           --icon src/TotalGit.App/Assets/totalgit.ico
 
       - name: Upload release
         run: >
           vpk upload github --repoUrl ${{ env.REPO_URL }} --token ${{ secrets.GITHUB_TOKEN }}
-          --publish --tag v${{ env.VERSION }} --releaseName "TotalGit ${{ env.VERSION }}"
+          --publish --tag v${{ env.VERSION }} --releaseName "Total Git ${{ env.VERSION }}"

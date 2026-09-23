@@ -46,7 +46,7 @@ public partial class ShellViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(WindowTitle))]
     public partial RepositoryViewModel? SelectedTab { get; set; }
 
-    public string WindowTitle => $"TotalGit {AppVersion} - {SelectedTab?.TabTitle ?? "No repository"}";
+    public string WindowTitle => $"Total Git {AppVersion} - {SelectedTab?.TabTitle ?? "No repository"}";
 
     /// <summary>Version of a downloaded update waiting for a restart.</summary>
     [ObservableProperty]
@@ -185,7 +185,7 @@ public partial class ShellViewModel : ObservableObject
         updates.UpdateReady += version => Dispatcher.UIThread.Post(() =>
         {
             UpdateVersion = version;
-            SelectedTab?.ShowBanner(new Banner($"TotalGit {version} is ready.", false,
+            SelectedTab?.ShowBanner(new Banner($"Total Git {version} is ready.", false,
                 [new MenuAction("Restart to update", RestartToUpdateCommand)]));
         });
 

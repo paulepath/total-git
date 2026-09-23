@@ -80,7 +80,7 @@
       <!-- Shown once an update has downloaded; stays until the user restarts. -->
       <Button Grid.Column="3" Command="{Binding RestartToUpdateCommand}" IsVisible="{Binding HasUpdate}" Background="Transparent"
               Padding="10,4" Margin="0,4,8,0" VerticalAlignment="Center"
-              ToolTip.Tip="{Binding UpdateVersion, StringFormat='TotalGit {0} is ready. Restart to update.'}">
+              ToolTip.Tip="{Binding UpdateVersion, StringFormat='Total Git {0} is ready. Restart to update.'}">
         <StackPanel Orientation="Horizontal" Spacing="6">
           <PathIcon Data="{StaticResource UpdateIcon}" Width="14" Height="14" Foreground="#4CC38A" />
           <TextBlock Text="Restart to update" FontSize="12" Foreground="#4CC38A" VerticalAlignment="Center" />

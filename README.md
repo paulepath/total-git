@@ -1,4 +1,4 @@
-# TotalGit
+# Total Git
 
 A visual git client for Windows, built with .NET and Avalonia: a commit graph with coloured
 lanes and avatars, branch/tag/worktree sidebar, commit details with inline or side-by-side diffs,
