@@ -16,7 +16,17 @@ public partial class MainWindow : Window, IDialogService
     public MainWindow()
     {
         InitializeComponent();
-        Opened += (_, _) => Avalonia.Threading.Dispatcher.UIThread.Post(HideDrawnTitle, Avalonia.Threading.DispatcherPriority.Loaded);
+        // Our own title row (with a larger icon) only on Windows: macOS puts its window buttons top-left and
+        // Linux window managers vary, so there the system title bar stays.
+        if (OperatingSystem.IsWindows())
+        {
+            ExtendClientAreaToDecorationsHint = true;
+            Opened += (_, _) => Avalonia.Threading.Dispatcher.UIThread.Post(HideDrawnTitle, Avalonia.Threading.DispatcherPriority.Loaded);
+        }
+        else
+        {
+            TitleRow.IsVisible = false;
+        }
 
         KeyDown += (_, e) =>
         {

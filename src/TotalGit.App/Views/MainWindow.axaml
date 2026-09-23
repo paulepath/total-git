@@ -7,7 +7,7 @@
         x:DataType="vm:ShellViewModel"
         Title="{Binding WindowTitle}"
         Width="1500" Height="900"
-        ExtendClientAreaToDecorationsHint="True"
+
         Background="{StaticResource WindowBackgroundBrush}">
   <Window.KeyBindings>
     <KeyBinding Gesture="F5" Command="{Binding SelectedTab.RefreshCommand}" />
@@ -51,7 +51,7 @@
   <DockPanel>
     <!-- Our own title bar (the window extends into the system one) so the app icon can be larger than
          Windows' small title-bar icon. Windows still draws the minimise/maximise/close buttons on the right. -->
-    <Border DockPanel.Dock="Top" Height="32" Background="#16191D" chrome:WindowDecorationProperties.ElementRole="TitleBar">
+    <Border x:Name="TitleRow" DockPanel.Dock="Top" Height="32" Background="#16191D" chrome:WindowDecorationProperties.ElementRole="TitleBar">
       <StackPanel Orientation="Horizontal" Spacing="9" Margin="9,0,150,0" VerticalAlignment="Center" IsHitTestVisible="False">
         <Image Source="/Assets/totalgit-dark.png" Width="20" Height="20" RenderOptions.BitmapInterpolationMode="HighQuality" />
         <TextBlock Text="{Binding WindowTitle}" FontSize="12" Foreground="#C2C7CE" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
