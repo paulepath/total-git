@@ -247,7 +247,7 @@ public partial class SidebarViewModel : ObservableObject
             {
                 folder = new SidebarNode(SidebarNodeKind.Folder, parts[i])
                 {
-                    KindIcon = i == categoryDepth ? BranchIcons.For(BranchCategory.ForFolder(parts[i])) : null,
+                    KindIcon = i == categoryDepth ? BranchIcons.ForFolder(parts[i]) : null,
                     IsExpanded = !_collapsed.Contains(key) || Filter.Trim().Length > 0,
                     ToolTip = key,
                 };

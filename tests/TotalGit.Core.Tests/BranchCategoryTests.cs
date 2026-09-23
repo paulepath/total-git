@@ -12,7 +12,11 @@ public class BranchCategoryTests
     [InlineData("hot-fix/sync-resolved-ref", BranchKind.HotFix, "sync-resolved-ref")]
     [InlineData("hotfix/a", BranchKind.HotFix, "a")]
     [InlineData("feature/team/a", BranchKind.Feature, "team/a")]
-    [InlineData("main", BranchKind.Other, "main")]
+    [InlineData("features/a", BranchKind.Feature, "a")]
+    [InlineData("bugs/a", BranchKind.Bug, "a")]
+    [InlineData("main", BranchKind.Main, "main")]
+    [InlineData("master", BranchKind.Main, "master")]
+    [InlineData("mainline", BranchKind.Other, "mainline")]
     [InlineData("features", BranchKind.Other, "features")]
     [InlineData("backup/e4-1", BranchKind.Other, "backup/e4-1")]
     [InlineData("feature/", BranchKind.Other, "feature/")]
@@ -26,6 +30,8 @@ public class BranchCategoryTests
     {
         Assert.Equal(BranchKind.Feature, BranchCategory.ForFolder("feature"));
         Assert.Equal(BranchKind.HotFix, BranchCategory.ForFolder("hot-fix"));
+        Assert.Equal(BranchKind.Bug, BranchCategory.ForFolder("bugs"));
+        Assert.Equal(BranchKind.Other, BranchCategory.ForFolder("main"));
         Assert.Equal(BranchKind.Other, BranchCategory.ForFolder("backup"));
         Assert.Equal(BranchKind.Other, BranchCategory.Classify(null).Kind);
     }
