@@ -1,0 +1,207 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:TotalGit.App.ViewModels"
+             xmlns:views="using:TotalGit.App.Views"
+             x:Class="TotalGit.App.Views.RepositoryView"
+             x:DataType="vm:RepositoryViewModel">
+  <!-- One repository tab: toolbar, banner, sidebar, graph/diff and details. -->
+  <DockPanel>
+    <!-- Toolbar -->
+    <Border DockPanel.Dock="Top" Background="{StaticResource ToolbarBackgroundBrush}" Padding="10,6">
+      <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto">
+        <Button Grid.Column="0" Classes="tool" Command="{Binding OpenRepositoryCommand}" ToolTip.Tip="Open repository (Ctrl+O)">
+          <StackPanel>
+            <PathIcon Data="{StaticResource FolderIcon}" />
+            <TextBlock Classes="label" Text="Open" />
+          </StackPanel>
+        </Button>
+
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="14,0,0,0" VerticalAlignment="Center">
+          <StackPanel>
+            <TextBlock Text="repository" FontSize="11" Foreground="{StaticResource MutedTextBrush}" />
+            <TextBlock Text="{Binding RepositoryName}" FontSize="16" FontWeight="SemiBold" Foreground="{StaticResource PrimaryTextBrush}" />
+          </StackPanel>
+          <PathIcon Width="10" Height="10" Margin="14,14,14,0" Foreground="{StaticResource MutedTextBrush}" Data="{StaticResource ChevronIcon}"
+                    IsVisible="{Binding HasWorktreeName}" />
+          <StackPanel IsVisible="{Binding HasWorktreeName}">
+            <TextBlock Text="worktree" FontSize="11" Foreground="{StaticResource MutedTextBrush}" />
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <Image Source="{Binding CurrentBranchIcon}" IsVisible="{Binding HasCurrentBranchIcon}" Width="16" Height="16" VerticalAlignment="Center" />
+              <TextBlock Text="{Binding WorktreeName}" FontSize="16" FontWeight="SemiBold" Foreground="#B084F5" />
+            </StackPanel>
+          </StackPanel>
+          <PathIcon Width="10" Height="10" Margin="14,14,14,0" Foreground="{StaticResource MutedTextBrush}" Data="{StaticResource ChevronIcon}" />
+          <StackPanel>
+            <TextBlock Text="branch" FontSize="11" Foreground="{StaticResource MutedTextBrush}" />
+            <StackPanel Orientation="Horizontal" Spacing="6" ToolTip.Tip="{Binding CurrentBranch}">
+              <Image Source="{Binding CurrentBranchIcon}" IsVisible="{Binding HasCurrentBranchIcon}" Width="16" Height="16" VerticalAlignment="Center" />
+              <TextBlock Text="{Binding CurrentBranchDisplay}" FontSize="16" FontWeight="SemiBold" Foreground="{StaticResource PrimaryTextBrush}" />
+            </StackPanel>
+          </StackPanel>
+        </StackPanel>
+
+        <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="2" IsEnabled="{Binding HasRepository}">
+          <Button Classes="tool" Command="{Binding FetchCommand}" ToolTip.Tip="Fetch all remotes">
+            <StackPanel>
+              <PathIcon Data="{StaticResource FetchIcon}" />
+              <TextBlock Classes="label" Text="Fetch" />
+            </StackPanel>
+          </Button>
+          <Button Classes="tool" Command="{Binding PullCommand}" ToolTip.Tip="Pull the current branch">
+            <StackPanel>
+              <PathIcon Data="{StaticResource PullIcon}" />
+              <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                <TextBlock Classes="label" Text="Pull" />
+                <TextBlock Classes="count" Text="{Binding BehindText}" Margin="3,3,0,0" />
+              </StackPanel>
+            </StackPanel>
+          </Button>
+          <Button Classes="tool" Command="{Binding PushCommand}" ToolTip.Tip="Push the current branch">
+            <StackPanel>
+              <PathIcon Data="{StaticResource PushIcon}" />
+              <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                <TextBlock Classes="label" Text="Push" />
+                <TextBlock Classes="count" Text="{Binding AheadText}" Margin="3,3,0,0" />
+              </StackPanel>
+            </StackPanel>
+          </Button>
+          <Border Width="1" Background="#3A3F47" Margin="8,6" />
+          <Button Classes="tool" Command="{Binding CreateWorktreeCommand}" ToolTip.Tip="Create a worktree with a new branch from HEAD">
+            <StackPanel>
+              <PathIcon Data="{StaticResource WorktreeIcon}" />
+              <TextBlock Classes="label" Text="Worktree" />
+            </StackPanel>
+          </Button>
+          <Button Classes="tool" Command="{Binding OpenInVsCodeCommand}" ToolTip.Tip="Open this worktree in VS Code">
+            <StackPanel>
+              <PathIcon Data="{StaticResource CodeIcon}" Foreground="#3FA0F0" />
+              <TextBlock Classes="label" Text="VS Code" />
+            </StackPanel>
+          </Button>
+        </StackPanel>
+
+        <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center" Spacing="8" Margin="0,0,10,0">
+          <ProgressBar IsIndeterminate="True" Width="60" IsVisible="{Binding IsBusy}" />
+          <TextBlock Text="{Binding BusyText}" Foreground="{StaticResource MutedTextBrush}" IsVisible="{Binding IsBusy}" />
+          <TextBlock Text="{Binding CommitCountText}" Foreground="{StaticResource MutedTextBrush}" IsVisible="{Binding !IsBusy}" />
+        </StackPanel>
+
+        <StackPanel Grid.Column="4" Orientation="Horizontal">
+          <Button Classes="tool" Command="{Binding RefreshCommand}" IsEnabled="{Binding HasRepository}" ToolTip.Tip="Refresh (F5)">
+            <StackPanel>
+              <PathIcon Data="{StaticResource RefreshIcon}" />
+              <TextBlock Classes="label" Text="Refresh" />
+            </StackPanel>
+          </Button>
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <!-- Banner -->
+    <Border DockPanel.Dock="Top" IsVisible="{Binding Banner, Converter={x:Static ObjectConverters.IsNotNull}}"
+            Background="{Binding Banner.IsError, Converter={x:Static vm:Converters.ErrorToBackground}, FallbackValue=Transparent}"
+            Padding="14,8">
+      <Grid ColumnDefinitions="*,Auto,Auto">
+        <SelectableTextBlock Text="{Binding Banner.Message}" TextWrapping="Wrap" VerticalAlignment="Center" Foreground="#F0F2F5" />
+        <ItemsControl Grid.Column="1" ItemsSource="{Binding Banner.Actions}" Margin="12,0,0,0">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <StackPanel Orientation="Horizontal" Spacing="6" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:MenuAction">
+              <Button Content="{Binding Header}" Command="{Binding Command}" CommandParameter="{Binding Parameter}" Padding="10,3" />
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <Button Grid.Column="2" Command="{Binding DismissBannerCommand}" Background="Transparent" Padding="6" Margin="8,0,0,0" ToolTip.Tip="Dismiss">
+          <PathIcon Data="{StaticResource CloseIcon}" Width="12" Height="12" />
+        </Button>
+      </Grid>
+    </Border>
+
+    <Grid x:Name="MainGrid" ColumnDefinitions="240,4,*,4,380">
+      <views:SidebarView Grid.Column="0" x:Name="Sidebar" DataContext="{Binding Sidebar}" />
+      <GridSplitter Grid.Column="1" ResizeDirection="Columns" />
+
+      <Panel Grid.Column="2">
+        <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding HasRepository}">
+          <views:CommitGraphView Grid.Column="0" x:Name="Graph" Data="{Binding Graph}" SelectedSha="{Binding SelectedSha}" />
+          <ScrollBar Grid.Column="1" x:Name="GraphScrollBar" Orientation="Vertical" AllowAutoHide="False" />
+        </Grid>
+
+        <!-- Diff replaces the graph while a file is open, like GitKraken. -->
+        <DockPanel IsVisible="{Binding HasDiff}" Background="#1C1F24">
+          <Border DockPanel.Dock="Top" Background="#23272D" Padding="12,6" BorderBrush="#30353C" BorderThickness="0,0,0,1">
+            <Grid ColumnDefinitions="*,Auto,Auto">
+              <TextBlock Text="{Binding DiffTitle}" VerticalAlignment="Center" FontFamily="Cascadia Mono, Consolas, monospace" FontSize="12"
+                         Foreground="#E6E8EB" TextTrimming="CharacterEllipsis" />
+              <!-- Inline | Side by side -->
+              <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="12,0,10,0">
+                <Button Classes="seg" Classes.active="{Binding IsInlineDiff}" Command="{Binding SetDiffModeCommand}"
+                              CommandParameter="{x:Static vm:DiffViewMode.Inline}" Padding="10,3" CornerRadius="4,0,0,4"
+                              ToolTip.Tip="Inline diff">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <PathIcon Data="{StaticResource InlineDiffIcon}" Width="12" Height="12" />
+                    <TextBlock Text="Inline" FontSize="12" />
+                  </StackPanel>
+                </Button>
+                <Button Classes="seg" Classes.active="{Binding IsSplitDiff}" Command="{Binding SetDiffModeCommand}"
+                              CommandParameter="{x:Static vm:DiffViewMode.Split}" Padding="10,3" CornerRadius="0,4,4,0"
+                              ToolTip.Tip="Side-by-side diff">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <PathIcon Data="{StaticResource SplitDiffIcon}" Width="12" Height="12" />
+                    <TextBlock Text="Side by side" FontSize="12" />
+                  </StackPanel>
+                </Button>
+              </StackPanel>
+              <Button Grid.Column="2" Command="{Binding CloseDiffCommand}" Padding="10,3" ToolTip.Tip="Close (Esc)">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <PathIcon Data="{StaticResource CloseIcon}" Width="10" Height="10" />
+                  <TextBlock Text="Close" FontSize="12" />
+                </StackPanel>
+              </Button>
+            </Grid>
+          </Border>
+          <Grid ColumnDefinitions="*,Auto">
+            <views:DiffView x:Name="DiffView" Diff="{Binding Diff}" Mode="{Binding DiffMode}" />
+            <ScrollBar Grid.Column="1" x:Name="DiffScrollBar" Orientation="Vertical" AllowAutoHide="False" />
+          </Grid>
+        </DockPanel>
+
+        <StackPanel IsVisible="{Binding ShowEmptyState}" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12">
+          <TextBlock Text="Open a git repository to view its history" FontSize="16"
+                     Foreground="{StaticResource MutedTextBrush}" HorizontalAlignment="Center" />
+          <Button Content="Open repository..." Command="{Binding OpenRepositoryCommand}" HorizontalAlignment="Center" />
+        </StackPanel>
+
+        <TextBlock IsVisible="{Binding IsLoading}" Text="Loading repository..." FontSize="16"
+                   Foreground="{StaticResource MutedTextBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+
+        <StackPanel IsVisible="{Binding LoadError, Converter={x:Static ObjectConverters.IsNotNull}}"
+                    HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12" MaxWidth="600">
+          <TextBlock Text="{Binding LoadError}" Foreground="#F26B6B" TextWrapping="Wrap" HorizontalAlignment="Center" />
+          <Button Content="Open a different repository..." Command="{Binding OpenRepositoryCommand}" HorizontalAlignment="Center" />
+        </StackPanel>
+      </Panel>
+
+      <GridSplitter Grid.Column="3" ResizeDirection="Columns" />
+
+      <Panel Grid.Column="4" Background="#23272D">
+        <views:CommitDetailsView x:Name="DetailsView" DataContext="{Binding Details}" IsVisible="{Binding $parent[views:RepositoryView].((vm:RepositoryViewModel)DataContext).ShowDetails}" />
+        <views:StagingView DataContext="{Binding Staging}" IsVisible="{Binding $parent[views:RepositoryView].((vm:RepositoryViewModel)DataContext).ShowStaging}" />
+        <TextBlock Text="Select a commit to see its details" Foreground="{StaticResource MutedTextBrush}"
+                   HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="12">
+          <TextBlock.IsVisible>
+            <MultiBinding Converter="{x:Static BoolConverters.And}">
+              <Binding Path="!ShowDetails" />
+              <Binding Path="!ShowStaging" />
+              <Binding Path="HasRepository" />
+            </MultiBinding>
+          </TextBlock.IsVisible>
+        </TextBlock>
+      </Panel>
+    </Grid>
+  </DockPanel>
+</UserControl>

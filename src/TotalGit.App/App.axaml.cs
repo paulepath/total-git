@@ -19,17 +19,17 @@ public partial class App : Application
             var avatars = new AvatarService(Path.Combine(AppSettings.DataDirectory, "avatars"));
             var settings = AppSettings.Load();
             var updates = new UpdateService();
-            var vm = new MainWindowViewModel(avatars, settings, updates);
-            desktop.MainWindow = new MainWindow { DataContext = vm };
+            var shell = new ShellViewModel(avatars, settings, updates);
+            desktop.MainWindow = new MainWindow { DataContext = shell };
             desktop.Exit += (_, _) =>
             {
+                foreach (var tab in shell.Tabs) tab.Dispose();
                 avatars.Dispose();
                 updates.ApplyOnExit(); // a downloaded update the user didn't restart for
             };
 
-            var startPath = desktop.Args is [var first, ..] ? first : settings.LastRepository;
-            if (!string.IsNullOrEmpty(startPath) && Directory.Exists(startPath))
-                _ = vm.LoadAsync(startPath);
+            // Reopen last session's tabs; a folder passed on the command line opens (or selects) a tab too.
+            shell.RestoreTabs(desktop.Args is [var first, ..] ? first : null);
         }
 
         base.OnFrameworkInitializationCompleted();

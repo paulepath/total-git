@@ -2,109 +2,81 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
+using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using Avalonia.VisualTree;
 using TotalGit.App.ViewModels;
-using TotalGit.Core.Git;
 
 namespace TotalGit.App.Views;
 
 public partial class MainWindow : Window, IDialogService
 {
-    private MainWindowViewModel? _vm;
+    private ShellViewModel? _shell;
 
     public MainWindow()
     {
         InitializeComponent();
-        Graph.AttachScrollBar(GraphScrollBar);
-        DiffView.AttachScrollBar(DiffScrollBar);
-
-        Graph.NearEnd += () => _ = _vm?.LoadMoreAsync();
-        Graph.ColumnsChanged += SaveGraphColumns;
-        Graph.CommitContextRequested += (commit, _) =>
-        {
-            if (_vm is not null) ShowMenu(Graph, _vm.ActionsForCommit(commit));
-        };
-
-        Sidebar.NodeActivated += node => _vm?.OnSidebarNodeActivated(node);
-        Sidebar.NodeDoubleTapped += node =>
-        {
-            if (_vm is null) return;
-            if (node.IsWorktree && node.Worktree is { } wt) _vm.OpenWorktreeCommand.Execute(wt);
-            else if (node.Target is { Kind: RefKind.LocalBranch or RefKind.RemoteBranch } t) _vm.CheckoutCommand.Execute(t);
-        };
-        Sidebar.NodeContextRequested += (node, control) =>
-        {
-            if (_vm is not null) ShowMenu(control, _vm.ActionsForSidebar(node));
-        };
-        Sidebar.AddWorktreeRequested += () => _vm?.CreateWorktreeCommand.Execute(null);
-        DetailsView.CopyRequested += sha => _ = CopyToClipboardAsync(sha);
 
         KeyDown += (_, e) =>
         {
             if (e.Key == Key.F && e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Alt))
             {
-                Sidebar.FocusFilter();
+                ActiveView()?.FocusFilter();
                 e.Handled = true;
             }
         };
+
+        // Middle-click closes a tab, as in browsers.
+        TabStrip.AddHandler(PointerReleasedEvent, (_, e) =>
+        {
+            if (e.InitialPressMouseButton == MouseButton.Middle
+                && (e.Source as Control)?.DataContext is RepositoryViewModel tab)
+            {
+                _shell?.CloseTabCommand.Execute(tab);
+                e.Handled = true;
+            }
+        }, RoutingStrategies.Tunnel);
     }
 
     protected override void OnDataContextChanged(EventArgs e)
     {
         base.OnDataContextChanged(e);
-        if (_vm is not null) _vm.ScrollToShaRequested -= Graph.ScrollToSha;
-        _vm = DataContext as MainWindowViewModel;
-        if (_vm is null) return;
+        if (_shell is not null) _shell.PropertyChanging -= OnShellPropertyChanging;
+        if (_shell is not null) _shell.PropertyChanged -= OnShellPropertyChanged;
+        _shell = DataContext as ShellViewModel;
+        if (_shell is null) return;
 
-        _vm.Dialogs = this;
-        _vm.ScrollToShaRequested += Graph.ScrollToSha;
-        MainGrid.ColumnDefinitions[0].Width = new GridLength(_vm.Settings.SidebarWidth);
-        MainGrid.ColumnDefinitions[4].Width = new GridLength(_vm.Settings.DetailsWidth);
-        var s = _vm.Settings;
-        Graph.Columns = new GraphColumns(s.RefColumnWidth, s.GraphColumnWidth, s.AuthorColumnWidth, s.DateColumnWidth);
+        _shell.Dialogs = this;
+        _shell.PropertyChanging += OnShellPropertyChanging;
+        _shell.PropertyChanged += OnShellPropertyChanged;
     }
 
-    private void SaveGraphColumns()
+    // Pane and column widths are shared: carry them from the tab being left to the tab being shown.
+    private void OnShellPropertyChanging(object? sender, System.ComponentModel.PropertyChangingEventArgs e)
     {
-        if (_vm is null) return;
-        var c = Graph.Columns;
-        (_vm.Settings.RefColumnWidth, _vm.Settings.GraphColumnWidth, _vm.Settings.AuthorColumnWidth, _vm.Settings.DateColumnWidth) =
-            (c.Ref, c.Graph, c.Author, c.Date);
-        _vm.Settings.Save();
+        if (e.PropertyName == nameof(ShellViewModel.SelectedTab) && _shell is not null)
+            ActiveView()?.SaveLayout(_shell.Settings);
     }
+
+    private void OnShellPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(ShellViewModel.SelectedTab) && _shell is not null)
+            ActiveView()?.ApplyLayout(_shell.Settings);
+    }
+
+    private RepositoryView? ActiveView() => _shell?.SelectedTab is { } tab
+        ? TabViews.GetVisualDescendants().OfType<RepositoryView>().FirstOrDefault(v => v.DataContext == tab)
+        : null;
 
     protected override void OnClosing(WindowClosingEventArgs e)
     {
-        if (_vm is not null)
+        if (_shell is not null)
         {
-            _vm.Settings.SidebarWidth = MainGrid.ColumnDefinitions[0].ActualWidth;
-            _vm.Settings.DetailsWidth = MainGrid.ColumnDefinitions[4].ActualWidth;
-            _vm.Settings.Save();
+            ActiveView()?.SaveLayout(_shell.Settings);
+            _shell.Settings.Save();
         }
         base.OnClosing(e);
     }
-
-    private static void ShowMenu(Control target, IReadOnlyList<MenuAction> actions)
-    {
-        if (actions.Count == 0) return;
-        var menu = new ContextMenu
-        {
-            ItemsSource = actions.Select(ToMenuItem).ToList(),
-            Placement = PlacementMode.Pointer,
-        };
-        menu.Open(target);
-    }
-
-    private static object ToMenuItem(MenuAction action) => action.IsSeparator
-        ? new Separator()
-        : new MenuItem
-        {
-            Header = action.Header,
-            Command = action.Command,
-            CommandParameter = action.Parameter,
-            IsEnabled = action.IsEnabled,
-            ItemsSource = action.Children?.Select(ToMenuItem).ToList(),
-        };
 
     // ------------------------------------------------------------------ IDialogService
 

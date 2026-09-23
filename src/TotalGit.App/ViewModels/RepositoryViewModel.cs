@@ -27,7 +27,8 @@ public sealed record GraphData(
     IReadOnlyDictionary<string, WorktreeInfo> WorktreesByBranch,
     int WipCount);
 
-public partial class MainWindowViewModel : ObservableObject
+/// <summary>One repository tab: its graph, sidebar, details/staging and git actions.</summary>
+public partial class RepositoryViewModel : ObservableObject, IDisposable
 {
     private readonly AppSettings _settings;
     private readonly SemaphoreSlim _refreshGate = new(1, 1);
@@ -41,17 +42,51 @@ public partial class MainWindowViewModel : ObservableObject
     private int _detailsRequest;
     private int _diffRequest;
 
-    private readonly UpdateService? _updates;
-    private DispatcherTimer? _updateTimer;
-
-    public MainWindowViewModel(AvatarService avatars, AppSettings settings, UpdateService? updates = null)
+    /// <param name="path">Repository to open when the tab is first shown (restored tabs load lazily).</param>
+    public RepositoryViewModel(AvatarCache avatars, AppSettings settings, string? path = null)
     {
         _settings = settings;
-        _updates = updates;
-        AppVersion = updates?.CurrentVersion ?? "dev";
-        StartUpdateChecks();
-        Avatars = new AvatarCache(avatars);
+        Avatars = avatars;
+        PendingPath = path;
+        if (path is not null) RepositoryName = Path.GetFileName(Path.TrimEndingDirectorySeparator(path));
         DiffMode = Enum.TryParse<DiffViewMode>(settings.DiffMode, out var mode) ? mode : DiffViewMode.Inline;
+    }
+
+    /// <summary>Path to load when the tab is first selected; null once loaded or for an empty tab.</summary>
+    public string? PendingPath { get; private set; }
+
+    /// <summary>The folder this tab shows (for restoring tabs), or null for an empty tab.</summary>
+    public string? TabPath => _state?.WorkingDirectory ?? PendingPath;
+
+    public bool IsEmptyTab => TabPath is null && !IsLoading;
+
+    /// <summary>Tab header: repository, plus the worktree when viewing a linked one.</summary>
+    public string TabTitle => IsEmptyTab && LoadError is null ? "New tab"
+        : WorktreeName is null ? RepositoryName : $"{RepositoryName} › {WorktreeName}";
+
+    [ObservableProperty]
+    public partial bool IsSelected { get; set; }
+
+    /// <summary>Set by the shell so "Open" can use another tab; without it the repository opens in this tab.</summary>
+    public Func<Task>? OpenRepositoryHandler { get; set; }
+
+    /// <summary>Raised after a repository has loaded, so the shell can save the open tabs.</summary>
+    public event Action? Loaded;
+
+    /// <summary>Starts loading a restored tab the first time it's shown.</summary>
+    public void EnsureLoaded()
+    {
+        if (_state is null && !IsLoading && PendingPath is { } path) _ = LoadAsync(path);
+    }
+
+    public void ShowBanner(Banner banner) => Banner = banner;
+
+    public void Dispose()
+    {
+        _watcher?.Dispose();
+        _watcher = null;
+        _session?.Dispose();
+        _session = null;
     }
 
     public AvatarCache Avatars { get; }
@@ -69,21 +104,11 @@ public partial class MainWindowViewModel : ObservableObject
     public partial GraphData? Graph { get; set; }
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(WindowTitle))]
+    [NotifyPropertyChangedFor(nameof(TabTitle))]
     public partial string RepositoryName { get; set; } = "No repository";
 
-    public string AppVersion { get; }
-    public string WindowTitle => $"TotalGit {AppVersion} - {RepositoryName}";
-
-    /// <summary>Version of a downloaded update waiting for a restart.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasUpdate))]
-    public partial string? UpdateVersion { get; set; }
-
-    public bool HasUpdate => UpdateVersion is not null;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasWorktreeName))]
+    [NotifyPropertyChangedFor(nameof(HasWorktreeName), nameof(TabTitle))]
     public partial string? WorktreeName { get; set; }
 
     [ObservableProperty]
@@ -96,7 +121,7 @@ public partial class MainWindowViewModel : ObservableObject
     public bool HasCurrentBranchIcon => CurrentBranchIcon is not null;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShowEmptyState))]
+    [NotifyPropertyChangedFor(nameof(ShowEmptyState), nameof(IsEmptyTab), nameof(TabTitle))]
     public partial bool IsLoading { get; set; }
 
     [ObservableProperty]
@@ -106,7 +131,7 @@ public partial class MainWindowViewModel : ObservableObject
     public partial string? BusyText { get; set; }
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShowEmptyState))]
+    [NotifyPropertyChangedFor(nameof(ShowEmptyState), nameof(TabTitle))]
     public partial string? LoadError { get; set; }
 
     [ObservableProperty]
@@ -168,6 +193,11 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private async Task OpenRepositoryAsync()
     {
+        if (OpenRepositoryHandler is not null)
+        {
+            await OpenRepositoryHandler();
+            return;
+        }
         if (Dialogs is null) return;
         var path = await Dialogs.PickFolderAsync();
         if (path is not null) await LoadAsync(path);
@@ -223,8 +253,11 @@ public partial class MainWindowViewModel : ObservableObject
             RebuildGraph();
             if (sameRepo) await ReloadSelectionAsync();
 
-            _settings.LastRepository = state.WorkingDirectory;
-            _settings.Save();
+            PendingPath = null;
+            OnPropertyChanged(nameof(TabPath));
+            OnPropertyChanged(nameof(IsEmptyTab));
+            OnPropertyChanged(nameof(TabTitle));
+            Loaded?.Invoke();
         }
         catch (Exception ex) when (ex is RepositoryOpenException or LibGit2Sharp.LibGit2SharpException or IOException or GitCommandException)
         {
@@ -923,31 +956,6 @@ public partial class MainWindowViewModel : ObservableObject
 
     [RelayCommand]
     private void DismissBanner() => Banner = null;
-
-    // ---------------------------------------------------------------- updates
-
-    private void StartUpdateChecks()
-    {
-        if (_updates is not { IsInstalled: true } updates) return;
-        updates.UpdateReady += version => Dispatcher.UIThread.Post(() =>
-        {
-            UpdateVersion = version;
-            Banner = new Banner($"TotalGit {version} is ready.", false,
-                [new MenuAction("Restart to update", RestartToUpdateCommand)]);
-        });
-
-        // First check shortly after start-up, then every few hours.
-        _updateTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
-        _updateTimer.Tick += (_, _) =>
-        {
-            _updateTimer.Interval = TimeSpan.FromHours(4);
-            _ = updates.CheckAndDownloadAsync();
-        };
-        _updateTimer.Start();
-    }
-
-    [RelayCommand]
-    private void RestartToUpdate() => _updates?.RestartToUpdate();
 
     private void ShowError(string message) => Banner = new Banner(message, true, []);
 

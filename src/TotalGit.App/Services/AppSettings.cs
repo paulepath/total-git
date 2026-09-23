@@ -22,7 +22,12 @@ public sealed class AppSettings
 
     private static string FilePath => Path.Combine(DataDirectory, "settings.json");
 
+    /// <summary>Only read to seed <see cref="OpenTabs"/> for settings from before tabs existed.</summary>
     public string? LastRepository { get; set; }
+
+    /// <summary>Folders open in tabs, restored on start-up (null until tabs have been saved once).</summary>
+    public List<string>? OpenTabs { get; set; }
+    public int SelectedTab { get; set; }
 
     /// <summary>Optional explicit path to VS Code (Code.exe or code.cmd).</summary>
     public string? VsCodePath { get; set; }

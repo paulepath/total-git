@@ -7,12 +7,66 @@
     <SolidColorBrush x:Key="ToolbarBackgroundBrush" Color="#2B2F36" />
     <SolidColorBrush x:Key="MutedTextBrush" Color="#8A9099" />
     <SolidColorBrush x:Key="PrimaryTextBrush" Color="#E6E8EB" />
+    <!-- Icons shared by the window and repository views -->
+    <StreamGeometry x:Key="PlusIcon">M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z</StreamGeometry>
+    <StreamGeometry x:Key="InlineDiffIcon">M3,4H21V6H3V4M3,9H21V11H3V9M3,14H21V16H3V14M3,19H21V21H3V19Z</StreamGeometry>
+    <StreamGeometry x:Key="SplitDiffIcon">M3,3H11V21H3V3M5,5V19H9V5H5M13,3H21V21H13V3M15,5V19H19V5H15Z</StreamGeometry>
+    <StreamGeometry x:Key="FolderIcon">M10,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V8C22,6.89 21.1,6 20,6H12L10,4Z</StreamGeometry>
+    <StreamGeometry x:Key="ChevronIcon">M8.59,16.58L13.17,12L8.59,7.41L10,6L16,12L10,18L8.59,16.58Z</StreamGeometry>
+    <StreamGeometry x:Key="FetchIcon">M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z</StreamGeometry>
+    <StreamGeometry x:Key="PullIcon">M9,4H15V12H19.84L12,19.84L4.16,12H9V4Z</StreamGeometry>
+    <StreamGeometry x:Key="PushIcon">M15,20H9V12H4.16L12,4.16L19.84,12H15V20Z</StreamGeometry>
+    <StreamGeometry x:Key="WorktreeIcon">M3,3H9V7H3V3M15,10H21V14H15V10M15,17H21V21H15V17M13,13H7V18H13V20H7L5,20V9H7V11H13V13Z</StreamGeometry>
+    <StreamGeometry x:Key="CodeIcon">M17,16.47V7.39L11,11.93M2.22,9.19C1.92,8.87 1.91,8.37 2.2,8.04L3.4,6.93C3.6,6.75 4.09,6.67 4.45,6.93L7.87,9.54L15.8,2.29C16.12,1.97 16.67,1.84 17.3,2.17L21.3,4.08C21.66,4.29 22,4.62 22,5.23V18.72C22,19.12 21.71,19.55 21.4,19.72L17,21.83C16.68,21.96 16.08,21.84 15.87,21.63L7.85,14.33L4.45,16.93C4.07,17.19 3.6,17.12 3.4,16.93L2.2,15.83C1.88,15.5 1.92,14.96 2.25,14.63L5.25,11.93</StreamGeometry>
+    <StreamGeometry x:Key="RefreshIcon">M17.65,6.35C16.2,4.9 14.21,4 12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20C15.73,20 18.84,17.45 19.73,14H17.65C16.83,16.33 14.61,18 12,18A6,6 0 0,1 6,12A6,6 0 0,1 12,6C13.66,6 15.14,6.69 16.22,7.78L13,11H20V4L17.65,6.35Z</StreamGeometry>
+    <StreamGeometry x:Key="UpdateIcon">M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22A10,10 0 0,1 2,12A10,10 0 0,1 12,2M12,17L17,12H14V8H10V12H7L12,17Z</StreamGeometry>
+    <StreamGeometry x:Key="CloseIcon">M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z</StreamGeometry>
   </Application.Resources>
   <Application.Styles>
     <FluentTheme />
     <!-- Every window, dialogs included, uses the app icon in its title bar and the taskbar. -->
     <Style Selector="Window">
       <Setter Property="Icon" Value="/Assets/totalgit.ico" />
+    </Style>
+    <Style Selector="Button.tool">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Padding" Value="10,4" />
+      <Setter Property="MinWidth" Value="56" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <!-- Disabled toolbar buttons (e.g. in an empty tab) stay flat, just dimmed. -->
+    <Style Selector="Button.tool:disabled /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="Button.tool PathIcon">
+      <Setter Property="Width" Value="18" />
+      <Setter Property="Height" Value="18" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.tool TextBlock.label">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="Margin" Value="0,3,0,0" />
+    </Style>
+    <Style Selector="TextBlock.count">
+      <Setter Property="FontSize" Value="10" />
+      <Setter Property="Foreground" Value="#5AA9F2" />
+      <Setter Property="Margin" Value="2,0,0,0" />
+    </Style>
+    <Style Selector="Button.seg">
+      <Setter Property="Background" Value="#2A2F36" />
+      <Setter Property="Foreground" Value="#A9AFB8" />
+    </Style>
+    <Style Selector="Button.seg.active">
+      <Setter Property="Background" Value="#2D5E9E" />
+      <Setter Property="Foreground" Value="White" />
+    </Style>
+    <Style Selector="Button.seg.active:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#3570B8" />
+      <Setter Property="Foreground" Value="White" />
+    </Style>
+    <Style Selector="GridSplitter">
+      <Setter Property="Background" Value="#2B2F36" />
     </Style>
   </Application.Styles>
 </Application>
