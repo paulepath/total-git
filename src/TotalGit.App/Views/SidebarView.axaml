@@ -66,6 +66,7 @@
               <PathIcon Classes="node" Data="{StaticResource BranchIcon}" IsVisible="{Binding ShowBranchGlyph}" />
               <PathIcon Classes="node" Data="{StaticResource FolderIcon}" IsVisible="{Binding ShowFolderGlyph}" />
               <PathIcon Classes="node" Data="{StaticResource TagIcon}" IsVisible="{Binding IsTag}" />
+              <PathIcon Classes="node" Data="{StaticResource StashIcon}" IsVisible="{Binding IsStash}" />
               <PathIcon Classes="node" Data="{StaticResource WorktreeIcon}" IsVisible="{Binding ShowWorktreeGlyph}" />
               <Image Source="{Binding KindIcon}" IsVisible="{Binding HasKindIcon}" Width="14" Height="14" Margin="-1,0,5,0" />
             </Panel>

@@ -45,6 +45,33 @@ public sealed class GitActionsTests : IDisposable
         Assert.Equal("v2", _repo.Git("tag", "-l"));
     }
 
+    [Fact]
+    public async Task Stash_push_apply_pop_and_drop()
+    {
+        _repo.Commit("base", "a.txt", "a");
+        _repo.Write("a.txt", "first change");
+        await GitActions.StashAsync(_repo.Root, "first", includeUntracked: false);
+        _repo.Write("b.txt", "untracked");
+        await GitActions.StashAsync(_repo.Root, null, includeUntracked: true);
+        Assert.Equal("", _repo.Git("status", "--porcelain"));
+
+        using (var session = RepositorySession.Open(_repo.Root))
+        {
+            var stashes = session.LoadState().Stashes;
+            Assert.Equal(2, stashes.Count);
+            Assert.Equal((0, "WIP: base", "main"), (stashes[0].Index, stashes[0].Message, stashes[0].Branch));
+            Assert.Equal((1, "first", "main"), (stashes[1].Index, stashes[1].Message, stashes[1].Branch));
+        }
+
+        await GitActions.StashPopAsync(_repo.Root, 0);
+        Assert.Equal("?? b.txt", _repo.Git("status", "--porcelain"));
+
+        await GitActions.StashApplyAsync(_repo.Root, 0);
+        Assert.Equal("first change", File.ReadAllText(Path.Combine(_repo.Root, "a.txt")));
+        await GitActions.StashDropAsync(_repo.Root, 0);
+        Assert.Equal("", _repo.Git("stash", "list"));
+    }
+
     [Theory]
     [InlineData("v1.2.3", true)]
     [InlineData("release/2026-09", true)]

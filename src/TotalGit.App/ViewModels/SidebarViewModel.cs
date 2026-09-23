@@ -15,6 +15,7 @@ public enum SidebarNodeKind
     RemoteBranch,
     Tag,
     Worktree,
+    Stash,
 }
 
 public partial class SidebarNode : ObservableObject
@@ -41,6 +42,7 @@ public partial class SidebarNode : ObservableObject
 
     public BranchTarget? Target { get; init; }
     public WorktreeInfo? Worktree { get; init; }
+    public StashInfo? Stash { get; init; }
 
     /// <summary>Set for a folder under .worktrees that git no longer tracks.</summary>
     public string? LeftoverPath { get; init; }
@@ -66,6 +68,7 @@ public partial class SidebarNode : ObservableObject
     public bool IsBranch => Kind is SidebarNodeKind.LocalBranch or SidebarNodeKind.RemoteBranch;
     public bool IsTag => Kind == SidebarNodeKind.Tag;
     public bool IsWorktree => Kind == SidebarNodeKind.Worktree;
+    public bool IsStash => Kind == SidebarNodeKind.Stash;
     public bool IsWorktreesSection { get; init; }
     public bool ShowCount => IsSection;
     public bool HasAhead => Ahead is not null;
@@ -81,8 +84,9 @@ public partial class SidebarViewModel : ObservableObject
     private IReadOnlyList<RefInfo> _refs = [];
     private IReadOnlyList<WorktreeInfo> _worktrees = [];
     private IReadOnlyList<string> _leftovers = [];
+    private IReadOnlyList<StashInfo> _stashes = [];
     private string? _currentWorktree;
-    private readonly HashSet<string> _collapsed = ["REMOTE", "TAGS"];
+    private readonly HashSet<string> _collapsed = ["REMOTE", "TAGS", "STASHES"];
 
     public ObservableCollection<SidebarNode> Nodes { get; } = [];
 
@@ -94,9 +98,11 @@ public partial class SidebarViewModel : ObservableObject
 
     partial void OnFilterChanged(string value) => Rebuild();
 
-    public void Update(IReadOnlyList<RefInfo> refs, IReadOnlyList<WorktreeInfo> worktrees, IReadOnlyList<string> leftovers, string currentWorktree)
+    public void Update(IReadOnlyList<RefInfo> refs, IReadOnlyList<StashInfo> stashes, IReadOnlyList<WorktreeInfo> worktrees,
+        IReadOnlyList<string> leftovers, string currentWorktree)
     {
         _refs = refs;
+        _stashes = stashes;
         _worktrees = worktrees;
         _leftovers = leftovers;
         _currentWorktree = currentWorktree;
@@ -106,6 +112,7 @@ public partial class SidebarViewModel : ObservableObject
     public void Clear()
     {
         _refs = [];
+        _stashes = [];
         _worktrees = [];
         _leftovers = [];
         Nodes.Clear();
@@ -166,6 +173,19 @@ public partial class SidebarViewModel : ObservableObject
         foreach (var r in tags)
             tagSection.Children.Add(new SidebarNode(SidebarNodeKind.Tag, r.Name) { Target = BranchTarget.From(r, null), ToolTip = r.Name });
         Nodes.Add(tagSection);
+
+        var stashes = _stashes.Where(s => Match(s.Message) || Match(s.Branch ?? "")).ToList();
+        var stashSection = Section("STASHES", stashes.Count);
+        foreach (var s in stashes)
+        {
+            stashSection.Children.Add(new SidebarNode(SidebarNodeKind.Stash, s.Message)
+            {
+                Stash = s,
+                Subtitle = s.Branch,
+                ToolTip = $"{s.RefName}: {s.Message}\n{(s.Branch is null ? "" : $"On {s.Branch}, ")}{s.When.LocalDateTime:g}",
+            });
+        }
+        Nodes.Add(stashSection);
 
         var worktrees = _worktrees.Where(w => Match(w.Name) || Match(w.Branch ?? "")).ToList();
         var leftovers = _leftovers.Where(p => Match(Path.GetFileName(p))).ToList();

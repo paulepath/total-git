@@ -74,6 +74,21 @@ public static class GitActions
         return name.Split('/').All(part => !part.StartsWith('.') && !part.EndsWith(".lock", StringComparison.Ordinal));
     }
 
+    /// <summary>Stashes all uncommitted changes (optionally including untracked files).</summary>
+    public static Task StashAsync(string worktree, string? message, bool includeUntracked)
+    {
+        var args = new List<string> { "stash", "push" };
+        if (includeUntracked) args.Add("--include-untracked");
+        if (!string.IsNullOrWhiteSpace(message)) args.AddRange(["-m", message.Trim()]);
+        return GitCli.RunAsync(worktree, args);
+    }
+
+    public static Task StashApplyAsync(string worktree, int index) => GitCli.RunAsync(worktree, "stash", "apply", $"stash@{{{index}}}");
+
+    public static Task StashPopAsync(string worktree, int index) => GitCli.RunAsync(worktree, "stash", "pop", $"stash@{{{index}}}");
+
+    public static Task StashDropAsync(string worktree, int index) => GitCli.RunAsync(worktree, "stash", "drop", $"stash@{{{index}}}");
+
     public static Task FetchAsync(string worktree) => GitCli.RunAsync(worktree, "fetch", "--all", "--prune");
 
     public static Task PullAsync(string worktree) => GitCli.RunAsync(worktree, "pull");

@@ -1,3 +1,4 @@
+using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using TotalGit.Core.Git;
 
@@ -57,6 +58,52 @@ public partial class RepositoryViewModel
         {
             foreach (var r in gone) await GitActions.DeleteBranchAsync(wt, r.Name, force: true);
         }, $"Deleted {gone.Count} branch{(gone.Count == 1 ? "" : "es")}.");
+    }
+
+    // ------------------------------------------------------------------ stash
+
+    [ObservableProperty]
+    public partial bool HasStashes { get; set; }
+
+    [RelayCommand]
+    private async Task StashAsync()
+    {
+        if (_state is null || Dialogs is null) return;
+        if (!_status.IsDirty)
+        {
+            ShowInfo("There are no changes to stash.");
+            return;
+        }
+        var message = FormField.TextBox("Message (optional)", placeholder: "What these changes are");
+        var untracked = FormField.CheckBox("Include untracked files", isChecked: _status.Unstaged.Any(f => f.Kind == ChangeKind.Untracked));
+        if (!await Dialogs.ShowFormAsync(new FormSpec("Stash changes",
+                "Saves your uncommitted changes and resets the working tree to the last commit.", "Stash", [message, untracked])))
+            return;
+        var wt = _state.WorkingDirectory;
+        await RunGitAsync("Stashing…", () => GitActions.StashAsync(wt, message.Text, untracked.IsChecked), "Stashed your changes.");
+    }
+
+    /// <summary>Toolbar Pop: restores the newest stash.</summary>
+    [RelayCommand]
+    private Task PopLatestStashAsync() => _state?.Stashes.FirstOrDefault() is { } s ? PopStashAsync(s) : Task.CompletedTask;
+
+    [RelayCommand]
+    private Task ApplyStashAsync(StashInfo stash) => _state is null ? Task.CompletedTask
+        : RunGitAsync("Applying stash…", () => GitActions.StashApplyAsync(_state.WorkingDirectory, stash.Index), $"Applied '{stash.Message}'. The stash is kept.");
+
+    [RelayCommand]
+    private Task PopStashAsync(StashInfo stash) => _state is null ? Task.CompletedTask
+        : RunGitAsync("Popping stash…", () => GitActions.StashPopAsync(_state.WorkingDirectory, stash.Index), $"Restored '{stash.Message}'.");
+
+    [RelayCommand]
+    private async Task DropStashAsync(StashInfo stash)
+    {
+        if (_state is null || Dialogs is null) return;
+        if (!await Dialogs.ConfirmAsync("Delete stash", $"Delete the stash '{stash.Message}'? Its changes will be lost.", null, "Delete"))
+            return;
+        if (SelectedSha == stash.Sha) SelectedSha = null;
+        var wt = _state.WorkingDirectory;
+        await RunGitAsync("Deleting stash…", () => GitActions.StashDropAsync(wt, stash.Index), "Deleted the stash.");
     }
 
     // ------------------------------------------------------------------ tags

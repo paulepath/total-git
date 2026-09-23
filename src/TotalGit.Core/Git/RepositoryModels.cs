@@ -13,9 +13,38 @@ public sealed record RepositoryState(
     string? CurrentBranch,
     string? HeadSha,
     string? OriginUrl,
-    IReadOnlyList<RefInfo> Refs)
+    IReadOnlyList<RefInfo> Refs,
+    IReadOnlyList<StashInfo> Stashes)
 {
     public string WorktreeName => Path.GetFileName(WorkingDirectory.TrimEnd('\\', '/'));
+}
+
+/// <param name="Index">Position in the stash list (0 = stash@{0}, the newest).</param>
+/// <param name="Branch">Branch the stash was made on, when git recorded it.</param>
+public sealed record StashInfo(int Index, string Message, string Sha, DateTimeOffset When, string? Branch)
+{
+    public string RefName => $"stash@{{{Index}}}";
+
+    /// <summary>Splits git's reflog message ("On main: msg" / "WIP on main: abc123 subject").</summary>
+    public static (string Message, string? Branch) ParseMessage(string raw)
+    {
+        foreach (var prefix in (string[])["WIP on ", "On "])
+        {
+            if (!raw.StartsWith(prefix, StringComparison.Ordinal)) continue;
+            var colon = raw.IndexOf(": ", prefix.Length, StringComparison.Ordinal);
+            if (colon < 0) break;
+            var branch = raw[prefix.Length..colon];
+            var message = raw[(colon + 2)..];
+            // "WIP on main: abc1234 last commit subject" -> keep the subject only.
+            if (prefix == "WIP on ")
+            {
+                var space = message.IndexOf(' ');
+                message = "WIP: " + (space > 0 ? message[(space + 1)..] : message);
+            }
+            return (message, branch);
+        }
+        return (raw, null);
+    }
 }
 
 public enum ChangeKind

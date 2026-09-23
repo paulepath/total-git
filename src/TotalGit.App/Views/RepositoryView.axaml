@@ -65,6 +65,18 @@
               </StackPanel>
             </StackPanel>
           </Button>
+          <Button Classes="tool" Command="{Binding StashCommand}" ToolTip.Tip="Stash uncommitted changes">
+            <StackPanel>
+              <PathIcon Data="{StaticResource StashIcon}" />
+              <TextBlock Classes="label" Text="Stash" />
+            </StackPanel>
+          </Button>
+          <Button Classes="tool" Command="{Binding PopLatestStashCommand}" IsEnabled="{Binding HasStashes}" ToolTip.Tip="Restore the newest stash">
+            <StackPanel>
+              <PathIcon Data="{StaticResource PopIcon}" />
+              <TextBlock Classes="label" Text="Pop" />
+            </StackPanel>
+          </Button>
           <Border Width="1" Background="#3A3F47" Margin="8,6" />
           <Button Classes="tool" Command="{Binding CreateWorktreeCommand}" ToolTip.Tip="Create a worktree with a new branch from HEAD">
             <StackPanel>

@@ -83,7 +83,8 @@ public sealed class RepositorySession : IDisposable
                 current,
                 _repo.Head.Tip?.Sha,
                 _repo.Network.Remotes["origin"]?.Url,
-                ReadRefs());
+                ReadRefs(),
+                ReadStashes());
         }
     }
 
@@ -292,6 +293,14 @@ public sealed class RepositorySession : IDisposable
         c.Author.Email,
         c.Author.When,
         c.MessageShort);
+
+    private List<StashInfo> ReadStashes() => _repo.Stashes
+        .Select((s, i) =>
+        {
+            var (message, branch) = StashInfo.ParseMessage(s.Message);
+            return new StashInfo(i, message, s.WorkTree.Sha, s.WorkTree.Committer.When, branch);
+        })
+        .ToList();
 
     private List<RefInfo> ReadRefs()
     {

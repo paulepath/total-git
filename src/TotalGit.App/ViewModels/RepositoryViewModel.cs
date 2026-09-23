@@ -398,7 +398,8 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
         AheadText = current is { Ahead: > 0 } ? current.Ahead.ToString() : null;
         BehindText = current is { Behind: > 0 } ? current.Behind.ToString() : null;
 
-        Sidebar.Update(state.Refs, _worktrees, WorktreeService.FindLeftovers(state.MainWorkingDirectory, _worktrees), state.WorkingDirectory);
+        HasStashes = state.Stashes.Count > 0;
+        Sidebar.Update(state.Refs, state.Stashes, _worktrees, WorktreeService.FindLeftovers(state.MainWorkingDirectory, _worktrees), state.WorkingDirectory);
     }
 
     private void RebuildGraph()
@@ -566,7 +567,9 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
 
     public void OnSidebarNodeActivated(SidebarNode node)
     {
-        if (node.Target?.Sha is { } sha) _ = SelectShaAsync(sha);
+        // Stash commits aren't in the graph; just show their changes in the details pane.
+        if (node.Stash is { } stash) SelectedSha = stash.Sha;
+        else if (node.Target?.Sha is { } sha) _ = SelectShaAsync(sha);
     }
 
     // ------------------------------------------------------------------ git actions
@@ -953,6 +956,16 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
         {
             var gone = GoneBranches().Count;
             return [new MenuAction($"Delete branches whose remote is gone ({gone})…", DeleteGoneBranchesCommand, IsEnabled: gone > 0)];
+        }
+        if (node.Stash is { } stash)
+        {
+            return
+            [
+                new MenuAction("Apply stash", ApplyStashCommand, stash),
+                new MenuAction("Pop stash", PopStashCommand, stash),
+                MenuAction.Separator,
+                new MenuAction("Delete stash…", DropStashCommand, stash),
+            ];
         }
         if (node.LeftoverPath is { } leftover)
         {
