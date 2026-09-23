@@ -70,6 +70,8 @@ public sealed class CommitGraphView : Control
         "M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z");
     private static readonly Geometry WorktreeIcon = Geometry.Parse(
         "M3,3H9V7H3V3M15,10H21V14H15V10M15,17H21V21H15V17M13,13H7V18H13V20H7L5,20V9H7V11H13V13Z");
+    private static readonly Geometry BranchGlyph = Geometry.Parse(
+        "M13,14C9.64,14 8.54,15.35 8.18,16.24C9.25,16.7 10,17.76 10,19A3,3 0 0,1 7,22A3,3 0 0,1 4,19C4,17.69 4.83,16.58 6,16.17V7.83C4.83,7.42 4,6.31 4,5A3,3 0 0,1 7,2A3,3 0 0,1 10,5C10,6.31 9.17,7.42 8,7.83V13.12C8.88,12.47 10.16,12 12,12C14.67,12 15.56,10.66 15.85,9.77C14.77,9.32 14,8.25 14,7A3,3 0 0,1 17,4A3,3 0 0,1 20,7C20,8.34 19.12,9.5 17.91,9.86C17.65,11.29 16.68,14 13,14M7,18A1,1 0 0,0 6,19A1,1 0 0,0 7,20A1,1 0 0,0 8,19A1,1 0 0,0 7,18M7,4A1,1 0 0,0 6,5A1,1 0 0,0 7,6A1,1 0 0,0 8,5A1,1 0 0,0 7,4M17,6A1,1 0 0,0 16,7A1,1 0 0,0 17,8A1,1 0 0,0 18,7A1,1 0 0,0 17,6Z");
     private static readonly Geometry TagIcon = Geometry.Parse(
         "M5.5,7A1.5,1.5 0 0,1 4,5.5A1.5,1.5 0 0,1 5.5,4A1.5,1.5 0 0,1 7,5.5A1.5,1.5 0 0,1 5.5,7M21.41,11.58L12.41,2.58C12.05,2.22 11.55,2 11,2H4C2.89,2 2,2.89 2,4V11C2,11.55 2.22,12.05 2.59,12.41L11.58,21.41C11.95,21.77 12.45,22 13,22C13.55,22 14.05,21.77 14.41,21.41L21.41,14.41C21.78,14.05 22,13.55 22,13C22,12.45 21.77,11.94 21.41,11.58Z");
 
@@ -635,6 +637,8 @@ public sealed class CommitGraphView : Control
     private const double PillIconSize = 12;
     private const double PillGap = 4;
     private const double KindIconSize = 14;
+    private const double BadgeCircle = 22; // icon circle at the left end of a ref label
+    private const double PillLeft = 4;
 
     /// <summary>Lays out a row's first ref pill (at y = 0): its icons, trimmed name, rectangle and "+N".</summary>
     private (List<Geometry> Icons, FormattedText Name, Rect Pill, FormattedText? More) LayoutBadges(List<RefBadge> badges)
@@ -644,17 +648,17 @@ public sealed class CommitGraphView : Control
         var maxWidth = RefColumnWidth - 12 - (more is not null ? more.Width + 8 : 0);
 
         var icons = new List<Geometry>();
-        if (badge.IsTag) icons.Add(TagIcon);
         if (badge.HasLocal) icons.Add(LaptopIcon);
         if (badge.HasRemote) icons.Add(Data?.GitHubRepo is not null ? GitHubIcon : CloudIcon);
         if (badge.HasWorktree) icons.Add(WorktreeIcon);
-        var leading = (badge.IsCurrent ? PillIconSize + PillGap : 0) + (badge.KindIcon is not null ? KindIconSize + PillGap : 0);
-        var trailing = icons.Count * (PillIconSize + PillGap);
+        // Circle + gap, optional check, name, trailing icons, then padding round the rounded right end.
+        var leading = BadgeCircle + 5 + (badge.IsCurrent ? PillIconSize + PillGap : 0);
+        var trailing = icons.Count * (PillIconSize + PillGap) + 6;
 
         var name = Text(badge.Name, 12, Brushes.White, badge.IsCurrent ? _boldTypeface : _typeface,
-            Math.Max(10, maxWidth - 12 - leading - trailing));
-        var pillWidth = Math.Max(0, Math.Min(maxWidth, 12 + leading + name.Width + trailing));
-        return (icons, name, new Rect(6, 0, pillWidth, PillHeight), more);
+            Math.Max(10, maxWidth - leading - trailing));
+        var pillWidth = Math.Max(0, Math.Min(maxWidth, leading + name.Width + trailing));
+        return (icons, name, new Rect(PillLeft, 0, pillWidth, BadgeCircle), more);
     }
 
     /// <summary>Where a row's pill (and its "+N") ends, so the connector can start there.</summary>
@@ -674,22 +678,28 @@ public sealed class CommitGraphView : Control
         const double gap = PillGap;
         var badge = badges[0];
         var top = RowTop(i) + (RowHeight - pillHeight) / 2;
-        var (icons, name, layoutPill, moreText) = LayoutBadges(badges);
-        var pill = layoutPill.WithY(top);
+        var (icons, name, layout, moreText) = LayoutBadges(badges);
+        var pill = layout.WithY(RowTop(i) + (RowHeight - BadgeCircle) / 2);
+        var laneBrush = _laneBrushes[row.ColorIndex];
 
-        ctx.DrawRectangle(badge.IsCurrent ? _laneBrushes[row.ColorIndex] : _pillBrushes[row.ColorIndex],
-            null, pill, 3, 3);
+        // The label box starts under the circle (so its left edge is hidden and square) and has a rounded right end.
+        var box = new Rect(pill.X + BadgeCircle / 2, top, Math.Max(0, pill.Width - BadgeCircle / 2), pillHeight);
+        ctx.DrawRectangle(badge.IsCurrent ? laneBrush : _pillBrushes[row.ColorIndex], null,
+            new RoundedRect(box, new CornerRadius(0, pillHeight / 2, pillHeight / 2, 0)));
 
-        var x = pill.X + 6;
+        // Black circle with a lane-coloured ring holding the branch-kind icon.
+        var center = new Point(pill.X + BadgeCircle / 2, top + pillHeight / 2);
+        ctx.DrawEllipse(Brushes.Black, _lanePens[row.ColorIndex], center, BadgeCircle / 2 - 1, BadgeCircle / 2 - 1);
+        if (badge.KindIcon is { } kindIcon)
+            ctx.DrawImage(kindIcon, new Rect(center.X - KindIconSize / 2, center.Y - KindIconSize / 2, KindIconSize, KindIconSize));
+        else
+            DrawIcon(ctx, badge.IsTag ? TagIcon : BranchGlyph, center.X - 6, center.Y - 6, 12);
+
+        var x = pill.X + BadgeCircle + 5;
         if (badge.IsCurrent)
         {
             DrawIcon(ctx, CheckIcon, x, top + (pillHeight - iconSize) / 2, iconSize);
             x += iconSize + gap;
-        }
-        if (badge.KindIcon is { } kindIcon)
-        {
-            ctx.DrawImage(kindIcon, new Rect(x, top + (pillHeight - KindIconSize) / 2, KindIconSize, KindIconSize));
-            x += KindIconSize + gap;
         }
         ctx.DrawText(name, new Point(x, top + (pillHeight - name.Height) / 2));
         x += name.Width + gap;
