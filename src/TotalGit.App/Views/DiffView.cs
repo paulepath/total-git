@@ -4,15 +4,19 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Media;
+using TotalGit.App.ViewModels;
 using TotalGit.Core.Git;
 
 namespace TotalGit.App.Views;
 
-/// <summary>Unified diff viewer with line numbers; draws only the visible lines.</summary>
+/// <summary>Diff viewer (inline or side by side) with line numbers; draws only the visible lines.</summary>
 public sealed class DiffView : Control
 {
     public static readonly StyledProperty<FileDiff?> DiffProperty =
         AvaloniaProperty.Register<DiffView, FileDiff?>(nameof(Diff));
+
+    public static readonly StyledProperty<DiffViewMode> ModeProperty =
+        AvaloniaProperty.Register<DiffView, DiffViewMode>(nameof(Mode));
 
     private const double LineHeight = 19;
     private const double GutterWidth = 46;
@@ -31,6 +35,8 @@ public sealed class DiffView : Control
     private static readonly IBrush AddedSignBrush = new SolidColorBrush(Color.Parse("#4CC38A"));
     private static readonly IBrush RemovedSignBrush = new SolidColorBrush(Color.Parse("#F26B6B"));
     private static readonly IBrush NoticeBrush = new SolidColorBrush(Color.Parse("#8A9099"));
+    private static readonly IBrush FillerBrush = new SolidColorBrush(Color.Parse("#131518"));
+    private static readonly IBrush DividerBrush = new SolidColorBrush(Color.Parse("#30353C"));
 
     private readonly Typeface _mono = new("Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, monospace");
     private double _offset;
@@ -38,10 +44,11 @@ public sealed class DiffView : Control
     private double _charWidth = 7.5;
     private ScrollBar? _scrollBar;
     private bool _syncing;
+    private IReadOnlyList<SplitRow> _splitRows = [];
 
     static DiffView()
     {
-        AffectsRender<DiffView>(DiffProperty);
+        AffectsRender<DiffView>(DiffProperty, ModeProperty);
         ClipToBoundsProperty.OverrideDefaultValue<DiffView>(true);
         FocusableProperty.OverrideDefaultValue<DiffView>(true);
     }
@@ -52,7 +59,14 @@ public sealed class DiffView : Control
         set => SetValue(DiffProperty, value);
     }
 
-    private int LineCount => (Diff?.Lines.Count ?? 0) + (Diff?.Truncated == true ? 1 : 0);
+    public DiffViewMode Mode
+    {
+        get => GetValue(ModeProperty);
+        set => SetValue(ModeProperty, value);
+    }
+
+    private int RowCount => Mode == DiffViewMode.Split ? _splitRows.Count : Diff?.Lines.Count ?? 0;
+    private int LineCount => RowCount + (Diff?.Truncated == true ? 1 : 0);
     private double MaxOffset => Math.Max(0, LineCount * LineHeight - Bounds.Height);
 
     public void AttachScrollBar(ScrollBar scrollBar)
@@ -70,10 +84,15 @@ public sealed class DiffView : Control
         base.OnPropertyChanged(change);
         if (change.Property == DiffProperty)
         {
+            _splitRows = change.GetNewValue<FileDiff?>() is { } d ? SplitDiff.Build(d.Lines) : [];
             var oldPath = change.GetOldValue<FileDiff?>()?.Path;
             var newPath = change.GetNewValue<FileDiff?>()?.Path;
             if (oldPath != newPath) _hOffset = 0;
             SetOffset(oldPath == newPath ? _offset : 0);
+        }
+        else if (change.Property == ModeProperty)
+        {
+            SetOffset(0);
         }
         else if (change.Property == BoundsProperty)
         {
@@ -154,6 +173,12 @@ public sealed class DiffView : Control
         }
 
         _charWidth = Text("M", TextBrush).WidthIncludingTrailingWhitespace;
+        if (Mode == DiffViewMode.Split)
+        {
+            RenderSplit(ctx, diff);
+            return;
+        }
+
         var textLeft = GutterWidth * 2 + 20;
         ctx.FillRectangle(GutterBrush, new Rect(0, 0, GutterWidth * 2, Bounds.Height));
 
@@ -188,6 +213,68 @@ public sealed class DiffView : Control
                 var brush = line.Kind is DiffLineKind.Hunk or DiffLineKind.NoNewline ? HunkTextBrush : TextBrush;
                 ctx.DrawText(Text(line.Text.Replace("\t", "    "), brush), new Point(textLeft - _hOffset, y + 2));
             }
+        }
+    }
+
+    private void RenderSplit(DrawingContext ctx, FileDiff diff)
+    {
+        var width = Bounds.Width;
+        var half = Math.Floor(width / 2);
+        var first = Math.Max(0, (int)(_offset / LineHeight));
+        var last = Math.Min(LineCount - 1, (int)((_offset + Bounds.Height) / LineHeight));
+
+        ctx.FillRectangle(GutterBrush, new Rect(0, 0, GutterWidth, Bounds.Height));
+        ctx.FillRectangle(GutterBrush, new Rect(half + 1, 0, GutterWidth, Bounds.Height));
+
+        for (var i = first; i <= last; i++)
+        {
+            var y = i * LineHeight - _offset;
+            if (i >= _splitRows.Count)
+            {
+                ctx.DrawText(Text($"Diff truncated after {diff.Lines.Count:N0} lines.", NoticeBrush), new Point(GutterWidth + 20, y + 2));
+                continue;
+            }
+
+            var row = _splitRows[i];
+            if (row.IsHunk)
+            {
+                ctx.FillRectangle(HunkBrush, new Rect(0, y, width, LineHeight));
+                using (ctx.PushClip(new Rect(0, y, width, LineHeight)))
+                    ctx.DrawText(Text(row.Left!.Value.Text, HunkTextBrush), new Point(GutterWidth + 20 - _hOffset, y + 2));
+                continue;
+            }
+
+            DrawSide(ctx, row.Left, 0, half, y, left: true);
+            DrawSide(ctx, row.Right, half + 1, width - half - 1, y, left: false);
+        }
+
+        ctx.FillRectangle(DividerBrush, new Rect(half, 0, 1, Bounds.Height));
+    }
+
+    private void DrawSide(DrawingContext ctx, DiffLine? line, double x, double w, double y, bool left)
+    {
+        if (line is not { } l)
+        {
+            ctx.FillRectangle(FillerBrush, new Rect(x, y, w, LineHeight));
+            return;
+        }
+
+        var (bg, gutterBg, sign, signBrush) = l.Kind switch
+        {
+            DiffLineKind.Added => (AddedBrush, AddedGutterBrush, "+", AddedSignBrush),
+            DiffLineKind.Removed => (RemovedBrush, RemovedGutterBrush, "-", RemovedSignBrush),
+            _ => ((IBrush?)null, (IBrush?)null, "", TextBrush),
+        };
+        if (bg is not null) ctx.FillRectangle(bg, new Rect(x + GutterWidth, y, w - GutterWidth, LineHeight));
+        if (gutterBg is not null) ctx.FillRectangle(gutterBg, new Rect(x, y, GutterWidth, LineHeight));
+
+        if ((left ? l.OldLine : l.NewLine) is { } n) DrawNumber(ctx, n, x, y);
+
+        using (ctx.PushClip(new Rect(x + GutterWidth, y, w - GutterWidth, LineHeight)))
+        {
+            if (sign.Length > 0) ctx.DrawText(Text(sign, signBrush), new Point(x + GutterWidth + 6, y + 2));
+            var brush = l.Kind == DiffLineKind.NoNewline ? HunkTextBrush : TextBrush;
+            ctx.DrawText(Text(l.Text.Replace("\t", "    "), brush), new Point(x + GutterWidth + 20 - _hOffset, y + 2));
         }
     }
 

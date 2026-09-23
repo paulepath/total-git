@@ -27,6 +27,9 @@ public sealed class AppSettings
     public double SidebarWidth { get; set; } = 240;
     public double DetailsWidth { get; set; } = 380;
 
+    /// <summary>"Inline" or "Split".</summary>
+    public string DiffMode { get; set; } = "Inline";
+
     public Dictionary<string, RepoSettings> Repositories { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
     public RepoSettings ForRepository(string mainRoot)

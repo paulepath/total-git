@@ -10,6 +10,12 @@ using TotalGit.Core.Worktrees;
 
 namespace TotalGit.App.ViewModels;
 
+public enum DiffViewMode
+{
+    Inline,
+    Split,
+}
+
 /// <summary>Everything the graph control needs to draw one repository.</summary>
 public sealed record GraphData(
     GraphLayoutResult Layout,
@@ -39,6 +45,7 @@ public partial class MainWindowViewModel : ObservableObject
     {
         _settings = settings;
         Avatars = new AvatarCache(avatars);
+        DiffMode = Enum.TryParse<DiffViewMode>(settings.DiffMode, out var mode) ? mode : DiffViewMode.Inline;
     }
 
     public AvatarCache Avatars { get; }
@@ -102,6 +109,22 @@ public partial class MainWindowViewModel : ObservableObject
 
     [ObservableProperty]
     public partial string? DiffTitle { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsInlineDiff), nameof(IsSplitDiff))]
+    public partial DiffViewMode DiffMode { get; set; }
+
+    public bool IsInlineDiff => DiffMode == DiffViewMode.Inline;
+    public bool IsSplitDiff => DiffMode == DiffViewMode.Split;
+
+    partial void OnDiffModeChanged(DiffViewMode value)
+    {
+        _settings.DiffMode = value.ToString();
+        _settings.Save();
+    }
+
+    [RelayCommand]
+    private void SetDiffMode(DiffViewMode mode) => DiffMode = mode;
 
     [ObservableProperty]
     public partial string? AheadText { get; set; }

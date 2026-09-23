@@ -14,6 +14,8 @@
   </Window.KeyBindings>
 
   <Window.Resources>
+    <StreamGeometry x:Key="InlineDiffIcon">M3,4H21V6H3V4M3,9H21V11H3V9M3,14H21V16H3V14M3,19H21V21H3V19Z</StreamGeometry>
+    <StreamGeometry x:Key="SplitDiffIcon">M3,3H11V21H3V3M5,5V19H9V5H5M13,3H21V21H13V3M15,5V19H19V5H15Z</StreamGeometry>
     <StreamGeometry x:Key="FolderIcon">M10,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V8C22,6.89 21.1,6 20,6H12L10,4Z</StreamGeometry>
     <StreamGeometry x:Key="ChevronIcon">M8.59,16.58L13.17,12L8.59,7.41L10,6L16,12L10,18L8.59,16.58Z</StreamGeometry>
     <StreamGeometry x:Key="FetchIcon">M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z</StreamGeometry>
@@ -46,6 +48,18 @@
       <Setter Property="FontSize" Value="10" />
       <Setter Property="Foreground" Value="#5AA9F2" />
       <Setter Property="Margin" Value="2,0,0,0" />
+    </Style>
+    <Style Selector="Button.seg">
+      <Setter Property="Background" Value="#2A2F36" />
+      <Setter Property="Foreground" Value="#A9AFB8" />
+    </Style>
+    <Style Selector="Button.seg.active">
+      <Setter Property="Background" Value="#2D5E9E" />
+      <Setter Property="Foreground" Value="White" />
+    </Style>
+    <Style Selector="Button.seg.active:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#3570B8" />
+      <Setter Property="Foreground" Value="White" />
     </Style>
     <Style Selector="GridSplitter">
       <Setter Property="Background" Value="#2B2F36" />
@@ -173,10 +187,29 @@
         <!-- Diff replaces the graph while a file is open, like GitKraken. -->
         <DockPanel IsVisible="{Binding HasDiff}" Background="#1C1F24">
           <Border DockPanel.Dock="Top" Background="#23272D" Padding="12,6" BorderBrush="#30353C" BorderThickness="0,0,0,1">
-            <Grid ColumnDefinitions="*,Auto">
+            <Grid ColumnDefinitions="*,Auto,Auto">
               <TextBlock Text="{Binding DiffTitle}" VerticalAlignment="Center" FontFamily="Cascadia Mono, Consolas, monospace" FontSize="12"
                          Foreground="#E6E8EB" TextTrimming="CharacterEllipsis" />
-              <Button Grid.Column="1" Command="{Binding CloseDiffCommand}" Padding="10,3" ToolTip.Tip="Close (Esc)">
+              <!-- Inline | Side by side -->
+              <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="12,0,10,0">
+                <Button Classes="seg" Classes.active="{Binding IsInlineDiff}" Command="{Binding SetDiffModeCommand}"
+                              CommandParameter="{x:Static vm:DiffViewMode.Inline}" Padding="10,3" CornerRadius="4,0,0,4"
+                              ToolTip.Tip="Inline diff">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <PathIcon Data="{StaticResource InlineDiffIcon}" Width="12" Height="12" />
+                    <TextBlock Text="Inline" FontSize="12" />
+                  </StackPanel>
+                </Button>
+                <Button Classes="seg" Classes.active="{Binding IsSplitDiff}" Command="{Binding SetDiffModeCommand}"
+                              CommandParameter="{x:Static vm:DiffViewMode.Split}" Padding="10,3" CornerRadius="0,4,4,0"
+                              ToolTip.Tip="Side-by-side diff">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <PathIcon Data="{StaticResource SplitDiffIcon}" Width="12" Height="12" />
+                    <TextBlock Text="Side by side" FontSize="12" />
+                  </StackPanel>
+                </Button>
+              </StackPanel>
+              <Button Grid.Column="2" Command="{Binding CloseDiffCommand}" Padding="10,3" ToolTip.Tip="Close (Esc)">
                 <StackPanel Orientation="Horizontal" Spacing="6">
                   <PathIcon Data="{StaticResource CloseIcon}" Width="10" Height="10" />
                   <TextBlock Text="Close" FontSize="12" />
@@ -185,7 +218,7 @@
             </Grid>
           </Border>
           <Grid ColumnDefinitions="*,Auto">
-            <views:DiffView x:Name="DiffView" Diff="{Binding Diff}" />
+            <views:DiffView x:Name="DiffView" Diff="{Binding Diff}" Mode="{Binding DiffMode}" />
             <ScrollBar Grid.Column="1" x:Name="DiffScrollBar" Orientation="Vertical" AllowAutoHide="False" />
           </Grid>
         </DockPanel>

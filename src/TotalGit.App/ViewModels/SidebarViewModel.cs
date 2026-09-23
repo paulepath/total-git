@@ -28,7 +28,14 @@ public partial class SidebarNode : ObservableObject
     public ObservableCollection<SidebarNode> Children { get; } = [];
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowCurrentDot))]
     public partial bool IsExpanded { get; set; }
+
+    /// <summary>A folder or section with the current branch somewhere below it.</summary>
+    public bool ContainsCurrent { get; set; }
+
+    /// <summary>Shows where the current branch is while its folder is collapsed.</summary>
+    public bool ShowCurrentDot => ContainsCurrent && !IsExpanded;
 
     public BranchTarget? Target { get; init; }
     public WorktreeInfo? Worktree { get; init; }
@@ -165,6 +172,7 @@ public partial class SidebarViewModel : ObservableObject
                 ToolTip = $"{w.Path}\n{(w.Branch is null ? "detached HEAD" : w.Branch)}{state}",
             });
         }
+        wtSection.ContainsCurrent = wtSection.Children.Any(c => c.IsCurrent);
         foreach (var path in leftovers)
         {
             wtSection.Children.Add(new SidebarNode(SidebarNodeKind.Worktree, Path.GetFileName(path))
@@ -189,6 +197,8 @@ public partial class SidebarViewModel : ObservableObject
     {
         var parts = name.Split('/');
         var parent = section;
+        var leaf = leafFactory(parts[^1]);
+        if (leaf.IsCurrent) section.ContainsCurrent = true;
         var key = section.Label;
         for (var i = 0; i < parts.Length - 1; i++)
         {
@@ -205,9 +215,10 @@ public partial class SidebarViewModel : ObservableObject
                 var insertAt = parent.Children.TakeWhile(c => c.IsFolder).Count();
                 parent.Children.Insert(insertAt, folder);
             }
+            if (leaf.IsCurrent) folder.ContainsCurrent = true;
             parent = folder;
         }
-        parent.Children.Add(leafFactory(parts[^1]));
+        parent.Children.Add(leaf);
     }
 
     private static string KeyOf(SidebarNode n) => n.IsSection ? n.Label : n.ToolTip ?? n.Label;

@@ -19,6 +19,21 @@
       <Setter Property="MinHeight" Value="24" />
       <Setter Property="Padding" Value="0" />
       <Setter Property="ToolTip.Tip" Value="{Binding ToolTip}" />
+      <!-- The ✓ can be squeezed out by a long name, so the current row is tinted as well. -->
+      <Setter Property="Background" Value="{Binding IsCurrent, Converter={x:Static vm:Converters.CurrentRowBrush}}" />
+    </Style>
+    <Style Selector="TextBlock.label">
+      <Setter Property="Foreground" Value="#D5D8DD" />
+    </Style>
+    <Style Selector="TextBlock.label.section">
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="TextBlock.label.dimmed">
+      <Setter Property="Foreground" Value="#6B727C" />
+    </Style>
+    <Style Selector="TextBlock.label.current">
+      <Setter Property="Foreground" Value="#4CC38A" />
+      <Setter Property="FontWeight" Value="SemiBold" />
     </Style>
     <Style Selector="TreeViewItem /template/ Border#PART_LayoutRoot">
       <Setter Property="MinHeight" Value="24" />
@@ -57,15 +72,16 @@
             <!-- The label always wins; the markers and grey subtitle only appear when they fit whole
                  (they are in the tooltip too). -->
             <views:PriorityRowPanel Grid.Column="1" VerticalAlignment="Center" ClipToBounds="True">
-              <TextBlock Text="{Binding Label}" FontSize="12" TextTrimming="CharacterEllipsis"
-                         FontWeight="{Binding IsSection, Converter={x:Static vm:Converters.BoolToSemiBold}}"
-                         Foreground="{Binding IsDimmed, Converter={x:Static vm:Converters.DimmedBrush}}" />
+              <TextBlock Classes="label" Classes.section="{Binding IsSection}" Classes.dimmed="{Binding IsDimmed}"
+                         Classes.current="{Binding IsCurrent}" Text="{Binding Label}" FontSize="12" TextTrimming="CharacterEllipsis" />
               <PathIcon Data="{StaticResource CheckIcon}" Width="11" Height="11" Foreground="#4CC38A" IsVisible="{Binding IsCurrent}" />
               <PathIcon Data="{StaticResource WorktreeIcon}" Width="11" Height="11" Foreground="#8A9099" IsVisible="{Binding HasWorktree}" />
               <TextBlock Text="{Binding Subtitle}" FontSize="11" Foreground="#6B727C" IsVisible="{Binding HasSubtitle}" />
             </views:PriorityRowPanel>
 
             <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" Margin="4,0,8,0" VerticalAlignment="Center">
+              <Ellipse Width="7" Height="7" Fill="#4CC38A" VerticalAlignment="Center" IsVisible="{Binding ShowCurrentDot}"
+                       ToolTip.Tip="Contains the current branch" />
               <TextBlock Text="{Binding Ahead}" FontSize="11" Foreground="#4CC38A" IsVisible="{Binding HasAhead}" />
               <TextBlock Text="{Binding Behind}" FontSize="11" Foreground="#E8B339" IsVisible="{Binding HasBehind}" />
               <TextBlock Text="{Binding Count}" FontSize="11" Foreground="#5AA9F2" IsVisible="{Binding ShowCount}" />
