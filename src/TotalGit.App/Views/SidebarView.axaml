@@ -1,0 +1,78 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:TotalGit.App.ViewModels"
+             x:Class="TotalGit.App.Views.SidebarView"
+             x:DataType="vm:SidebarViewModel">
+  <UserControl.Resources>
+    <StreamGeometry x:Key="BranchIcon">M13,14C9.64,14 8.54,15.35 8.18,16.24C9.25,16.7 10,17.76 10,19A3,3 0 0,1 7,22A3,3 0 0,1 4,19C4,17.69 4.83,16.58 6,16.17V7.83C4.83,7.42 4,6.31 4,5A3,3 0 0,1 7,2A3,3 0 0,1 10,5C10,6.31 9.17,7.42 8,7.83V13.12C8.88,12.47 10.16,12 12,12C14.67,12 15.56,10.66 15.85,9.77C14.77,9.32 14,8.25 14,7A3,3 0 0,1 17,4A3,3 0 0,1 20,7C20,8.34 19.12,9.5 17.91,9.86C17.65,11.29 16.68,14 13,14M7,18A1,1 0 0,0 6,19A1,1 0 0,0 7,20A1,1 0 0,0 8,19A1,1 0 0,0 7,18M7,4A1,1 0 0,0 6,5A1,1 0 0,0 7,6A1,1 0 0,0 8,5A1,1 0 0,0 7,4M17,6A1,1 0 0,0 16,7A1,1 0 0,0 17,8A1,1 0 0,0 18,7A1,1 0 0,0 17,6Z</StreamGeometry>
+    <StreamGeometry x:Key="FolderIcon">M10,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V8C22,6.89 21.1,6 20,6H12L10,4Z</StreamGeometry>
+    <StreamGeometry x:Key="TagIcon">M5.5,7A1.5,1.5 0 0,1 4,5.5A1.5,1.5 0 0,1 5.5,4A1.5,1.5 0 0,1 7,5.5A1.5,1.5 0 0,1 5.5,7M21.41,11.58L12.41,2.58C12.05,2.22 11.55,2 11,2H4C2.89,2 2,2.89 2,4V11C2,11.55 2.22,12.05 2.59,12.41L11.58,21.41C11.95,21.77 12.45,22 13,22C13.55,22 14.05,21.77 14.41,21.41L21.41,14.41C21.78,14.05 22,13.55 22,13C22,12.45 21.77,11.94 21.41,11.58Z</StreamGeometry>
+    <StreamGeometry x:Key="WorktreeIcon">M3,3H9V7H3V3M15,10H21V14H15V10M15,17H21V21H15V17M13,13H7V18H13V20H7L5,20V9H7V11H13V13Z</StreamGeometry>
+    <StreamGeometry x:Key="CheckIcon">M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z</StreamGeometry>
+    <StreamGeometry x:Key="SearchIcon">M9.5,3A6.5,6.5 0 0,1 16,9.5C16,11.11 15.41,12.59 14.44,13.73L14.71,14H15.5L20.5,19L19,20.5L14,15.5V14.71L13.73,14.44C12.59,15.41 11.11,16 9.5,16A6.5,6.5 0 0,1 3,9.5A6.5,6.5 0 0,1 9.5,3M9.5,5C7,5 5,7 5,9.5C5,12 7,14 9.5,14C12,14 14,12 14,9.5C14,7 12,5 9.5,5Z</StreamGeometry>
+  </UserControl.Resources>
+
+  <UserControl.Styles>
+    <Style Selector="TreeViewItem" x:DataType="vm:SidebarNode">
+      <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+      <Setter Property="MinHeight" Value="24" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="ToolTip.Tip" Value="{Binding ToolTip}" />
+    </Style>
+    <Style Selector="TreeViewItem /template/ Border#PART_LayoutRoot">
+      <Setter Property="MinHeight" Value="24" />
+    </Style>
+    <Style Selector="PathIcon.node">
+      <Setter Property="Width" Value="12" />
+      <Setter Property="Height" Value="12" />
+      <Setter Property="Margin" Value="0,0,6,0" />
+      <Setter Property="Foreground" Value="#8A9099" />
+    </Style>
+  </UserControl.Styles>
+
+  <DockPanel Background="#23272D">
+    <Border DockPanel.Dock="Top" Padding="8,8,8,6">
+      <TextBox x:Name="FilterBox" Text="{Binding Filter}" PlaceholderText="Filter (Ctrl+Alt+F)" FontSize="12"
+               MinHeight="28" Padding="6,4">
+        <TextBox.InnerRightContent>
+          <PathIcon Data="{StaticResource SearchIcon}" Width="12" Height="12" Margin="0,0,8,0" Foreground="#8A9099" />
+        </TextBox.InnerRightContent>
+      </TextBox>
+    </Border>
+
+    <TreeView x:Name="Tree" ItemsSource="{Binding Nodes}" SelectedItem="{Binding SelectedNode}" Background="Transparent"
+              ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+      <TreeView.ItemTemplate>
+        <TreeDataTemplate ItemsSource="{Binding Children}" x:DataType="vm:SidebarNode">
+          <Grid ColumnDefinitions="Auto,*,Auto" Height="24" Background="Transparent">
+            <!-- Icons -->
+            <Panel Grid.Column="0" VerticalAlignment="Center">
+              <PathIcon Classes="node" Data="{StaticResource BranchIcon}" IsVisible="{Binding IsBranch}" />
+              <PathIcon Classes="node" Data="{StaticResource FolderIcon}" IsVisible="{Binding IsFolder}" />
+              <PathIcon Classes="node" Data="{StaticResource TagIcon}" IsVisible="{Binding IsTag}" />
+              <PathIcon Classes="node" Data="{StaticResource WorktreeIcon}" IsVisible="{Binding IsWorktree}" />
+            </Panel>
+
+            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Spacing="6">
+              <TextBlock Text="{Binding Label}" FontSize="12" TextTrimming="CharacterEllipsis"
+                         FontWeight="{Binding IsSection, Converter={x:Static vm:Converters.BoolToSemiBold}}"
+                         Foreground="{Binding IsDimmed, Converter={x:Static vm:Converters.DimmedBrush}}" />
+              <PathIcon Data="{StaticResource CheckIcon}" Width="11" Height="11" Foreground="#4CC38A" IsVisible="{Binding IsCurrent}" />
+              <PathIcon Data="{StaticResource WorktreeIcon}" Width="11" Height="11" Foreground="#8A9099" IsVisible="{Binding HasWorktree}" />
+              <TextBlock Text="{Binding Subtitle}" FontSize="11" Foreground="#6B727C" IsVisible="{Binding HasSubtitle}"
+                         TextTrimming="CharacterEllipsis" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" Margin="4,0,8,0" VerticalAlignment="Center">
+              <TextBlock Text="{Binding Ahead}" FontSize="11" Foreground="#4CC38A" IsVisible="{Binding HasAhead}" />
+              <TextBlock Text="{Binding Behind}" FontSize="11" Foreground="#E8B339" IsVisible="{Binding HasBehind}" />
+              <TextBlock Text="{Binding Count}" FontSize="11" Foreground="#5AA9F2" IsVisible="{Binding ShowCount}" />
+              <Button Content="+" IsVisible="{Binding IsWorktreesSection}" Padding="6,0" MinHeight="0" Height="18" FontSize="12"
+                      ToolTip.Tip="Create worktree with new branch" Click="OnAddWorktreeClick" />
+            </StackPanel>
+          </Grid>
+        </TreeDataTemplate>
+      </TreeView.ItemTemplate>
+    </TreeView>
+  </DockPanel>
+</UserControl>

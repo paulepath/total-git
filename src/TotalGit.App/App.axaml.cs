@@ -17,11 +17,12 @@ public partial class App : Application
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             var avatars = new AvatarService(Path.Combine(AppSettings.DataDirectory, "avatars"));
-            var vm = new MainWindowViewModel(avatars);
+            var settings = AppSettings.Load();
+            var vm = new MainWindowViewModel(avatars, settings);
             desktop.MainWindow = new MainWindow { DataContext = vm };
             desktop.Exit += (_, _) => avatars.Dispose();
 
-            var startPath = desktop.Args is [var first, ..] ? first : AppSettings.Load().LastRepository;
+            var startPath = desktop.Args is [var first, ..] ? first : settings.LastRepository;
             if (!string.IsNullOrEmpty(startPath) && Directory.Exists(startPath))
                 _ = vm.LoadAsync(startPath);
         }

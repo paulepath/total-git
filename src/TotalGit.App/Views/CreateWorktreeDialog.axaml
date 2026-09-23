@@ -1,0 +1,44 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:TotalGit.App.ViewModels"
+        x:Class="TotalGit.App.Views.CreateWorktreeDialog"
+        x:DataType="vm:CreateWorktreeViewModel"
+        Title="{Binding Title}"
+        Width="560" SizeToContent="Height" CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        Background="#23272D">
+  <StackPanel Margin="20" Spacing="12">
+    <TextBlock Text="{Binding Title}" FontSize="18" FontWeight="SemiBold" Foreground="#E6E8EB" />
+    <TextBlock Text="{Binding SourceDescription}" Foreground="#8A9099" TextWrapping="Wrap" />
+
+    <StackPanel Spacing="4">
+      <TextBlock Text="Branch" FontSize="12" Foreground="#8A9099" />
+      <TextBox x:Name="BranchBox" Text="{Binding Branch}" IsReadOnly="{Binding !CanEditBranch}" PlaceholderText="feature/my-branch" />
+    </StackPanel>
+
+    <StackPanel Spacing="4">
+      <TextBlock Text="Folder name" FontSize="12" Foreground="#8A9099" />
+      <TextBox Text="{Binding Name}" />
+      <TextBlock Text="{Binding TargetPath}" FontSize="11" Foreground="#6B727C" TextWrapping="Wrap" />
+    </StackPanel>
+
+    <Border Background="#1C1F24" CornerRadius="4" Padding="12">
+      <StackPanel Spacing="8">
+        <CheckBox IsChecked="{Binding CopyLocalFiles}" Content="Copy local (gitignored) files into the worktree" />
+        <StackPanel Spacing="4" IsVisible="{Binding CopyLocalFiles}" Margin="28,0,0,0">
+          <TextBlock Text="File name patterns (one per line, wildcards allowed)" FontSize="11" Foreground="#8A9099" />
+          <TextBox Text="{Binding Patterns}" AcceptsReturn="True" Height="84" FontFamily="Cascadia Mono, Consolas, monospace" FontSize="12" />
+        </StackPanel>
+        <CheckBox IsChecked="{Binding LinkNodeModules}" Content="Link node__modules folders from the main checkout (junctions)" />
+      </StackPanel>
+    </Border>
+
+    <TextBlock Text="{Binding Error}" Foreground="#F26B6B" TextWrapping="Wrap"
+               IsVisible="{Binding Error, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
+    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+      <Button Content="Cancel" IsCancel="True" Click="OnCancel" />
+      <Button Content="Create worktree" IsDefault="True" Classes="accent" IsEnabled="{Binding IsValid}" Click="OnCreate" />
+    </StackPanel>
+  </StackPanel>
+</Window>

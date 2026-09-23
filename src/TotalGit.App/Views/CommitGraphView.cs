@@ -7,6 +7,7 @@ using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
+using TotalGit.App.Services;
 using TotalGit.App.ViewModels;
 using TotalGit.Core.Avatars;
 using TotalGit.Core.Git;
@@ -66,6 +67,10 @@ public sealed class CommitGraphView : Control
         "M12,2A10,10 0 0,0 2,12C2,16.42 4.87,20.17 8.84,21.5C9.34,21.58 9.5,21.27 9.5,21C9.5,20.77 9.5,20.14 9.5,19.31C6.73,19.91 6.14,17.97 6.14,17.97C5.68,16.81 5.03,16.5 5.03,16.5C4.12,15.88 5.1,15.9 5.1,15.9C6.1,15.97 6.63,16.93 6.63,16.93C7.5,18.45 8.97,18 9.54,17.76C9.63,17.11 9.89,16.67 10.17,16.42C7.95,16.17 5.62,15.31 5.62,11.5C5.62,10.39 6,9.5 6.65,8.79C6.55,8.54 6.2,7.5 6.75,6.15C6.75,6.15 7.59,5.88 9.5,7.17C10.29,6.95 11.15,6.84 12,6.84C12.85,6.84 13.71,6.95 14.5,7.17C16.41,5.88 17.25,6.15 17.25,6.15C17.8,7.5 17.45,8.54 17.35,8.79C18,9.5 18.38,10.39 18.38,11.5C18.38,15.32 16.04,16.16 13.81,16.41C14.17,16.72 14.5,17.33 14.5,18.26C14.5,19.6 14.5,20.68 14.5,21C14.5,21.27 14.66,21.58 15.17,21.5C19.14,20.16 22,16.42 22,12A10,10 0 0,0 12,2Z");
     private static readonly Geometry CloudIcon = Geometry.Parse(
         "M19.35,10.04C18.67,6.59 15.64,4 12,4C9.11,4 6.6,5.64 5.35,8.04C2.34,8.36 0,10.91 0,14A6,6 0 0,0 6,20H19A5,5 0 0,0 24,15C24,12.36 21.95,10.22 19.35,10.04Z");
+    private static readonly Geometry PencilIcon = Geometry.Parse(
+        "M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z");
+    private static readonly Geometry WorktreeIcon = Geometry.Parse(
+        "M3,3H9V7H3V3M15,10H21V14H15V10M15,17H21V21H15V17M13,13H7V18H13V20H7L5,20V9H7V11H13V13Z");
     private static readonly Geometry TagIcon = Geometry.Parse(
         "M5.5,7A1.5,1.5 0 0,1 4,5.5A1.5,1.5 0 0,1 5.5,4A1.5,1.5 0 0,1 7,5.5A1.5,1.5 0 0,1 5.5,7M21.41,11.58L12.41,2.58C12.05,2.22 11.55,2 11,2H4C2.89,2 2,2.89 2,4V11C2,11.55 2.22,12.05 2.59,12.41L11.58,21.41C11.95,21.77 12.45,22 13,22C13.55,22 14.05,21.77 14.41,21.41L21.41,14.41C21.78,14.05 22,13.55 22,13C22,12.45 21.77,11.94 21.41,11.58Z");
 
@@ -78,10 +83,9 @@ public sealed class CommitGraphView : Control
     private readonly IBrush[] _strongBandBrushes = LanePalette.Select(c => (IBrush)new SolidColorBrush(c, 0.55)).ToArray();
     private readonly IBrush[] _pillBrushes = LanePalette.Select(c => (IBrush)new SolidColorBrush(c, 0.35)).ToArray();
 
-    // Avatars are keyed by normalised email and survive repository switches.
-    private readonly Dictionary<string, Bitmap?> _avatars = [];
-    private readonly HashSet<string> _avatarRequests = [];
+    private static readonly IPen WipPen = new Pen(new SolidColorBrush(Color.Parse("#A0A7B0")), 1.5, new DashStyle([2, 2], 0));
 
+    private AvatarCache? _avatarCache;
     private Dictionary<string, List<RefBadge>> _badgesBySha = [];
     private Dictionary<string, int> _rowBySha = [];
     private string? _headSha;
@@ -109,6 +113,12 @@ public sealed class CommitGraphView : Control
         set => SetValue(SelectedShaProperty, value);
     }
 
+    /// <summary>Raised when the viewport nears the last loaded row, so more history can be loaded.</summary>
+    public event Action? NearEnd;
+
+    /// <summary>Raised on right-click with the commit under the pointer.</summary>
+    public event Action<CommitInfo, Point>? CommitContextRequested;
+
     private IReadOnlyList<GraphRow> Rows => Data?.Layout.Rows ?? [];
     private double BodyHeight => Math.Max(0, Bounds.Height - HeaderHeight);
     private double MaxOffset => Math.Max(0, Rows.Count * RowHeight - BodyHeight);
@@ -134,10 +144,21 @@ public sealed class CommitGraphView : Control
         base.OnPropertyChanged(change);
         if (change.Property == DataProperty)
         {
+            var old = change.GetOldValue<GraphData?>();
+            var data = change.GetNewValue<GraphData?>();
+            if (!ReferenceEquals(_avatarCache, data?.Avatars))
+            {
+                if (_avatarCache is not null) _avatarCache.Updated -= InvalidateVisual;
+                _avatarCache = data?.Avatars;
+                if (_avatarCache is not null) _avatarCache.Updated += InvalidateVisual;
+            }
+
             RebuildIndexes();
             _hoverRow = -1;
-            if (SelectedSha is not null && !_rowBySha.ContainsKey(SelectedSha)) SelectedSha = null;
-            SetOffset(SelectedSha is null ? 0 : _offset);
+            // Refreshes of the same worktree keep the scroll position; switching repos goes to the top.
+            var sameView = old is not null && data is not null && old.CurrentWorktreePath == data.CurrentWorktreePath;
+            if (!sameView && SelectedSha is not null && !_rowBySha.ContainsKey(SelectedSha)) SelectedSha = null;
+            SetOffset(sameView ? _offset : 0);
         }
         else if (change.Property == BoundsProperty)
         {
@@ -154,7 +175,7 @@ public sealed class CommitGraphView : Control
         if (data is null) return;
 
         for (var i = 0; i < data.Layout.Rows.Count; i++) _rowBySha[data.Layout.Rows[i].Commit.Sha] = i;
-        _badgesBySha = RefBadge.Build(data.Refs);
+        _badgesBySha = RefBadge.Build(data);
         _headSha = data.Refs.FirstOrDefault(r => r.IsCurrent)?.TargetSha;
     }
 
@@ -163,6 +184,18 @@ public sealed class CommitGraphView : Control
         _offset = Math.Clamp(offset, 0, MaxOffset);
         SyncScrollBar();
         InvalidateVisual();
+
+        var lastVisible = (_offset + BodyHeight) / RowHeight;
+        if (Rows.Count > 0 && lastVisible > Rows.Count - 200) NearEnd?.Invoke();
+    }
+
+    /// <summary>Scrolls so the given commit is visible (centred when it was off-screen).</summary>
+    public void ScrollToSha(string sha)
+    {
+        if (!_rowBySha.TryGetValue(sha, out var row)) return;
+        var top = row * RowHeight;
+        if (top < _offset || top + RowHeight > _offset + BodyHeight)
+            SetOffset(top - BodyHeight / 2 + RowHeight / 2);
     }
 
     private void SyncScrollBar()
@@ -204,8 +237,13 @@ public sealed class CommitGraphView : Control
     {
         base.OnPointerPressed(e);
         Focus();
-        var row = RowAt(e.GetPosition(this).Y);
-        if (row >= 0) SelectedSha = Rows[row].Commit.Sha;
+        var point = e.GetCurrentPoint(this);
+        var row = RowAt(point.Position.Y);
+        if (row >= 0)
+        {
+            SelectedSha = Rows[row].Commit.Sha;
+            if (point.Properties.IsRightButtonPressed) CommitContextRequested?.Invoke(Rows[row].Commit, point.Position);
+        }
         e.Handled = true;
     }
 
@@ -413,6 +451,13 @@ public sealed class CommitGraphView : Control
         var center = new Point(LaneX(row.Lane), RowTop(i) + RowHeight / 2);
         var brush = _laneBrushes[row.ColorIndex];
 
+        if (row.Commit.IsWorkingTree)
+        {
+            ctx.DrawEllipse(BackgroundBrush, WipPen, center, NodeRadius - 1, NodeRadius - 1);
+            DrawIcon(ctx, PencilIcon, center.X - 6, center.Y - 6, 12, MutedTextBrush);
+            return;
+        }
+
         if (row.Commit.IsMerge)
         {
             ctx.DrawEllipse(brush, null, center, MergeDotRadius, MergeDotRadius);
@@ -423,7 +468,7 @@ public sealed class CommitGraphView : Control
         var inner = NodeRadius - 2;
         var rect = new Rect(center.X - inner, center.Y - inner, inner * 2, inner * 2);
 
-        if (GetAvatar(row.Commit) is { } bitmap)
+        if (_avatarCache?.TryGet(row.Commit.AuthorEmail, Data?.GitHubRepo, row.Commit.Sha) is { } bitmap)
         {
             using (ctx.PushGeometryClip(new EllipseGeometry(rect)))
                 ctx.DrawImage(bitmap, rect);
@@ -443,6 +488,14 @@ public sealed class CommitGraphView : Control
         var top = RowTop(i);
         var metaWidth = ShowMetaColumns ? AuthorColumnWidth + DateColumnWidth : 0;
         var messageWidth = Math.Max(0, width - MessageLeft - metaWidth - 12);
+
+        if (c.IsWorkingTree)
+        {
+            var count = Data?.WipCount ?? 0;
+            var wip = Text($"// WIP    {count} {(count == 1 ? "file" : "files")} changed", 13, MutedTextBrush, _typeface, messageWidth);
+            ctx.DrawText(wip, new Point(MessageLeft, top + (RowHeight - wip.Height) / 2));
+            return;
+        }
 
         var msg = Text(c.MessageShort, 13, PrimaryTextBrush, _typeface, messageWidth);
         ctx.DrawText(msg, new Point(MessageLeft, top + (RowHeight - msg.Height) / 2));
@@ -470,6 +523,7 @@ public sealed class CommitGraphView : Control
         if (badge.IsTag) icons.Add(TagIcon);
         if (badge.HasLocal) icons.Add(LaptopIcon);
         if (badge.HasRemote) icons.Add(Data?.GitHubRepo is not null ? GitHubIcon : CloudIcon);
+        if (badge.HasWorktree) icons.Add(WorktreeIcon);
         var leading = badge.IsCurrent ? iconSize + gap : 0;
         var trailing = icons.Count * (iconSize + gap);
 
@@ -502,11 +556,11 @@ public sealed class CommitGraphView : Control
         }
     }
 
-    private static void DrawIcon(DrawingContext ctx, Geometry icon, double x, double y, double size)
+    private static void DrawIcon(DrawingContext ctx, Geometry icon, double x, double y, double size, IBrush? brush = null)
     {
         var scale = size / 24;
         using (ctx.PushTransform(Matrix.CreateScale(scale, scale) * Matrix.CreateTranslation(x, y)))
-            ctx.DrawGeometry(Brushes.White, null, icon);
+            ctx.DrawGeometry(brush ?? Brushes.White, null, icon);
     }
 
     private static FormattedText Text(string text, double size, IBrush brush, Typeface typeface, double maxWidth = double.PositiveInfinity)
@@ -534,47 +588,12 @@ public sealed class CommitGraphView : Control
         };
     }
 
-    // ---------------------------------------------------------------- avatars
-
-    private Bitmap? GetAvatar(CommitInfo commit)
-    {
-        var key = AvatarIdentity.NormalizeEmail(commit.AuthorEmail);
-        if (_avatars.TryGetValue(key, out var bitmap)) return bitmap;
-        if (Data is not { } data || !_avatarRequests.Add(key)) return null;
-
-        _ = LoadAvatarAsync(data, key, commit);
-        return null;
-    }
-
-    private async Task LoadAvatarAsync(GraphData data, string key, CommitInfo commit)
-    {
-        var bytes = await data.Avatars.GetAvatarAsync(commit.AuthorEmail, data.GitHubRepo, commit.Sha).ConfigureAwait(false);
-        Bitmap? bitmap = null;
-        if (bytes is not null)
-        {
-            try
-            {
-                using var stream = new MemoryStream(bytes);
-                bitmap = Bitmap.DecodeToWidth(stream, 48);
-            }
-            catch (Exception)
-            {
-                // Unsupported or corrupt image: fall back to initials.
-            }
-        }
-
-        Dispatcher.UIThread.Post(() =>
-        {
-            _avatars[key] = bitmap;
-            InvalidateVisual();
-        });
-    }
-
     /// <summary>One pill in the branch/tag column; local and remote branches with the same name share a pill.</summary>
-    private sealed record RefBadge(string Name, bool IsCurrent, bool HasLocal, bool HasRemote, bool IsTag)
+    private sealed record RefBadge(string Name, bool IsCurrent, bool HasLocal, bool HasRemote, bool IsTag, bool HasWorktree = false)
     {
-        public static Dictionary<string, List<RefBadge>> Build(IReadOnlyList<RefInfo> refs)
+        public static Dictionary<string, List<RefBadge>> Build(GraphData data)
         {
+            var refs = data.Refs;
             var result = new Dictionary<string, List<RefBadge>>();
             foreach (var group in refs.GroupBy(r => r.TargetSha))
             {
@@ -585,7 +604,10 @@ public sealed class CommitGraphView : Control
                 {
                     var match = remotes.FirstOrDefault(r => ShortRemoteName(r.Name) == local.Name);
                     if (match is not null) remotes.Remove(match);
-                    badges.Add(new RefBadge(local.Name, local.IsCurrent, true, match is not null, false));
+                    // Worktree icon: the branch is checked out in a worktree other than the one being viewed.
+                    var inOtherWorktree = data.WorktreesByBranch.TryGetValue(local.Name, out var wt)
+                        && !string.Equals(wt.Path, data.CurrentWorktreePath, StringComparison.OrdinalIgnoreCase);
+                    badges.Add(new RefBadge(local.Name, local.IsCurrent, true, match is not null, false, inOtherWorktree));
                 }
                 badges.AddRange(remotes.Select(r => new RefBadge(ShortRemoteName(r.Name), false, false, true, false)));
                 badges.AddRange(group.Where(r => r.Kind == RefKind.Tag).Select(r => new RefBadge(r.Name, false, false, false, true)));

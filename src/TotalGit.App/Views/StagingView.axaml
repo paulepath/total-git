@@ -1,0 +1,84 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:TotalGit.App.ViewModels"
+             x:Class="TotalGit.App.Views.StagingView"
+             x:DataType="vm:StagingViewModel">
+  <UserControl.Styles>
+    <Style Selector="ListBoxItem">
+      <Setter Property="Padding" Value="14,2,6,2" />
+      <Setter Property="MinHeight" Value="24" />
+    </Style>
+    <Style Selector="Button.fileAction">
+      <Setter Property="Padding" Value="6,0" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="Height" Value="20" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Opacity" Value="0" />
+    </Style>
+    <Style Selector="ListBoxItem:pointerover Button.fileAction, ListBoxItem:selected Button.fileAction">
+      <Setter Property="Opacity" Value="1" />
+    </Style>
+    <Style Selector="TextBlock.header">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="#8A9099" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid RowDefinitions="Auto,*,Auto,*,Auto">
+    <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="14,10,10,4">
+      <TextBlock Classes="header" Text="{Binding UnstagedHeader}" />
+      <Button Grid.Column="1" Content="Stage all changes" Command="{Binding StageAllFilesCommand}" IsEnabled="{Binding HasUnstaged}"
+              Padding="8,2" MinHeight="0" FontSize="11" />
+    </Grid>
+    <ListBox Grid.Row="1" x:Name="UnstagedList" ItemsSource="{Binding Unstaged}" Background="Transparent">
+      <ListBox.ItemTemplate>
+        <DataTemplate x:DataType="vm:FileChangeItem">
+          <Grid ColumnDefinitions="18,*,Auto" ToolTip.Tip="{Binding ToolTip}">
+            <TextBlock Text="{Binding StatusLetter}" Foreground="{Binding StatusBrush}" FontWeight="Bold" FontSize="12" VerticalAlignment="Center" />
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+              <TextBlock Text="{Binding FileName}" FontSize="12" Foreground="#E6E8EB" />
+              <TextBlock Text="{Binding Folder}" FontSize="11" Foreground="#6B727C" IsVisible="{Binding HasFolder}" TextTrimming="CharacterEllipsis" />
+            </StackPanel>
+            <Button Grid.Column="2" Classes="fileAction" Content="Stage"
+                    Command="{Binding $parent[UserControl].((vm:StagingViewModel)DataContext).StageFileCommand}"
+                    CommandParameter="{Binding}" />
+          </Grid>
+        </DataTemplate>
+      </ListBox.ItemTemplate>
+    </ListBox>
+
+    <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Margin="14,10,10,4">
+      <TextBlock Classes="header" Text="{Binding StagedHeader}" />
+      <Button Grid.Column="1" Content="Unstage all" Command="{Binding UnstageAllFilesCommand}" IsEnabled="{Binding HasStaged}"
+              Padding="8,2" MinHeight="0" FontSize="11" />
+    </Grid>
+    <ListBox Grid.Row="3" x:Name="StagedList" ItemsSource="{Binding Staged}" Background="Transparent">
+      <ListBox.ItemTemplate>
+        <DataTemplate x:DataType="vm:FileChangeItem">
+          <Grid ColumnDefinitions="18,*,Auto" ToolTip.Tip="{Binding ToolTip}">
+            <TextBlock Text="{Binding StatusLetter}" Foreground="{Binding StatusBrush}" FontWeight="Bold" FontSize="12" VerticalAlignment="Center" />
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+              <TextBlock Text="{Binding FileName}" FontSize="12" Foreground="#E6E8EB" />
+              <TextBlock Text="{Binding Folder}" FontSize="11" Foreground="#6B727C" IsVisible="{Binding HasFolder}" TextTrimming="CharacterEllipsis" />
+            </StackPanel>
+            <Button Grid.Column="2" Classes="fileAction" Content="Unstage"
+                    Command="{Binding $parent[UserControl].((vm:StagingViewModel)DataContext).UnstageFileCommand}"
+                    CommandParameter="{Binding}" />
+          </Grid>
+        </DataTemplate>
+      </ListBox.ItemTemplate>
+    </ListBox>
+
+    <Border Grid.Row="4" Padding="14,10" BorderBrush="#30353C" BorderThickness="0,1,0,0">
+      <StackPanel Spacing="8">
+        <TextBlock Classes="header" Text="Commit" />
+        <TextBox Text="{Binding Summary}" PlaceholderText="Summary" MaxLength="200" />
+        <TextBox Text="{Binding Description}" PlaceholderText="Description" AcceptsReturn="True" TextWrapping="Wrap" Height="80" />
+        <Button Content="Commit staged changes" Command="{Binding CommitCommand}" HorizontalAlignment="Stretch"
+                HorizontalContentAlignment="Center" Classes="accent" />
+      </StackPanel>
+    </Border>
+  </Grid>
+</UserControl>

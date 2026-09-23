@@ -1,0 +1,75 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:TotalGit.App.ViewModels"
+             x:Class="TotalGit.App.Views.CommitDetailsView"
+             x:DataType="vm:CommitDetailsViewModel">
+  <Grid RowDefinitions="Auto,Auto,*">
+    <Border Grid.Row="0" Padding="14,12" BorderBrush="#30353C" BorderThickness="0,0,0,1">
+      <StackPanel Spacing="10">
+        <Grid ColumnDefinitions="Auto,*">
+          <Panel Width="40" Height="40" VerticalAlignment="Top">
+            <Border CornerRadius="20" Background="#3A4250">
+              <TextBlock Text="{Binding Initials}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                         FontWeight="SemiBold" Foreground="White" />
+            </Border>
+            <Border CornerRadius="20" ClipToBounds="True" IsVisible="{Binding Avatar, Converter={x:Static ObjectConverters.IsNotNull}}">
+              <Image Source="{Binding Avatar}" Stretch="UniformToFill" />
+            </Border>
+          </Panel>
+          <StackPanel Grid.Column="1" Margin="10,0,0,0" Spacing="1">
+            <TextBlock Text="{Binding AuthorName}" FontWeight="SemiBold" Foreground="#E6E8EB" />
+            <TextBlock Text="{Binding AuthorEmail}" FontSize="11" Foreground="#8A9099" />
+            <TextBlock Text="{Binding AuthorDate}" FontSize="11" Foreground="#8A9099" />
+          </StackPanel>
+        </Grid>
+
+        <SelectableTextBlock Text="{Binding Summary}" FontSize="14" FontWeight="SemiBold" Foreground="#E6E8EB" TextWrapping="Wrap" />
+        <SelectableTextBlock Text="{Binding Body}" FontSize="12" Foreground="#C2C7CE" TextWrapping="Wrap" IsVisible="{Binding HasBody}" />
+        <TextBlock Text="{Binding CommitterText}" FontSize="11" Foreground="#8A9099" IsVisible="{Binding CommitterDiffers}" />
+
+        <WrapPanel Orientation="Horizontal">
+          <TextBlock Text="commit" FontSize="11" Foreground="#8A9099" VerticalAlignment="Center" Margin="0,0,6,0" />
+          <Button x:Name="CopyShaButton" Content="{Binding ShortSha}" FontFamily="Cascadia Mono, Consolas, monospace" FontSize="11"
+                  Padding="6,1" MinHeight="0" ToolTip.Tip="Copy full SHA" />
+          <TextBlock Text="parents" FontSize="11" Foreground="#8A9099" VerticalAlignment="Center" Margin="12,0,6,0" />
+          <ItemsControl ItemsSource="{Binding Parents}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <StackPanel Orientation="Horizontal" Spacing="4" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:CommitDetailsViewModel+ParentLink">
+                <Button Content="{Binding ShortSha}" Command="{Binding Command}" FontFamily="Cascadia Mono, Consolas, monospace"
+                        FontSize="11" Padding="6,1" MinHeight="0" ToolTip.Tip="Go to parent" />
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </WrapPanel>
+      </StackPanel>
+    </Border>
+
+    <TextBlock Grid.Row="1" Text="{Binding FileCountText}" Margin="14,10,14,6" FontSize="11" FontWeight="SemiBold" Foreground="#8A9099" />
+
+    <ListBox Grid.Row="2" ItemsSource="{Binding Files}" SelectedItem="{Binding SelectedFile}" Background="Transparent">
+      <ListBox.Styles>
+        <Style Selector="ListBoxItem">
+          <Setter Property="Padding" Value="14,3" />
+          <Setter Property="MinHeight" Value="24" />
+        </Style>
+      </ListBox.Styles>
+      <ListBox.ItemTemplate>
+        <DataTemplate x:DataType="vm:FileChangeItem">
+          <Grid ColumnDefinitions="18,*,Auto" ToolTip.Tip="{Binding ToolTip}">
+            <TextBlock Text="{Binding StatusLetter}" Foreground="{Binding StatusBrush}" FontWeight="Bold" FontSize="12" VerticalAlignment="Center" />
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+              <TextBlock Text="{Binding FileName}" FontSize="12" Foreground="#E6E8EB" />
+              <TextBlock Text="{Binding Folder}" FontSize="11" Foreground="#6B727C" IsVisible="{Binding HasFolder}" TextTrimming="CharacterEllipsis" />
+            </StackPanel>
+            <TextBlock Grid.Column="2" Text="{Binding Stats}" FontSize="11" Foreground="#8A9099" IsVisible="{Binding HasStats}" VerticalAlignment="Center" Margin="8,0,0,0" />
+          </Grid>
+        </DataTemplate>
+      </ListBox.ItemTemplate>
+    </ListBox>
+  </Grid>
+</UserControl>
