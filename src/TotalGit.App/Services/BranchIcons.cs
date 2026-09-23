@@ -18,19 +18,16 @@ public static class BranchIcons
     public static Bitmap? For(BranchKind kind) => kind switch
     {
         BranchKind.Feature => Feature.Value,
+        BranchKind.Features => Features.Value,
         BranchKind.Bug => Bug.Value,
+        BranchKind.Bugs => Bugs.Value,
         BranchKind.HotFix => HotFix.Value,
         BranchKind.Main => Main.Value,
         _ => null,
     };
 
-    /// <summary>The icon for a sidebar category folder: the plural (group) versions for features and bugs.</summary>
-    public static Bitmap? ForFolder(string folder) => BranchCategory.ForFolder(folder) switch
-    {
-        BranchKind.Feature => Features.Value,
-        BranchKind.Bug => Bugs.Value,
-        var kind => For(kind),
-    };
+    /// <summary>The icon for a sidebar category folder ("feature" ✦, "features" multi-star, "bugs" multi-bug…).</summary>
+    public static Bitmap? ForFolder(string folder) => For(BranchCategory.ForFolder(folder));
 
     public static Bitmap? ForBranch(string? name) => For(BranchCategory.Classify(name).Kind);
 

@@ -4,13 +4,15 @@ public enum BranchKind
 {
     Other,
     Feature,
+    Features,
     Bug,
+    Bugs,
     HotFix,
     Main,
 }
 
 /// <summary>
-/// Recognises the feature/, bug/ and hot-fix/ naming convention, so the UI can show an icon
+/// Recognises the feature(s)/, bug(s)/ and hot-fix/ naming convention, so the UI can show an icon
 /// in place of the prefix ("feature/e4-1-x" → ✦ "e4-1-x"). main/master get an icon too, keeping their name.
 /// </summary>
 public static class BranchCategory
@@ -18,9 +20,9 @@ public static class BranchCategory
     private static readonly (string Prefix, BranchKind Kind)[] Prefixes =
     [
         ("feature/", BranchKind.Feature),
-        ("features/", BranchKind.Feature),
+        ("features/", BranchKind.Features),
         ("bug/", BranchKind.Bug),
-        ("bugs/", BranchKind.Bug),
+        ("bugs/", BranchKind.Bugs),
         ("bugfix/", BranchKind.Bug),
         ("hot-fix/", BranchKind.HotFix),
         ("hotfix/", BranchKind.HotFix),
