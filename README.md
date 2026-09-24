@@ -14,7 +14,9 @@ A visual git client for Windows, built with .NET and Avalonia.
   ✕ on branches whose remote branch has been deleted.
 - **Tabs** for several repositories or worktrees at once, restored when you reopen the app.
 - **Diffs** inline or side by side, for commits and for uncommitted changes.
-- **Staging and commit**, fetch, pull and push.
+- **Staging and commit** with changed files grouped in a collapsible folder tree (or a flat list) and a filter,
+  plus fetch, pull and push.
+- **Add to .gitignore** from a right-click on a file or folder: edit the rule and see which files it will hide.
 - **Merge and rebase** from the right-click menu, including rebasing onto any commit and
   **interactive rebase** (reorder, reword, squash, fix up or drop commits).
 - **Built-in 3-pane merge tool** for conflicts, with continue / skip / abort for merges and rebases in progress.
@@ -28,6 +30,10 @@ A visual git client for Windows, built with .NET and Avalonia.
 | Resolving a merge conflict | Interactive rebase |
 | --- | --- |
 | ![The 3-pane merge tool with a merge in progress](docs/screenshots/merge-tool.png) | ![Interactive rebase: pick, squash and reword commits](docs/screenshots/interactive-rebase.png) |
+
+Right-click a changed file or folder to add it to `.gitignore`, with a live list of what the rule hides:
+
+<img src="docs/screenshots/gitignore.png" alt="Add to .gitignore: an editable rule with the files it matches" width="560">
 
 Right-click a commit, branch or tag for tags, worktrees, merge and rebase:
 
