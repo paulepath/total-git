@@ -66,3 +66,24 @@ public static partial class UnifiedDiff
         return (lines, false);
     }
 }
+
+/// <summary>Maps a row of a diff to a line in the new version of the file (for opening it in an editor).</summary>
+public static class DiffLineMap
+{
+    public static int? TargetLine(IReadOnlyList<DiffLine> lines, int index)
+    {
+        if (index < 0 || index >= lines.Count) return null;
+        if (lines[index].NewLine is { } n) return n;
+
+        // A removed line, hunk header or marker has no new line: use the next one in the hunk,
+        // or else the line after the previous one.
+        for (var i = index + 1; i < lines.Count && lines[i].Kind != DiffLineKind.Hunk; i++)
+            if (lines[i].NewLine is { } next) return next;
+        for (var i = index - 1; i >= 0; i--)
+        {
+            if (lines[i].NewLine is { } previous) return previous + 1;
+            if (lines[i].Kind == DiffLineKind.Hunk) break;
+        }
+        return lines[index].Kind == DiffLineKind.Hunk ? null : 1;
+    }
+}

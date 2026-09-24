@@ -33,6 +33,9 @@ public sealed record BranchTarget(
         new(r.Kind, r.Name, r.TargetSha, r.RemoteName, worktree);
 }
 
+/// <summary>A file in the worktree (repository-relative path), optionally at a line and column.</summary>
+public sealed record FileTarget(string Path, int? Line = null, int? Column = null);
+
 /// <summary>Message strip under the toolbar, with optional follow-up actions.</summary>
 public sealed record Banner(string Message, bool IsError, IReadOnlyList<MenuAction> Actions)
 {

@@ -10,7 +10,7 @@ using TotalGit.Core.Git;
 namespace TotalGit.App.Views;
 
 /// <summary>Diff viewer (inline or side by side) with line numbers; draws only the visible lines.</summary>
-public sealed class DiffView : Control
+public sealed partial class DiffView : Control
 {
     public static readonly StyledProperty<FileDiff?> DiffProperty =
         AvaloniaProperty.Register<DiffView, FileDiff?>(nameof(Diff));
@@ -93,11 +93,16 @@ public sealed class DiffView : Control
             _highlights = diff is not null ? IntraLineDiff.Compute(diff.Lines) : IntraLineHighlights.None;
             var oldPath = change.GetOldValue<FileDiff?>()?.Path;
             var newPath = change.GetNewValue<FileDiff?>()?.Path;
-            if (oldPath != newPath) _hOffset = 0;
+            if (oldPath != newPath)
+            {
+                _hOffset = 0;
+                ClearSelection();
+            }
             SetOffset(oldPath == newPath ? _offset : 0);
         }
         else if (change.Property == ModeProperty)
         {
+            ClearSelection();
             SetOffset(0);
         }
         else if (change.Property == BoundsProperty)
@@ -140,6 +145,11 @@ public sealed class DiffView : Control
     protected override void OnKeyDown(KeyEventArgs e)
     {
         base.OnKeyDown(e);
+        if (OnSelectionKey(e))
+        {
+            e.Handled = true;
+            return;
+        }
         var page = Math.Max(LineHeight, Bounds.Height - LineHeight);
         double? target = e.Key switch
         {
@@ -162,6 +172,69 @@ public sealed class DiffView : Control
     {
         base.OnPointerPressed(e);
         Focus();
+        if (OnSelectionPressed(e))
+        {
+            e.Handled = true;
+            return;
+        }
+        var point = e.GetCurrentPoint(this);
+        if (point.Properties.IsRightButtonPressed && Diff is { IsBinary: false } diff)
+        {
+            var (line, column) = LineAt(diff, point.Position);
+            LineContextRequested?.Invoke(diff, line, column);
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>Right-click: the file, and the line (in the new version) and column under the pointer.</summary>
+    public event Action<FileDiff, int?, int?>? LineContextRequested;
+
+    private (int? Line, int? Column) LineAt(FileDiff diff, Point p)
+    {
+        var row = (int)((p.Y + _offset) / LineHeight);
+        DiffLine? line;
+        double textLeft;
+        if (Mode == DiffViewMode.Split)
+        {
+            if (row < 0 || row >= _splitRows.Count) return (null, null);
+            var half = Math.Floor(Bounds.Width / 2);
+            var r = _splitRows[row];
+            // The right side is the new file; a left-only (removed) line maps to where it was.
+            line = p.X < half ? r.Left ?? r.Right : r.Right ?? r.Left;
+            textLeft = (p.X < half ? 0 : half + 1) + GutterWidth + 20;
+        }
+        else
+        {
+            if (row < 0 || row >= diff.Lines.Count) return (null, null);
+            line = diff.Lines[row];
+            textLeft = GutterWidth * 2 + 20;
+        }
+        if (line is not { } l) return (null, null);
+
+        var index = Mode == DiffViewMode.Split ? IndexOf(diff.Lines, l) : row;
+        var target = DiffLineMap.TargetLine(diff.Lines, index);
+        // A column only means something on a line that is in the new file.
+        int? column = l.NewLine is not null ? ColumnAt(l.Text, (p.X - textLeft + _hOffset) / _charWidth) : null;
+        return (target, column);
+    }
+
+    private static int IndexOf(IReadOnlyList<DiffLine> lines, DiffLine line)
+    {
+        for (var i = 0; i < lines.Count; i++)
+            if (lines[i] == line) return i;
+        return -1;
+    }
+
+    /// <summary>1-based column in the raw text for a display position (tabs are drawn as four spaces).</summary>
+    private static int ColumnAt(string text, double displayColumn)
+    {
+        var display = 0;
+        for (var i = 0; i < text.Length; i++)
+        {
+            display += text[i] == '\t' ? 4 : 1;
+            if (display > displayColumn) return i + 1;
+        }
+        return text.Length + 1;
     }
 
     public override void Render(DrawingContext ctx)
@@ -217,7 +290,7 @@ public sealed class DiffView : Control
             {
                 if (sign.Length > 0) ctx.DrawText(Text(sign, signBrush), new Point(GutterWidth * 2 + 6, y + 2));
                 var brush = line.Kind is DiffLineKind.Hunk or DiffLineKind.NoNewline ? HunkTextBrush : TextBrush;
-                DrawLineText(ctx, line, brush, new Point(textLeft - _hOffset, y + 2));
+                DrawLineText(ctx, line, brush, new Point(textLeft - _hOffset, y + 2), i, 0);
             }
         }
     }
@@ -250,14 +323,14 @@ public sealed class DiffView : Control
                 continue;
             }
 
-            DrawSide(ctx, row.Left, 0, half, y, left: true);
-            DrawSide(ctx, row.Right, half + 1, width - half - 1, y, left: false);
+            DrawSide(ctx, row.Left, 0, half, y, i, left: true);
+            DrawSide(ctx, row.Right, half + 1, width - half - 1, y, i, left: false);
         }
 
         ctx.FillRectangle(DividerBrush, new Rect(half, 0, 1, Bounds.Height));
     }
 
-    private void DrawSide(DrawingContext ctx, DiffLine? line, double x, double w, double y, bool left)
+    private void DrawSide(DrawingContext ctx, DiffLine? line, double x, double w, double y, int row, bool left)
     {
         if (line is not { } l)
         {
@@ -280,13 +353,14 @@ public sealed class DiffView : Control
         {
             if (sign.Length > 0) ctx.DrawText(Text(sign, signBrush), new Point(x + GutterWidth + 6, y + 2));
             var brush = l.Kind == DiffLineKind.NoNewline ? HunkTextBrush : TextBrush;
-            DrawLineText(ctx, l, brush, new Point(x + GutterWidth + 20 - _hOffset, y + 2));
+            DrawLineText(ctx, l, brush, new Point(x + GutterWidth + 20 - _hOffset, y + 2), row, left ? 0 : 1);
         }
     }
 
     /// <summary>Draws a line's text, over a stronger highlight on the words that changed.</summary>
-    private void DrawLineText(DrawingContext ctx, DiffLine line, IBrush brush, Point origin)
+    private void DrawLineText(DrawingContext ctx, DiffLine line, IBrush brush, Point origin, int row, int side)
     {
+        DrawSelection(ctx, line, row, side, origin);
         var text = Text(line.Text.Replace("\t", "    "), brush);
         var ranges = _highlights.For(line);
         if (ranges.Count > 0)

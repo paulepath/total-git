@@ -6,7 +6,20 @@ namespace TotalGit.App.Services;
 public static class VsCodeLauncher
 {
     /// <summary>Opens <paramref name="folder"/> in a new VS Code window.</summary>
-    public static void Open(string folder, string? configuredPath = null)
+    public static void Open(string folder, string? configuredPath = null) =>
+        Run(configuredPath, folder, ["--new-window", folder]);
+
+    /// <summary>
+    /// Opens a file, optionally at a line and column. The worktree folder is passed too, so a VS Code window that
+    /// already has it open is reused (and focused); otherwise a new window opens on the folder.
+    /// </summary>
+    public static void OpenFile(string folder, string file, int? line = null, int? column = null, string? configuredPath = null)
+    {
+        var target = line is { } l ? $"{file}:{l}" + (column is { } c ? $":{c}" : "") : file;
+        Run(configuredPath, folder, [folder, "--goto", target]);
+    }
+
+    private static void Run(string? configuredPath, string workingDirectory, string[] args)
     {
         var exe = Resolve(configuredPath)
             ?? throw new FileNotFoundException("Visual Studio Code was not found. Set its path in settings.json (VsCodePath).");
@@ -15,17 +28,17 @@ public static class VsCodeLauncher
         if (exe.EndsWith(".cmd", StringComparison.OrdinalIgnoreCase) || exe.EndsWith(".bat", StringComparison.OrdinalIgnoreCase))
         {
             // /s makes cmd strip only the outer quotes, so paths with spaces survive.
-            psi = new ProcessStartInfo("cmd.exe") { Arguments = $"/s /c \"\"{exe}\" --new-window \"{folder}\"\"" };
+            var quoted = string.Join(' ', args.Select(a => a.StartsWith('-') ? a : $"\"{a}\""));
+            psi = new ProcessStartInfo("cmd.exe") { Arguments = $"/s /c \"\"{exe}\" {quoted}\"" };
         }
         else
         {
             psi = new ProcessStartInfo(exe);
-            psi.ArgumentList.Add("--new-window");
-            psi.ArgumentList.Add(folder);
+            foreach (var a in args) psi.ArgumentList.Add(a);
         }
         psi.UseShellExecute = false;
         psi.CreateNoWindow = true;
-        psi.WorkingDirectory = folder;
+        psi.WorkingDirectory = workingDirectory;
         Process.Start(psi)?.Dispose();
     }
 

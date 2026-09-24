@@ -12,7 +12,6 @@
   <Window.KeyBindings>
     <KeyBinding Gesture="F5" Command="{Binding SelectedTab.RefreshCommand}" />
     <KeyBinding Gesture="Ctrl+O" Command="{Binding OpenRepositoryCommand}" />
-    <KeyBinding Gesture="Escape" Command="{Binding SelectedTab.CloseDiffCommand}" />
     <KeyBinding Gesture="Ctrl+T" Command="{Binding NewTabCommand}" />
     <KeyBinding Gesture="Ctrl+W" Command="{Binding CloseTabCommand}" />
     <KeyBinding Gesture="Ctrl+Tab" Command="{Binding NextTabCommand}" />

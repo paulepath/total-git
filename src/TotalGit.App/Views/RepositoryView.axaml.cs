@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using CommunityToolkit.Mvvm.Input;
 using TotalGit.App.Services;
 using TotalGit.App.ViewModels;
 using TotalGit.Core.Git;
@@ -39,6 +40,18 @@ public partial class RepositoryView : UserControl
         StagingPane.NodeContextRequested += (node, control) =>
         {
             if (_vm is not null) ShowMenu(control, _vm.ActionsForStagingNode(node));
+        };
+        DiffView.LineContextRequested += (diff, line, column) =>
+        {
+            if (_vm is null) return;
+            var actions = _vm.ActionsForDiffLine(diff.Path, line, column);
+            if (DiffView.HasSelection)
+                actions = [new MenuAction("Copy", new RelayCommand(() => _ = DiffView.CopySelectionAsync())), MenuAction.Separator, .. actions];
+            ShowMenu(DiffView, actions);
+        };
+        DetailsView.FileContextRequested += (file, control) =>
+        {
+            if (_vm is not null) ShowMenu(control, _vm.ActionsForFile(file));
         };
         DetailsView.CopyRequested += sha => _ = _vm?.Dialogs?.CopyToClipboardAsync(sha);
     }

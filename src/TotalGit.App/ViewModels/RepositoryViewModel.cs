@@ -694,6 +694,21 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
     }
 
     [RelayCommand]
+    private void OpenFileInVsCode(FileTarget target)
+    {
+        if (_state is null) return;
+        try
+        {
+            var full = Path.GetFullPath(Path.Combine(_state.WorkingDirectory, target.Path));
+            VsCodeLauncher.OpenFile(_state.WorkingDirectory, full, target.Line, target.Column, _settings.VsCodePath);
+        }
+        catch (Exception ex) when (ex is FileNotFoundException or System.ComponentModel.Win32Exception)
+        {
+            ShowError(ex.Message);
+        }
+    }
+
+    [RelayCommand]
     private async Task RevealAsync(string path)
     {
         if (Dialogs is not null) await Dialogs.RevealFolderAsync(path);

@@ -35,6 +35,13 @@ public partial class MainWindow : Window, IDialogService
                 ActiveView()?.FocusFilter();
                 e.Handled = true;
             }
+            // Escape closes the diff. Not a key binding: those run before the focused control, and the diff view
+            // uses Escape first to clear a text selection.
+            else if (e.Key == Key.Escape && e.KeyModifiers == KeyModifiers.None && _shell?.SelectedTab is { } tab)
+            {
+                tab.CloseDiffCommand.Execute(null);
+                e.Handled = true;
+            }
         };
 
         // Middle-click closes a tab, as in browsers.
