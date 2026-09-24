@@ -150,6 +150,7 @@ public partial class ShellViewModel : ObservableObject
     {
         tab.Dialogs = Dialogs;
         tab.OpenRepositoryHandler = OpenRepositoryAsync;
+        tab.OpenInTabHandler = OpenPathAsync;
         tab.PropertyChanged += OnTabPropertyChanged;
         tab.Loaded += SaveTabs;
         Tabs.Add(tab);

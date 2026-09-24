@@ -47,36 +47,38 @@ public sealed partial class RepositoryViewModel
     /// <summary>Right-click in a diff: open the file at that line.</summary>
     public IReadOnlyList<MenuAction> ActionsForDiffLine(string path, int? line, int? column)
     {
-        if (_state is null) return [];
-        var exists = File.Exists(Path.Combine(_state.WorkingDirectory, path));
+        if (DiffFolder is not { } folder) return [];
+        var exists = File.Exists(Path.Combine(folder, path));
         var actions = new List<MenuAction>();
         if (line is { } l && exists)
-            actions.Add(new MenuAction($"Open in VS Code at line {l}", OpenFileInVsCodeCommand, new FileTarget(path, l, column)));
-        actions.Add(OpenInVsCodeAction(path));
+            actions.Add(new MenuAction($"Open in VS Code at line {l}", OpenFileInVsCodeCommand, new FileTarget(path, l, column, folder)));
+        actions.Add(OpenInVsCodeAction(path, folder));
         actions.Add(MenuAction.Separator);
         actions.Add(new MenuAction("Copy path", CopyCommand, path));
         if (line is { } n) actions.Add(new MenuAction("Copy line number", CopyCommand, n.ToString(System.Globalization.CultureInfo.InvariantCulture)));
         return actions;
     }
 
-    /// <summary>Right-click on a file in a commit's file list.</summary>
-    public IReadOnlyList<MenuAction> ActionsForFile(FileChangeItem file)
+    /// <summary>Right-click on a file in a commit's (or another worktree's) file list.</summary>
+    public IReadOnlyList<MenuAction> ActionsForFile(FileChangeItem file, string? folder = null)
     {
-        if (_state is null) return [];
+        folder ??= _state?.WorkingDirectory;
+        if (folder is null) return [];
         return
         [
-            OpenInVsCodeAction(file.Path),
+            OpenInVsCodeAction(file.Path, folder),
             MenuAction.Separator,
             new MenuAction("Copy path", CopyCommand, file.Path),
-            new MenuAction("Reveal folder", RevealCommand, Path.Combine(_state.WorkingDirectory, file.Change.Directory ?? "")),
+            new MenuAction("Reveal folder", RevealCommand, Path.Combine(folder, file.Change.Directory ?? "")),
         ];
     }
 
-    private MenuAction OpenInVsCodeAction(string path)
+    private MenuAction OpenInVsCodeAction(string path, string? folder = null)
     {
-        var exists = _state is not null && File.Exists(Path.Combine(_state.WorkingDirectory, path));
+        folder ??= _state?.WorkingDirectory;
+        var exists = folder is not null && File.Exists(Path.Combine(folder, path));
         return new MenuAction(exists ? "Open in VS Code" : "Open in VS Code (file no longer exists)",
-            OpenFileInVsCodeCommand, new FileTarget(path), IsEnabled: exists);
+            OpenFileInVsCodeCommand, new FileTarget(path, Folder: folder), IsEnabled: exists);
     }
 
     [RelayCommand]

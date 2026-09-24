@@ -54,6 +54,12 @@ public partial class RepositoryView : UserControl
             if (_vm is not null) ShowMenu(control, _vm.ActionsForFile(file));
         };
         DetailsView.CopyRequested += sha => _ = _vm?.Dialogs?.CopyToClipboardAsync(sha);
+        WorktreeChangesPane.OpenTabRequested += wt => _vm?.OpenWorktreeInTabCommand.Execute(wt);
+        WorktreeChangesPane.OpenInCodeRequested += path => _vm?.OpenInVsCodeCommand.Execute(path);
+        WorktreeChangesPane.FileContextRequested += (file, folder, control) =>
+        {
+            if (_vm is not null) ShowMenu(control, _vm.ActionsForFile(file, folder));
+        };
     }
 
     public void FocusFilter() => Sidebar.FocusFilter();

@@ -25,7 +25,10 @@ public sealed record GraphData(
     string RepositoryPath,
     string CurrentWorktreePath,
     IReadOnlyDictionary<string, WorktreeInfo> WorktreesByBranch,
-    int WipCount);
+    IReadOnlyDictionary<string, WipInfo> Wip);
+
+/// <summary>A WIP row's file count, and the worktree name for rows of other worktrees.</summary>
+public sealed record WipInfo(int Count, string? WorktreeName);
 
 /// <summary>One repository tab: its graph, sidebar, details/staging and git actions.</summary>
 public partial class RepositoryViewModel : ObservableObject, IDisposable
@@ -249,9 +252,11 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
                 Banner = null;
             }
 
+            _otherWip.Clear();
             ApplyState();
             RebuildGraph();
             if (sameRepo) await ReloadSelectionAsync();
+            _ = RefreshOtherWorktreesAsync();
 
             PendingPath = null;
             OnPropertyChanged(nameof(TabPath));
@@ -322,6 +327,7 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
             ApplyState();
             RebuildGraph();
             await ReloadSelectionAsync();
+            _ = RefreshOtherWorktreesAsync();
         }
         catch (Exception ex) when (ex is LibGit2Sharp.LibGit2SharpException or IOException)
         {
@@ -408,13 +414,14 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
     {
         var state = _state!;
         var builder = new GraphLayoutBuilder();
-        var wipCount = _status.TotalCount;
+        var wip = new Dictionary<string, WipInfo>();
         if (_status.IsDirty && state.HeadSha is not null)
         {
             builder.Append([new CommitInfo(CommitInfo.WorkingTreeSha, [state.HeadSha], "", "", DateTimeOffset.Now,
                 "// WIP", IsWorkingTree: true)]);
+            wip[CommitInfo.WorkingTreeSha] = new WipInfo(_status.TotalCount, null);
         }
-        builder.Append(_commits);
+        builder.Append(WithOtherWorktreeRows(_commits, wip));
 
         var byBranch = _worktrees
             .Where(w => w.Branch is not null)
@@ -429,7 +436,7 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
             state.MainWorkingDirectory,
             state.WorkingDirectory,
             byBranch,
-            wipCount);
+            wip);
         UpdateCommitCount();
     }
 
@@ -445,7 +452,7 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
 
     private Task ReloadSelectionAsync() => SelectedSha == CommitInfo.WorkingTreeSha
         ? Task.CompletedTask // staging already updated with the status
-        : SelectedSha is { } sha && Details?.Sha != sha ? LoadSelectionAsync(sha) : Task.CompletedTask;
+        : SelectedSha is { } sha && Details?.Sha != sha && WorktreeForWip(sha) is null ? LoadSelectionAsync(sha) : Task.CompletedTask;
 
     private async Task LoadSelectionAsync(string? sha)
     {
@@ -456,8 +463,19 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
         {
             Details = null;
             Staging = null;
+            WorktreeChanges = null;
             return;
         }
+
+        if (WorktreeForWip(sha) is { } otherWorktree)
+        {
+            Details = null;
+            Staging = null;
+            WorktreeChanges = null;
+            await LoadWorktreeChangesAsync(otherWorktree, request);
+            return;
+        }
+        WorktreeChanges = null;
 
         if (sha == CommitInfo.WorkingTreeSha)
         {
@@ -531,6 +549,12 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
             load = () => session.GetWorkingFileDiff(sf.Path, sf.IsStaged);
             title = $"{sf.Path}  ({(sf.IsStaged ? "staged" : "unstaged")})";
         }
+        else if (WorktreeChanges is { SelectedFile: { } wf } changes)
+        {
+            file = wf;
+            load = () => changes.Session.GetWorkingFileDiff(wf.Path, wf.IsStaged);
+            title = $"{wf.Path}  ({changes.Name}, {(wf.IsStaged ? "staged" : "unstaged")})";
+        }
         else if (Details is { SelectedFile: { } df } details)
         {
             file = df;
@@ -562,6 +586,7 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
         MergeTool = null;
         if (Details is not null) Details.SelectedFile = null;
         if (Staging is not null) Staging.SelectedFile = null;
+        if (WorktreeChanges is not null) WorktreeChanges.SelectedFile = null;
         Diff = null;
     }
 
@@ -705,8 +730,9 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
         if (_state is null) return;
         try
         {
-            var full = Path.GetFullPath(Path.Combine(_state.WorkingDirectory, target.Path));
-            VsCodeLauncher.OpenFile(_state.WorkingDirectory, full, target.Line, target.Column, _settings.VsCodePath);
+            var folder = target.Folder ?? _state.WorkingDirectory;
+            var full = Path.GetFullPath(Path.Combine(folder, target.Path));
+            VsCodeLauncher.OpenFile(folder, full, target.Line, target.Column, _settings.VsCodePath);
         }
         catch (Exception ex) when (ex is FileNotFoundException or System.ComponentModel.Win32Exception)
         {
@@ -975,6 +1001,7 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
     /// <summary>Context menu for a graph row: one submenu per ref on the commit, then commit actions.</summary>
     public IReadOnlyList<MenuAction> ActionsForCommit(CommitInfo commit)
     {
+        if (commit.IsOtherWorktree) return ActionsForOtherWip(commit);
         if (commit.IsWorkingTree)
             return [new MenuAction("Open in VS Code", OpenInVsCodeCommand, _state?.WorkingDirectory)];
 

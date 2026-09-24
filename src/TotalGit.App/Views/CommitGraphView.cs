@@ -617,8 +617,12 @@ public sealed class CommitGraphView : Control
 
         if (c.IsWorkingTree)
         {
-            var count = Data?.WipCount ?? 0;
-            var wip = Text($"// WIP    {count} {(count == 1 ? "file" : "files")} changed", 13, MutedTextBrush, _typeface, messageWidth);
+            var info = Data?.Wip.GetValueOrDefault(c.Sha);
+            var count = info?.Count ?? 0;
+            var files = $"{count} {(count == 1 ? "file" : "files")}";
+            // Another worktree's row names the worktree (kept short: the message column can be narrow).
+            var label = info?.WorktreeName is { } name ? $"// WIP {name} · {files}" : $"// WIP    {files} changed";
+            var wip = Text(label, 13, MutedTextBrush, _typeface, messageWidth);
             ctx.DrawText(wip, new Point(MessageLeft, top + (RowHeight - wip.Height) / 2));
             return;
         }

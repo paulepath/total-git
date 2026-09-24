@@ -85,6 +85,26 @@ public sealed class RepositorySessionTests : IDisposable
     }
 
     [Fact]
+    public void Linked_worktree_reports_its_own_changes()
+    {
+        _repo.Commit("base", "a.txt", "a");
+        _repo.Write(".gitignore", ".worktrees/\n");
+        _repo.Git("add", ".gitignore");
+        _repo.Git("commit", "-q", "-m", "ignore worktrees");
+        var wt = Path.Combine(_repo.Root, ".worktrees", "wt");
+        _repo.Git("worktree", "add", "-q", "-b", "wt-branch", wt);
+        _repo.Write("a.txt", "main change");
+        File.WriteAllText(Path.Combine(wt, "a.txt"), "worktree change");
+        File.WriteAllText(Path.Combine(wt, "new.txt"), "new");
+
+        using var session = RepositorySession.Open(wt);
+        var status = session.GetStatus();
+
+        Assert.Equal(["a.txt", "new.txt"], status.Unstaged.Select(f => f.Path).Order());
+        Assert.Contains("worktree change", string.Join('\n', session.GetWorkingFileDiff("a.txt", staged: false).Lines.Select(l => l.Text)));
+    }
+
+    [Fact]
     public void Status_separates_staged_unstaged_and_untracked()
     {
         _repo.Commit("base", "a.txt", "a");

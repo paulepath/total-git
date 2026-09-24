@@ -45,6 +45,21 @@ public class GraphLayoutBuilderTests
     }
 
     [Fact]
+    public void A_wip_row_inserted_above_a_branch_tip_sits_on_that_branch()
+    {
+        static CommitInfo C(string sha, params string[] parents) => new(sha, parents, "A", "a@x", DateTimeOffset.UnixEpoch, sha);
+        var wip = new CommitInfo(CommitInfo.OtherWorkingTreeSha("wt"), ["feature"], "", "", DateTimeOffset.UnixEpoch, "// WIP",
+            IsWorkingTree: true, WorktreePath: "wt");
+        var history = new[] { C("main2", "base"), wip, C("feature", "base"), C("base") };
+
+        var rows = GraphLayout.Compute(history).Rows;
+
+        Assert.True(rows[1].Commit.IsOtherWorktree);
+        Assert.Equal(rows[2].Lane, rows[1].Lane);
+        Assert.NotEqual(rows[0].Lane, rows[1].Lane);
+    }
+
+    [Fact]
     public void Snapshot_is_not_affected_by_later_appends()
     {
         var history = SyntheticHistory(20);

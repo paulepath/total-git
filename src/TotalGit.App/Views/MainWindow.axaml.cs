@@ -44,6 +44,9 @@ public partial class MainWindow : Window, IDialogService
             }
         };
 
+        // Other worktrees aren't watched: check them when coming back to the app (e.g. after editing in VS Code).
+        Activated += (_, _) => _ = _shell?.SelectedTab?.RefreshOtherWorktreesAsync();
+
         // Middle-click closes a tab, as in browsers.
         TabStrip.AddHandler(PointerReleasedEvent, (_, e) =>
         {
