@@ -24,8 +24,11 @@ public sealed class DiffView : Control
 
     private static readonly IBrush Background = new SolidColorBrush(Color.Parse("#1C1F24"));
     private static readonly IBrush GutterBrush = new SolidColorBrush(Color.Parse("#20242A"));
-    private static readonly IBrush AddedBrush = new SolidColorBrush(Color.Parse("#2FBF71"), 0.16);
-    private static readonly IBrush RemovedBrush = new SolidColorBrush(Color.Parse("#E5392F"), 0.18);
+    private static readonly IBrush AddedBrush = new SolidColorBrush(Color.Parse("#2FBF71"), 0.10);
+    private static readonly IBrush RemovedBrush = new SolidColorBrush(Color.Parse("#E5392F"), 0.11);
+    // The words that changed within a changed line.
+    private static readonly IBrush AddedWordBrush = new SolidColorBrush(Color.Parse("#2FBF71"), 0.48);
+    private static readonly IBrush RemovedWordBrush = new SolidColorBrush(Color.Parse("#E5392F"), 0.52);
     private static readonly IBrush AddedGutterBrush = new SolidColorBrush(Color.Parse("#2FBF71"), 0.28);
     private static readonly IBrush RemovedGutterBrush = new SolidColorBrush(Color.Parse("#E5392F"), 0.3);
     private static readonly IBrush HunkBrush = new SolidColorBrush(Color.Parse("#2D7BF4"), 0.14);
@@ -45,6 +48,7 @@ public sealed class DiffView : Control
     private ScrollBar? _scrollBar;
     private bool _syncing;
     private IReadOnlyList<SplitRow> _splitRows = [];
+    private IntraLineHighlights _highlights = IntraLineHighlights.None;
 
     static DiffView()
     {
@@ -84,7 +88,9 @@ public sealed class DiffView : Control
         base.OnPropertyChanged(change);
         if (change.Property == DiffProperty)
         {
-            _splitRows = change.GetNewValue<FileDiff?>() is { } d ? SplitDiff.Build(d.Lines) : [];
+            var diff = change.GetNewValue<FileDiff?>();
+            _splitRows = diff is not null ? SplitDiff.Build(diff.Lines) : [];
+            _highlights = diff is not null ? IntraLineDiff.Compute(diff.Lines) : IntraLineHighlights.None;
             var oldPath = change.GetOldValue<FileDiff?>()?.Path;
             var newPath = change.GetNewValue<FileDiff?>()?.Path;
             if (oldPath != newPath) _hOffset = 0;
@@ -211,7 +217,7 @@ public sealed class DiffView : Control
             {
                 if (sign.Length > 0) ctx.DrawText(Text(sign, signBrush), new Point(GutterWidth * 2 + 6, y + 2));
                 var brush = line.Kind is DiffLineKind.Hunk or DiffLineKind.NoNewline ? HunkTextBrush : TextBrush;
-                ctx.DrawText(Text(line.Text.Replace("\t", "    "), brush), new Point(textLeft - _hOffset, y + 2));
+                DrawLineText(ctx, line, brush, new Point(textLeft - _hOffset, y + 2));
             }
         }
     }
@@ -274,8 +280,38 @@ public sealed class DiffView : Control
         {
             if (sign.Length > 0) ctx.DrawText(Text(sign, signBrush), new Point(x + GutterWidth + 6, y + 2));
             var brush = l.Kind == DiffLineKind.NoNewline ? HunkTextBrush : TextBrush;
-            ctx.DrawText(Text(l.Text.Replace("\t", "    "), brush), new Point(x + GutterWidth + 20 - _hOffset, y + 2));
+            DrawLineText(ctx, l, brush, new Point(x + GutterWidth + 20 - _hOffset, y + 2));
         }
+    }
+
+    /// <summary>Draws a line's text, over a stronger highlight on the words that changed.</summary>
+    private void DrawLineText(DrawingContext ctx, DiffLine line, IBrush brush, Point origin)
+    {
+        var text = Text(line.Text.Replace("\t", "    "), brush);
+        var ranges = _highlights.For(line);
+        if (ranges.Count > 0)
+        {
+            var wordBrush = line.Kind == DiffLineKind.Added ? AddedWordBrush : RemovedWordBrush;
+            // Fill the row height, not just the glyph box (the text sits 2px below the row top).
+            var top = new Point(origin.X, origin.Y - 2);
+            foreach (var r in ranges)
+            {
+                // Tabs are drawn as four spaces, so offsets after a tab move along.
+                var start = DisplayIndex(line.Text, r.Start);
+                var end = DisplayIndex(line.Text, r.Start + r.Length);
+                if (text.BuildHighlightGeometry(top, start, end - start) is { } box)
+                    ctx.DrawRectangle(wordBrush, null, new Rect(box.Bounds.X, top.Y, box.Bounds.Width, LineHeight), 2, 2);
+            }
+        }
+        ctx.DrawText(text, origin);
+    }
+
+    private static int DisplayIndex(string text, int index)
+    {
+        var tabs = 0;
+        for (var i = 0; i < index; i++)
+            if (text[i] == '\t') tabs++;
+        return index + tabs * 3;
     }
 
     private void DrawNumber(DrawingContext ctx, int number, double left, double y)
