@@ -163,6 +163,34 @@ public sealed class GitActionsTests : IDisposable
     }
 
     [Fact]
+    public async Task Checkout_can_merge_or_discard_conflicting_local_changes()
+    {
+        _repo.Commit("base", "f.txt", "one\n");
+        _repo.Git("branch", "other");
+        _repo.Git("switch", "-q", "other");
+        _repo.Commit("other", "f.txt", "two\n");
+        _repo.Git("switch", "-q", "main");
+
+        // Keep: git refuses, nothing changes.
+        _repo.Write("f.txt", "mine\n");
+        await Assert.ThrowsAsync<GitCommandException>(() => GitActions.CheckoutAsync(_repo.Root, "other"));
+        Assert.Equal("main", _repo.Git("branch", "--show-current"));
+
+        // Merge: switches and leaves the conflict to resolve.
+        await GitActions.CheckoutAsync(_repo.Root, "other", LocalChanges.Merge);
+        Assert.Equal("other", _repo.Git("branch", "--show-current"));
+        Assert.Equal("UU f.txt", _repo.Git("status", "--porcelain"));
+
+        // Discard: switches and drops the change (untracked files stay).
+        _repo.Git("reset", "-q", "--hard");
+        _repo.Write("f.txt", "mine again\n");
+        _repo.Write("untracked.txt", "keep me");
+        await GitActions.CheckoutAsync(_repo.Root, "main", LocalChanges.Discard);
+        Assert.Equal("main", _repo.Git("branch", "--show-current"));
+        Assert.Equal("?? untracked.txt", _repo.Git("status", "--porcelain"));
+    }
+
+    [Fact]
     public async Task Checks_out_a_commit_detached_then_branches_from_it()
     {
         var first = _repo.Commit("one");

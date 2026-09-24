@@ -659,10 +659,16 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
             return;
         }
 
+        var name = target.Kind == RefKind.RemoteBranch ? target.ShortName : target.Name;
+        if (target.Kind is not (RefKind.RemoteBranch or RefKind.LocalBranch)) return;
+        if (await AskLocalChangesAsync("Check out branch", $"Check out {name}. You have uncommitted changes.", "Check out") is not { } mode)
+            return;
+
+        var dir = _state.WorkingDirectory;
         if (target.Kind == RefKind.RemoteBranch && target.RemoteName is { } remote)
-            await RunGitAsync($"Checking out {target.ShortName}…", () => GitActions.CheckoutRemoteAsync(_state.WorkingDirectory, remote, target.ShortName));
-        else if (target.Kind == RefKind.LocalBranch)
-            await RunGitAsync($"Checking out {target.Name}…", () => GitActions.CheckoutAsync(_state.WorkingDirectory, target.Name));
+            await CheckoutWithChangesAsync(name, mode, m => GitActions.CheckoutRemoteAsync(dir, remote, name, m));
+        else
+            await CheckoutWithChangesAsync(name, mode, m => GitActions.CheckoutAsync(dir, name, m));
     }
 
     // ------------------------------------------------------------------ worktrees

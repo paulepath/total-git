@@ -377,19 +377,14 @@ public partial class RepositoryViewModel
     [RelayCommand]
     private async Task CheckoutCommitAsync(CommitInfo commit)
     {
-        if (_state is null || Dialogs is null) return;
-        var details = new List<string>
-        {
-            "You'll be on this commit without a branch (a \"detached HEAD\"). It's the way to look at, build or test an older version.",
-            "If you make commits here, create a branch (right-click the commit, Create branch here…) or they'll be hard to find once you switch away.",
-            "To go back, check out a branch.",
-        };
-        if (_status.IsDirty) details.Add("Your uncommitted changes will come with you, as when switching branches (git stops if they conflict).");
-        if (!await Dialogs.ConfirmAsync("Check out commit", $"Check out {commit.ShortSha} \"{commit.MessageShort}\"?", details, "Check out"))
-            return;
+        if (_state is null) return;
+        var message = $"Check out {commit.ShortSha} \"{commit.MessageShort}\" without a branch (a \"detached HEAD\"), to look at, " +
+                      "build or test it. If you commit here, create a branch (right-click the commit, Create branch here…) " +
+                      "to keep the commits. To go back, check out a branch.";
+        if (await AskLocalChangesAsync("Check out commit", message, "Check out", alwaysAsk: true) is not { } mode) return;
 
         var wt = _state.WorkingDirectory;
-        await RunGitAsync($"Checking out {commit.ShortSha}…", () => GitActions.CheckoutDetachedAsync(wt, commit.Sha),
+        await CheckoutWithChangesAsync(commit.ShortSha, mode, m => GitActions.CheckoutDetachedAsync(wt, commit.Sha, m),
             $"Checked out {commit.ShortSha} (detached HEAD). Create a branch here to keep any new commits.");
     }
 

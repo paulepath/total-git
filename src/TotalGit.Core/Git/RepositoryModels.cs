@@ -110,3 +110,19 @@ public enum IgnoreTarget
 }
 
 public sealed record IgnorePreview(IReadOnlyList<string> Untracked, int TrackedCount);
+
+/// <summary>What to do with uncommitted changes when checking out another branch or commit.</summary>
+public enum LocalChanges
+{
+    /// <summary>Bring them along (git refuses if a changed file differs on the other branch).</summary>
+    Keep,
+
+    /// <summary>Bring them along, merging them into files that differ (may leave conflicts).</summary>
+    Merge,
+
+    /// <summary>Stash them first, so the other branch starts clean.</summary>
+    Stash,
+
+    /// <summary>Throw away changes to tracked files (untracked files are kept).</summary>
+    Discard,
+}

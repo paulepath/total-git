@@ -82,6 +82,8 @@ public sealed class FormDialog : Window
             return box;
         }
 
+        if (field.Kind == FormFieldKind.Choice) return BuildChoice(field);
+
         var multiline = field.Kind == FormFieldKind.MultilineText;
         var text = new TextBox
         {
@@ -108,6 +110,48 @@ public sealed class FormDialog : Window
                 text,
             },
         };
+    }
+
+    /// <summary>Radio buttons, each with a short description underneath.</summary>
+    private Control BuildChoice(FormField field)
+    {
+        var group = $"choice-{_controls.Count}";
+        var panel = new StackPanel { Spacing = 6 };
+        panel.Children.Add(new TextBlock { Text = field.Label, FontSize = 12, Foreground = new SolidColorBrush(Color.Parse("#8A9099")) });
+        for (var i = 0; i < field.Choices.Count; i++)
+        {
+            var choice = field.Choices[i];
+            var index = i;
+            var radio = new RadioButton
+            {
+                GroupName = group,
+                IsChecked = i == field.SelectedIndex,
+                Content = new StackPanel
+                {
+                    Spacing = 1,
+                    Children =
+                    {
+                        new TextBlock { Text = choice.Label },
+                        new TextBlock
+                        {
+                            Text = choice.Description,
+                            FontSize = 12,
+                            TextWrapping = TextWrapping.Wrap,
+                            Foreground = new SolidColorBrush(Color.Parse(choice.IsWarning ? "#F26B6B" : "#8A9099")),
+                        },
+                    },
+                },
+            };
+            radio.IsCheckedChanged += (_, _) =>
+            {
+                if (radio.IsChecked != true) return;
+                field.SelectedIndex = index;
+                Validate();
+            };
+            panel.Children.Add(radio);
+        }
+        _controls.Add((field, panel));
+        return panel;
     }
 
     private void UpdateEnabled()

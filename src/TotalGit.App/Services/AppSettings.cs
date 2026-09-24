@@ -44,6 +44,9 @@ public sealed class AppSettings
     /// <summary>"Inline" or "Split".</summary>
     public string DiffMode { get; set; } = "Inline";
 
+    /// <summary>The preselected option for uncommitted changes when checking out a branch or commit.</summary>
+    public TotalGit.Core.Git.LocalChanges CheckoutLocalChanges { get; set; }
+
     /// <summary>Staging lists grouped by folder (otherwise a flat list).</summary>
     public bool StagingTree { get; set; } = true;
 

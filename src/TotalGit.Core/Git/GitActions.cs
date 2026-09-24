@@ -45,20 +45,31 @@ public static class GitActions
         GitCli.RunAsync(worktree, ["commit", "--cleanup=strip", "-F", "-"], stdin: message);
 
     /// <summary>Checks out a local branch. Throws <see cref="BranchInUseException"/> if another worktree has it.</summary>
-    public static Task CheckoutAsync(string worktree, string branch) =>
-        GitCli.RunAsync(worktree, "switch", branch);
+    public static Task CheckoutAsync(string worktree, string branch, LocalChanges changes = LocalChanges.Keep) =>
+        GitCli.RunAsync(worktree, ["switch", .. SwitchFlags(changes), branch]);
+
+    /// <summary>
+    /// What <c>git switch</c> does with uncommitted changes. <see cref="LocalChanges.Stash"/> is done by the caller
+    /// beforehand (the tree is then clean), so it needs no flag.
+    /// </summary>
+    private static string[] SwitchFlags(LocalChanges changes) => changes switch
+    {
+        LocalChanges.Merge => ["--merge"],
+        LocalChanges.Discard => ["--discard-changes"],
+        _ => [],
+    };
 
     /// <summary>
     /// Checks out a remote branch: switches to the existing local branch of the same name, or
     /// creates one tracking the remote branch.
     /// </summary>
-    public static async Task<string> CheckoutRemoteAsync(string worktree, string remoteName, string branch)
+    public static async Task<string> CheckoutRemoteAsync(string worktree, string remoteName, string branch, LocalChanges changes = LocalChanges.Keep)
     {
         var exists = await GitCli.RunAsync(worktree, ["rev-parse", "--verify", "--quiet", $"refs/heads/{branch}"], throwOnError: false);
         if (exists.ExitCode == 0)
-            await GitCli.RunAsync(worktree, "switch", branch);
+            await GitCli.RunAsync(worktree, ["switch", .. SwitchFlags(changes), branch]);
         else
-            await GitCli.RunAsync(worktree, "switch", "--track", "-c", branch, $"{remoteName}/{branch}");
+            await GitCli.RunAsync(worktree, ["switch", .. SwitchFlags(changes), "--track", "-c", branch, $"{remoteName}/{branch}"]);
         return branch;
     }
 
@@ -75,7 +86,8 @@ public static class GitActions
     public static Task DeleteTagAsync(string worktree, string name) => GitCli.RunAsync(worktree, "tag", "-d", name);
 
     /// <summary>Checks out a commit without a branch (detached HEAD). Uncommitted changes come along, as with a branch switch.</summary>
-    public static Task CheckoutDetachedAsync(string worktree, string sha) => GitCli.RunAsync(worktree, "switch", "--detach", sha);
+    public static Task CheckoutDetachedAsync(string worktree, string sha, LocalChanges changes = LocalChanges.Keep) =>
+        GitCli.RunAsync(worktree, ["switch", .. SwitchFlags(changes), "--detach", sha]);
 
     /// <summary>Creates a branch at a commit, optionally switching to it.</summary>
     public static Task CreateBranchAsync(string worktree, string name, string sha, bool checkout) => checkout
