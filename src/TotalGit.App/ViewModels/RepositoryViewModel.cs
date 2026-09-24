@@ -490,6 +490,12 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
 
     private StagingViewModel CreateStaging() => new()
     {
+        ShowAsTree = Settings.StagingTree,
+        ShowAsTreeChanged = tree =>
+        {
+            Settings.StagingTree = tree;
+            Settings.Save();
+        },
         Stage = paths => RunGitAsync("Staging…", () => GitActions.StageAsync(_state!.WorkingDirectory, paths), refresh: Refresh.Status),
         Unstage = paths => RunGitAsync("Unstaging…", () => GitActions.UnstageAsync(_state!.WorkingDirectory, paths), refresh: Refresh.Status),
         StageAll = () => RunGitAsync("Staging…", () => GitActions.StageAllAsync(_state!.WorkingDirectory), refresh: Refresh.Status),

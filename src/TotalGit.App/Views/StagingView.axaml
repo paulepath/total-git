@@ -4,8 +4,12 @@
              x:Class="TotalGit.App.Views.StagingView"
              x:DataType="vm:StagingViewModel">
   <UserControl.Styles>
-    <Style Selector="ListBoxItem">
-      <Setter Property="Padding" Value="14,2,6,2" />
+    <Style Selector="TreeViewItem" x:DataType="vm:StagingNode">
+      <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+      <Setter Property="MinHeight" Value="24" />
+      <Setter Property="Padding" Value="0" />
+    </Style>
+    <Style Selector="TreeViewItem /template/ Border#PART_LayoutRoot">
       <Setter Property="MinHeight" Value="24" />
     </Style>
     <Style Selector="Button.fileAction">
@@ -15,7 +19,8 @@
       <Setter Property="FontSize" Value="11" />
       <Setter Property="Opacity" Value="0" />
     </Style>
-    <Style Selector="ListBoxItem:pointerover Button.fileAction, ListBoxItem:selected Button.fileAction">
+    <!-- Only the hovered row: a folder's TreeViewItem also contains its children's rows. -->
+    <Style Selector="Grid.row:pointerover Button.fileAction">
       <Setter Property="Opacity" Value="1" />
     </Style>
     <Style Selector="TextBlock.header">
@@ -26,50 +31,59 @@
     </Style>
   </UserControl.Styles>
 
-  <Grid RowDefinitions="Auto,*,Auto,*,Auto">
-    <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="14,10,10,4">
-      <TextBlock Classes="header" Text="{Binding UnstagedHeader}" />
-      <Button Grid.Column="1" Content="Stage all changes" Command="{Binding StageAllFilesCommand}" IsEnabled="{Binding HasUnstaged}"
-              Padding="8,2" MinHeight="0" FontSize="11" />
-    </Grid>
-    <ListBox Grid.Row="1" x:Name="UnstagedList" ItemsSource="{Binding Unstaged}" Background="Transparent">
-      <ListBox.ItemTemplate>
-        <DataTemplate x:DataType="vm:FileChangeItem">
-          <Grid ColumnDefinitions="18,Auto,*,Auto" ToolTip.Tip="{Binding ToolTip}">
-            <TextBlock Text="{Binding StatusLetter}" Foreground="{Binding StatusBrush}" FontWeight="Bold" FontSize="12" VerticalAlignment="Center" />
-            <TextBlock Grid.Column="1" Text="{Binding FileName}" FontSize="12" Foreground="#E6E8EB" VerticalAlignment="Center" />
-            <TextBlock Grid.Column="2" Text="{Binding Folder}" FontSize="11" Foreground="#6B727C" IsVisible="{Binding HasFolder}"
-                       TextTrimming="LeadingCharacterEllipsis" VerticalAlignment="Center" Margin="6,0,0,0" />
-            <Button Grid.Column="3" Classes="fileAction" Content="Stage"
-                    Command="{Binding $parent[UserControl].((vm:StagingViewModel)DataContext).StageFileCommand}"
-                    CommandParameter="{Binding}" />
-          </Grid>
-        </DataTemplate>
-      </ListBox.ItemTemplate>
-    </ListBox>
+  <UserControl.DataTemplates>
+    <TreeDataTemplate DataType="vm:StagingNode" ItemsSource="{Binding Children}">
+      <Grid Classes="row" ColumnDefinitions="18,Auto,*,Auto" Height="24" Background="Transparent" ToolTip.Tip="{Binding ToolTip}">
+        <TextBlock Text="{Binding StatusLetter}" Foreground="{Binding StatusBrush}" FontWeight="Bold" FontSize="12"
+                   VerticalAlignment="Center" IsVisible="{Binding IsFile}" />
+        <PathIcon Data="{StaticResource FolderIcon}" Width="12" Height="12" Foreground="#8A9099" HorizontalAlignment="Left"
+                  VerticalAlignment="Center" IsVisible="{Binding IsFolder}" />
+        <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="12" Foreground="#E6E8EB" VerticalAlignment="Center"
+                   TextTrimming="CharacterEllipsis" />
+        <TextBlock Grid.Column="2" Text="{Binding Subtitle}" FontSize="11" Foreground="#6B727C" IsVisible="{Binding HasSubtitle}"
+                   TextTrimming="LeadingCharacterEllipsis" VerticalAlignment="Center" Margin="6,0,0,0" />
+        <TextBlock Grid.Column="2" Text="{Binding FileCount}" FontSize="11" Foreground="#6B727C" IsVisible="{Binding IsFolder}"
+                   VerticalAlignment="Center" Margin="6,0,0,0" />
+        <Button Grid.Column="3" Classes="fileAction" Content="{Binding ActionText}" Margin="0,0,6,0"
+                Command="{Binding $parent[UserControl].((vm:StagingViewModel)DataContext).StageNodeCommand}"
+                CommandParameter="{Binding}" />
+      </Grid>
+    </TreeDataTemplate>
+  </UserControl.DataTemplates>
 
-    <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Margin="14,10,10,4">
-      <TextBlock Classes="header" Text="{Binding StagedHeader}" />
-      <Button Grid.Column="1" Content="Unstage all" Command="{Binding UnstageAllFilesCommand}" IsEnabled="{Binding HasStaged}"
-              Padding="8,2" MinHeight="0" FontSize="11" />
+  <Grid RowDefinitions="Auto,*,*,Auto">
+    <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="10,8,10,0">
+      <TextBox x:Name="FilterBox" Text="{Binding Filter}" PlaceholderText="Filter files" FontSize="12" MinHeight="28" Padding="6,4">
+        <TextBox.InnerRightContent>
+          <PathIcon Data="{StaticResource SearchIcon}" Width="12" Height="12" Margin="0,0,8,0" Foreground="#8A9099" />
+        </TextBox.InnerRightContent>
+      </TextBox>
+      <ToggleButton Grid.Column="1" IsChecked="{Binding ShowAsTree}" Margin="6,0,0,0" Padding="7,0" MinHeight="28"
+                    ToolTip.Tip="Group files by folder">
+        <PathIcon Data="{StaticResource FolderIcon}" Width="13" Height="13" />
+      </ToggleButton>
     </Grid>
-    <ListBox Grid.Row="3" x:Name="StagedList" ItemsSource="{Binding Staged}" Background="Transparent">
-      <ListBox.ItemTemplate>
-        <DataTemplate x:DataType="vm:FileChangeItem">
-          <Grid ColumnDefinitions="18,Auto,*,Auto" ToolTip.Tip="{Binding ToolTip}">
-            <TextBlock Text="{Binding StatusLetter}" Foreground="{Binding StatusBrush}" FontWeight="Bold" FontSize="12" VerticalAlignment="Center" />
-            <TextBlock Grid.Column="1" Text="{Binding FileName}" FontSize="12" Foreground="#E6E8EB" VerticalAlignment="Center" />
-            <TextBlock Grid.Column="2" Text="{Binding Folder}" FontSize="11" Foreground="#6B727C" IsVisible="{Binding HasFolder}"
-                       TextTrimming="LeadingCharacterEllipsis" VerticalAlignment="Center" Margin="6,0,0,0" />
-            <Button Grid.Column="3" Classes="fileAction" Content="Unstage"
-                    Command="{Binding $parent[UserControl].((vm:StagingViewModel)DataContext).UnstageFileCommand}"
-                    CommandParameter="{Binding}" />
-          </Grid>
-        </DataTemplate>
-      </ListBox.ItemTemplate>
-    </ListBox>
+    <Grid Grid.Row="1" RowDefinitions="Auto,*">
+      <Grid ColumnDefinitions="*,Auto" Margin="14,6,10,4">
+        <TextBlock Classes="header" Text="{Binding UnstagedHeader}" />
+        <Button Grid.Column="1" Content="Stage all changes" Command="{Binding StageAllFilesCommand}" IsEnabled="{Binding HasUnstaged}"
+                Padding="8,2" MinHeight="0" FontSize="11" />
+      </Grid>
+      <TreeView Grid.Row="1" x:Name="UnstagedTree" ItemsSource="{Binding UnstagedTree}" Background="Transparent"
+                ScrollViewer.HorizontalScrollBarVisibility="Disabled" />
+    </Grid>
 
-    <Border Grid.Row="4" Padding="14,10" BorderBrush="#30353C" BorderThickness="0,1,0,0">
+    <Grid Grid.Row="2" RowDefinitions="Auto,*">
+      <Grid ColumnDefinitions="*,Auto" Margin="14,10,10,4">
+        <TextBlock Classes="header" Text="{Binding StagedHeader}" />
+        <Button Grid.Column="1" Content="Unstage all" Command="{Binding UnstageAllFilesCommand}" IsEnabled="{Binding HasStaged}"
+                Padding="8,2" MinHeight="0" FontSize="11" />
+      </Grid>
+      <TreeView Grid.Row="1" x:Name="StagedTree" ItemsSource="{Binding StagedTree}" Background="Transparent"
+                ScrollViewer.HorizontalScrollBarVisibility="Disabled" />
+    </Grid>
+
+    <Border Grid.Row="3" Padding="14,10" BorderBrush="#30353C" BorderThickness="0,1,0,0">
       <StackPanel Spacing="8">
         <TextBlock Classes="header" Text="Commit" />
         <TextBox Text="{Binding Summary}" PlaceholderText="Summary" MaxLength="200" />

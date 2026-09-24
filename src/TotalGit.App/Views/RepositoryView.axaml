@@ -228,7 +228,7 @@
 
       <Panel Grid.Column="4" Background="#23272D">
         <views:CommitDetailsView x:Name="DetailsView" DataContext="{Binding Details}" IsVisible="{Binding $parent[views:RepositoryView].((vm:RepositoryViewModel)DataContext).ShowDetails}" />
-        <views:StagingView DataContext="{Binding Staging}" IsVisible="{Binding $parent[views:RepositoryView].((vm:RepositoryViewModel)DataContext).ShowStaging}" />
+        <views:StagingView x:Name="StagingPane" DataContext="{Binding Staging}" IsVisible="{Binding $parent[views:RepositoryView].((vm:RepositoryViewModel)DataContext).ShowStaging}" />
         <TextBlock Text="Select a commit to see its details" Foreground="{StaticResource MutedTextBrush}"
                    HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="12">
           <TextBlock.IsVisible>

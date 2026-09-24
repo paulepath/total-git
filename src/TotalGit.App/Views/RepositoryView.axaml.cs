@@ -36,6 +36,10 @@ public partial class RepositoryView : UserControl
             if (_vm is not null) ShowMenu(control, _vm.ActionsForSidebar(node));
         };
         Sidebar.AddWorktreeRequested += () => _vm?.CreateWorktreeCommand.Execute(null);
+        StagingPane.NodeContextRequested += (node, control) =>
+        {
+            if (_vm is not null) ShowMenu(control, _vm.ActionsForStagingNode(node));
+        };
         DetailsView.CopyRequested += sha => _ = _vm?.Dialogs?.CopyToClipboardAsync(sha);
     }
 

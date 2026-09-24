@@ -1,0 +1,56 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:TotalGit.App.ViewModels"
+        x:Class="TotalGit.App.Views.AddIgnoreDialog"
+        x:DataType="vm:AddIgnoreViewModel"
+        Title="Add to .gitignore"
+        Width="780" Height="600" MinWidth="520" MinHeight="380"
+        WindowStartupLocation="CenterOwner"
+        Background="#23272D">
+  <DockPanel Margin="20">
+    <StackPanel DockPanel.Dock="Top" Spacing="8" Margin="0,0,0,12">
+      <TextBlock Text="Add to .gitignore" FontSize="18" FontWeight="SemiBold" Foreground="#E6E8EB" />
+      <TextBlock Foreground="#A9AFB8" TextWrapping="Wrap"
+                 Text="One rule per line. A leading / anchors to the repository root, a trailing / matches folders, * matches anything but /, and ! re-includes." />
+      <TextBox x:Name="RulesBox" Text="{Binding Rules}" AcceptsReturn="True" TextWrapping="NoWrap" Height="88"
+               FontFamily="Cascadia Mono, Consolas, monospace" FontSize="12" />
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <TextBlock Text="Add to" Foreground="#A9AFB8" VerticalAlignment="Center" />
+        <ComboBox ItemsSource="{x:Static vm:AddIgnoreViewModel.Targets}" SelectedIndex="{Binding TargetIndex}" MinWidth="280" />
+      </StackPanel>
+    </StackPanel>
+
+    <StackPanel DockPanel.Dock="Bottom" Spacing="10" Margin="0,10,0,0">
+      <Grid ColumnDefinitions="*,Auto">
+        <Border Background="#4A3A12" CornerRadius="4" Padding="10,6" IsVisible="{Binding HasTracked}" HorizontalAlignment="Left">
+          <TextBlock Foreground="#F5D48B" TextWrapping="Wrap" Text="{Binding TrackedText}" />
+        </Border>
+        <TextBlock Grid.Column="1" Text="{Binding MatchText}" Foreground="#A9AFB8" VerticalAlignment="Top" Margin="12,0,0,0" />
+      </Grid>
+      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+        <Button Content="Cancel" IsCancel="True" Click="OnCancel" />
+        <Button Content="Ignore" IsDefault="True" Classes="accent" IsEnabled="{Binding CanIgnore}" Click="OnIgnore" />
+      </StackPanel>
+    </StackPanel>
+
+    <DockPanel>
+      <TextBlock DockPanel.Dock="Top" Text="Files that will be ignored" FontSize="11" FontWeight="SemiBold" Foreground="#8A9099"
+                 Margin="0,0,0,4" />
+      <Border Background="#1C1F24" CornerRadius="4">
+        <ListBox ItemsSource="{Binding Matches}" Background="Transparent">
+          <ListBox.Styles>
+            <Style Selector="ListBoxItem">
+              <Setter Property="Padding" Value="8,1" />
+              <Setter Property="MinHeight" Value="20" />
+            </Style>
+          </ListBox.Styles>
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="x:String">
+              <TextBlock Text="{Binding}" FontFamily="Cascadia Mono, Consolas, monospace" FontSize="12" Foreground="#D5D8DD" />
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+      </Border>
+    </DockPanel>
+  </DockPanel>
+</Window>

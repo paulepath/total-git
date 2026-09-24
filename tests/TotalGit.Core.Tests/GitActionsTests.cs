@@ -195,6 +195,21 @@ public sealed class GitActionsTests : IDisposable
     }
 
     [Fact]
+    public async Task Escaped_names_match_literally()
+    {
+        _repo.Commit("base");
+        _repo.Write("a[1].txt", "x");
+        _repo.Write("a1.txt", "x");
+        _repo.Write("#notes", "x");
+        _repo.Write("!bang", "x");
+
+        var rules = string.Join('\n', GitIgnore.Escape("a[1].txt"), GitIgnore.Escape("#notes"), GitIgnore.Escape("!bang"));
+        var preview = await GitActions.PreviewIgnoreAsync(_repo.Root, rules);
+
+        Assert.Equal(["!bang", "#notes", "a[1].txt"], preview.Untracked.Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
     public async Task Adds_ignore_rules_once_after_a_newline()
     {
         _repo.Commit("base", ".gitignore", "bin/");

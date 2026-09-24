@@ -90,8 +90,14 @@ public sealed partial class CommitDetailsViewModel : ObservableObject
 
 public sealed partial class StagingViewModel : ObservableObject
 {
+    // Folders the user collapsed, per list; kept across status refreshes.
+    private readonly HashSet<string> _collapsedUnstaged = [];
+    private readonly HashSet<string> _collapsedStaged = [];
+
     public ObservableCollection<FileChangeItem> Unstaged { get; } = [];
     public ObservableCollection<FileChangeItem> Staged { get; } = [];
+    public ObservableCollection<StagingNode> UnstagedTree { get; } = [];
+    public ObservableCollection<StagingNode> StagedTree { get; } = [];
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(CommitCommand))]
@@ -107,10 +113,19 @@ public sealed partial class StagingViewModel : ObservableObject
     [NotifyCanExecuteChangedFor(nameof(CommitCommand))]
     public partial bool IsBusy { get; set; }
 
-    public string UnstagedHeader => $"Unstaged files ({Unstaged.Count})";
-    public string StagedHeader => $"Staged files ({Staged.Count})";
+    /// <summary>Case-insensitive text matched against file paths, in both lists.</summary>
+    [ObservableProperty]
+    public partial string Filter { get; set; } = "";
+
+    /// <summary>Folder tree, or a flat list with the folder next to each file.</summary>
+    [ObservableProperty]
+    public partial bool ShowAsTree { get; set; } = true;
+
+    public string UnstagedHeader => Header("Unstaged files", UnstagedTree, Unstaged.Count);
+    public string StagedHeader => Header("Staged files", StagedTree, Staged.Count);
     public bool HasUnstaged => Unstaged.Count > 0;
     public bool HasStaged => Staged.Count > 0;
+    public bool IsFiltering => Filter.Trim().Length > 0;
 
     public required Func<IEnumerable<string>, Task> Stage { get; init; }
     public required Func<IEnumerable<string>, Task> Unstage { get; init; }
@@ -118,13 +133,18 @@ public sealed partial class StagingViewModel : ObservableObject
     public required Func<Task> UnstageAll { get; init; }
     public required Func<string, Task<bool>> Commit { get; init; }
 
+    /// <summary>The trees were replaced (new node objects), so the view reselects <see cref="SelectedFile"/>.</summary>
+    public event Action? TreesRebuilt;
+
+    /// <summary>Called when the tree/list mode changes, so it can be saved.</summary>
+    public Action<bool>? ShowAsTreeChanged { get; init; }
+
     public void Update(WorkingTreeStatus status)
     {
         var selected = SelectedFile;
         Replace(Unstaged, status.Unstaged.Select(f => new FileChangeItem(f, false)));
         Replace(Staged, status.Staged.Select(f => new FileChangeItem(f, true)));
-        OnPropertyChanged(nameof(UnstagedHeader));
-        OnPropertyChanged(nameof(StagedHeader));
+        RebuildTrees();
         OnPropertyChanged(nameof(HasUnstaged));
         OnPropertyChanged(nameof(HasStaged));
         CommitCommand.NotifyCanExecuteChanged();
@@ -136,17 +156,75 @@ public sealed partial class StagingViewModel : ObservableObject
         }
     }
 
-    private static void Replace(ObservableCollection<FileChangeItem> target, IEnumerable<FileChangeItem> items)
+    partial void OnFilterChanged(string value) => RebuildTrees();
+
+    partial void OnShowAsTreeChanged(bool value)
+    {
+        RebuildTrees();
+        ShowAsTreeChanged?.Invoke(value);
+    }
+
+    [RelayCommand]
+    private void ToggleTree() => ShowAsTree = !ShowAsTree;
+
+    private void RebuildTrees()
+    {
+        Replace(UnstagedTree, BuildTree(Unstaged, staged: false));
+        Replace(StagedTree, BuildTree(Staged, staged: true));
+        OnPropertyChanged(nameof(UnstagedHeader));
+        OnPropertyChanged(nameof(StagedHeader));
+        OnPropertyChanged(nameof(IsFiltering));
+        TreesRebuilt?.Invoke();
+    }
+
+    private IEnumerable<StagingNode> BuildTree(IEnumerable<FileChangeItem> files, bool staged)
+    {
+        var filter = Filter.Trim();
+        var visible = filter.Length == 0 ? files : files.Where(f => f.Path.Contains(filter, StringComparison.OrdinalIgnoreCase));
+        if (!ShowAsTree) return visible.Select(f => StagingNode.ForFile(f, showFolder: true));
+
+        var collapsed = staged ? _collapsedStaged : _collapsedUnstaged;
+        return Convert(PathTree.Build(visible, f => f.Path));
+
+        IReadOnlyList<StagingNode> Convert(IReadOnlyList<PathTreeNode<FileChangeItem>> nodes) => nodes
+            .Select(n => n.IsFolder
+                ? StagingNode.ForFolder(n.Name, n.FolderPath!, n.FileCount, staged,
+                    isExpanded: filter.Length > 0 || !collapsed.Contains(n.FolderPath!), Convert(n.Children), OnFolderExpandedChanged)
+                : StagingNode.ForFile(n.Item!, showFolder: false))
+            .ToList();
+    }
+
+    private void OnFolderExpandedChanged(StagingNode folder)
+    {
+        // While filtering everything is shown expanded; that isn't the user's choice.
+        if (IsFiltering || folder.FolderPath is not { } path) return;
+        var collapsed = folder.IsStaged ? _collapsedStaged : _collapsedUnstaged;
+        if (folder.IsExpanded) collapsed.Remove(path);
+        else collapsed.Add(path);
+    }
+
+    private string Header(string title, IEnumerable<StagingNode> tree, int total)
+    {
+        if (!IsFiltering) return $"{title} ({total})";
+        var shown = tree.Sum(n => n.IsFolder ? n.FileCount : 1);
+        return $"{title} ({shown} of {total})";
+    }
+
+    /// <summary>
+    /// Paths to stage or unstage for a row. A whole folder is passed as the folder itself (one argument however
+    /// many files it holds); with a filter only the files shown are used.
+    /// </summary>
+    public IReadOnlyList<string> PathsFor(StagingNode node) =>
+        node.FolderPath is { } folder && !IsFiltering ? [folder] : node.Files().Select(f => f.Path).ToList();
+
+    private static void Replace<T>(ObservableCollection<T> target, IEnumerable<T> items)
     {
         target.Clear();
         foreach (var i in items) target.Add(i);
     }
 
     [RelayCommand]
-    private Task StageFileAsync(FileChangeItem item) => Run(() => Stage([item.Path]));
-
-    [RelayCommand]
-    private Task UnstageFileAsync(FileChangeItem item) => Run(() => Unstage([item.Path]));
+    private Task StageNodeAsync(StagingNode node) => Run(() => node.IsStaged ? Unstage(PathsFor(node)) : Stage(PathsFor(node)));
 
     [RelayCommand]
     private Task StageAllFilesAsync() => Run(StageAll);

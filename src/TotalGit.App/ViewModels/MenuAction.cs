@@ -46,6 +46,7 @@ public interface IDialogService
     Task<bool> ShowCreateWorktreeAsync(CreateWorktreeViewModel viewModel);
     Task<bool> ShowFormAsync(FormSpec spec);
     Task<bool> ShowInteractiveRebaseAsync(InteractiveRebaseViewModel viewModel);
+    Task<bool> ShowAddIgnoreAsync(AddIgnoreViewModel viewModel);
     Task CopyToClipboardAsync(string text);
     Task RevealFolderAsync(string path);
 }

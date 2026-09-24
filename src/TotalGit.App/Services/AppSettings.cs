@@ -44,6 +44,9 @@ public sealed class AppSettings
     /// <summary>"Inline" or "Split".</summary>
     public string DiffMode { get; set; } = "Inline";
 
+    /// <summary>Staging lists grouped by folder (otherwise a flat list).</summary>
+    public bool StagingTree { get; set; } = true;
+
     public Dictionary<string, RepoSettings> Repositories { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
     public RepoSettings ForRepository(string mainRoot)
