@@ -126,3 +126,22 @@ public enum LocalChanges
     /// <summary>Throw away changes to tracked files (untracked files are kept).</summary>
     Discard,
 }
+
+/// <summary>The kinds of <c>git reset</c>, named after its flags.</summary>
+public enum ResetMode
+{
+    /// <summary>Move the branch only; the working tree and index keep their contents (changes show as staged).</summary>
+    Soft,
+
+    /// <summary>Move the branch and reset the index; the working tree keeps its contents (changes show as unstaged).</summary>
+    Mixed,
+
+    /// <summary>Move the branch and update the working tree; refuses if that would touch local changes.</summary>
+    Keep,
+
+    /// <summary>Move the branch and update the working tree, keeping local changes; refuses on conflicts.</summary>
+    Merge,
+
+    /// <summary>Move the branch and make the working tree and index match it, discarding all local changes.</summary>
+    Hard,
+}

@@ -220,6 +220,26 @@ public static class GitActions
         return false;
     }
 
+    /// <summary>Moves the current branch (or detached HEAD) to <paramref name="sha"/>.</summary>
+    public static Task ResetAsync(string worktree, string sha, ResetMode mode) =>
+        GitCli.RunAsync(worktree, "reset", "--" + mode.ToString().ToLowerInvariant(), sha);
+
+    /// <summary>
+    /// What resetting to <paramref name="sha"/> takes off the branch: commits after it on the current branch, and how
+    /// many of those the upstream already has (removing them means a force push).
+    /// </summary>
+    public static async Task<(int Removed, int RemovedPushed)> ResetImpactAsync(string worktree, string sha)
+    {
+        var removed = await CountAsync(worktree, $"{sha}..HEAD");
+        var upstream = await GitCli.RunAsync(worktree, ["rev-parse", "--verify", "--quiet", "@{u}"], throwOnError: false);
+        if (upstream.ExitCode != 0 || removed == 0) return (removed, 0);
+        var notPushed = await CountAsync(worktree, $"{sha}..HEAD", "^@{u}");
+        return (removed, removed - notPushed);
+    }
+
+    private static async Task<int> CountAsync(string worktree, params string[] revisions) =>
+        int.Parse((await GitCli.RunAsync(worktree, ["rev-list", "--count", .. revisions])).StdOut.Trim(), System.Globalization.CultureInfo.InvariantCulture);
+
     public static async Task<bool> IsAncestorAsync(string worktree, string ancestor, string descendant) =>
         (await GitCli.RunAsync(worktree, ["merge-base", "--is-ancestor", ancestor, descendant], throwOnError: false)).ExitCode == 0;
 

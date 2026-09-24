@@ -999,6 +999,8 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
         var rewrite = MergeRebaseActions(here, isCurrentTip: _state?.HeadSha == commit.Sha).ToList();
         if (_state?.CurrentBranch is not null && !IsOperationInProgress)
             rewrite.Add(new MenuAction("Interactive rebase from here…", InteractiveRebaseCommand, commit));
+        if (_state is not null && !IsOperationInProgress)
+            rewrite.Add(new MenuAction($"Reset {_state.CurrentBranch ?? "HEAD"} to here…", ResetToCommitCommand, commit));
         if (rewrite.Count > 0)
         {
             actions.Add(MenuAction.Separator);

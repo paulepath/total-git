@@ -191,6 +191,45 @@ public sealed class GitActionsTests : IDisposable
     }
 
     [Fact]
+    public async Task Resets_the_branch_soft_mixed_and_hard()
+    {
+        var first = _repo.Commit("one", "a.txt", "1");
+        _repo.Commit("two", "a.txt", "2");
+        var third = _repo.Commit("three", "a.txt", "3");
+
+        Assert.Equal((2, 0), await GitActions.ResetImpactAsync(_repo.Root, first));
+
+        await GitActions.ResetAsync(_repo.Root, first, ResetMode.Soft);
+        Assert.Equal(first, _repo.Git("rev-parse", "HEAD"));
+        Assert.Equal("M  a.txt", _repo.Git("status", "--porcelain"));
+
+        await GitActions.ResetAsync(_repo.Root, first, ResetMode.Mixed);
+        Assert.Equal("M a.txt", _repo.Git("status", "--porcelain"));
+
+        await GitActions.ResetAsync(_repo.Root, third, ResetMode.Hard);
+        Assert.Equal(third, _repo.Git("rev-parse", "HEAD"));
+        Assert.Equal("", _repo.Git("status", "--porcelain"));
+
+        // Keep refuses to overwrite a local change to a file that differs.
+        _repo.Write("a.txt", "local");
+        await Assert.ThrowsAsync<GitCommandException>(() => GitActions.ResetAsync(_repo.Root, first, ResetMode.Keep));
+        Assert.Equal(third, _repo.Git("rev-parse", "HEAD"));
+    }
+
+    [Fact]
+    public async Task Reset_impact_counts_pushed_commits()
+    {
+        using var remote = new TestRepo(bare: true);
+        var first = _repo.Commit("one");
+        _repo.Git("remote", "add", "origin", remote.Root);
+        _repo.Commit("two");
+        _repo.Git("push", "-q", "-u", "origin", "main");
+        _repo.Commit("three");
+
+        Assert.Equal((2, 1), await GitActions.ResetImpactAsync(_repo.Root, first));
+    }
+
+    [Fact]
     public async Task Checks_out_a_commit_detached_then_branches_from_it()
     {
         var first = _repo.Commit("one");
