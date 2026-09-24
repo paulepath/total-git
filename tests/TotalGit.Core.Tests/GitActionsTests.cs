@@ -163,6 +163,23 @@ public sealed class GitActionsTests : IDisposable
     }
 
     [Fact]
+    public async Task Checks_out_a_commit_detached_then_branches_from_it()
+    {
+        var first = _repo.Commit("one");
+        _repo.Commit("two");
+
+        await GitActions.CheckoutDetachedAsync(_repo.Root, first);
+        Assert.Equal(first, _repo.Git("rev-parse", "HEAD"));
+        Assert.Equal("", _repo.Git("branch", "--show-current"));
+
+        await GitActions.CreateBranchAsync(_repo.Root, "kept", first, checkout: false);
+        Assert.Equal("", _repo.Git("branch", "--show-current"));
+        await GitActions.CreateBranchAsync(_repo.Root, "fix/old", first, checkout: true);
+        Assert.Equal("fix/old", _repo.Git("branch", "--show-current"));
+        Assert.Equal(first, _repo.Git("rev-parse", "kept"));
+    }
+
+    [Fact]
     public async Task Stages_and_unstages_long_path_lists()
     {
         _repo.Commit("base");

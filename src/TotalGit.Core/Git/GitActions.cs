@@ -74,6 +74,14 @@ public static class GitActions
 
     public static Task DeleteTagAsync(string worktree, string name) => GitCli.RunAsync(worktree, "tag", "-d", name);
 
+    /// <summary>Checks out a commit without a branch (detached HEAD). Uncommitted changes come along, as with a branch switch.</summary>
+    public static Task CheckoutDetachedAsync(string worktree, string sha) => GitCli.RunAsync(worktree, "switch", "--detach", sha);
+
+    /// <summary>Creates a branch at a commit, optionally switching to it.</summary>
+    public static Task CreateBranchAsync(string worktree, string name, string sha, bool checkout) => checkout
+        ? GitCli.RunAsync(worktree, "switch", "-c", name, sha)
+        : GitCli.RunAsync(worktree, "branch", name, sha);
+
     public static Task PushTagAsync(string worktree, string remote, string name) =>
         GitCli.RunAsync(worktree, "push", remote, $"refs/tags/{name}");
 

@@ -375,6 +375,50 @@ public partial class RepositoryViewModel
     }
 
     [RelayCommand]
+    private async Task CheckoutCommitAsync(CommitInfo commit)
+    {
+        if (_state is null || Dialogs is null) return;
+        var details = new List<string>
+        {
+            "You'll be on this commit without a branch (a \"detached HEAD\"). It's the way to look at, build or test an older version.",
+            "If you make commits here, create a branch (right-click the commit, Create branch here…) or they'll be hard to find once you switch away.",
+            "To go back, check out a branch.",
+        };
+        if (_status.IsDirty) details.Add("Your uncommitted changes will come with you, as when switching branches (git stops if they conflict).");
+        if (!await Dialogs.ConfirmAsync("Check out commit", $"Check out {commit.ShortSha} \"{commit.MessageShort}\"?", details, "Check out"))
+            return;
+
+        var wt = _state.WorkingDirectory;
+        await RunGitAsync($"Checking out {commit.ShortSha}…", () => GitActions.CheckoutDetachedAsync(wt, commit.Sha),
+            $"Checked out {commit.ShortSha} (detached HEAD). Create a branch here to keep any new commits.");
+    }
+
+    [RelayCommand]
+    private async Task CreateBranchAsync(BranchTarget target)
+    {
+        if (_state is null || Dialogs is null) return;
+        var existing = _state.Refs.Where(r => r.Kind == RefKind.LocalBranch).Select(r => r.Name).ToHashSet();
+        var name = FormField.TextBox("Branch name", placeholder: "feature/my-change");
+        var checkout = FormField.CheckBox("Check it out", isChecked: true);
+
+        var where = target.Kind == RefKind.DetachedHead ? $"commit {target.Name}" : $"{target.Name} ({target.Sha[..Math.Min(7, target.Sha.Length)]})";
+        var spec = new FormSpec("Create branch", $"Creates a branch at {where}.", "Create branch", [name, checkout], () =>
+        {
+            var n = name.Text.Trim();
+            if (n.Length == 0) return "Enter a branch name.";
+            if (!GitActions.IsValidRefName(n)) return "That isn't a valid branch name.";
+            if (existing.Contains(n)) return $"A branch named '{n}' already exists.";
+            return null;
+        });
+        if (!await Dialogs.ShowFormAsync(spec)) return;
+
+        var branch = name.Text.Trim();
+        var wt = _state.WorkingDirectory;
+        await RunGitAsync($"Creating branch {branch}…", () => GitActions.CreateBranchAsync(wt, branch, target.Sha, checkout.IsChecked),
+            checkout.IsChecked ? $"Created and checked out {branch}." : $"Created branch {branch}.");
+    }
+
+    [RelayCommand]
     private async Task PushTagAsync(BranchTarget tag)
     {
         if (_state is null) return;

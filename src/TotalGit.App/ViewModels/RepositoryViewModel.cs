@@ -617,6 +617,12 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
             Banner = new Banner($"That branch is checked out in the worktree at {ex.WorktreePath}.", true, WorktreeOpenActions(wt));
             return false;
         }
+        catch (GitCommandException ex) when (ex.Message.Contains("would be overwritten by checkout", StringComparison.Ordinal))
+        {
+            // Switching branch or commit would lose local edits: offer to stash them, then try again.
+            Banner = new Banner(ex.Message, true, [new MenuAction("Stash changes…", StashCommand)]);
+            return false;
+        }
         catch (Exception ex) when (ex is GitCommandException or InvalidOperationException or IOException or System.ComponentModel.Win32Exception)
         {
             ShowError(ex.Message);
@@ -961,6 +967,9 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
         if (actions.Count > 0) actions.Add(MenuAction.Separator);
 
         var here = new BranchTarget(RefKind.DetachedHead, commit.ShortSha, commit.Sha);
+        var isCheckedOut = _state?.HeadSha == commit.Sha && _state.CurrentBranch is null;
+        actions.Add(new MenuAction("Check out this commit…", CheckoutCommitCommand, commit, IsEnabled: !isCheckedOut && !IsOperationInProgress));
+        actions.Add(new MenuAction("Create branch here…", CreateBranchCommand, here));
         actions.Add(new MenuAction("Create tag here…", CreateTagCommand, here));
         actions.Add(new MenuAction("Create worktree from this commit…", CreateWorktreeCommand, here));
         actions.Add(new MenuAction("Copy commit SHA", CopyCommand, commit.Sha));
