@@ -99,3 +99,14 @@ public sealed record CommitDetails(
     IReadOnlyList<FileChange> Files);
 
 public sealed record FileDiff(string Path, bool IsBinary, IReadOnlyList<DiffLine> Lines, bool Truncated);
+
+public enum IgnoreTarget
+{
+    /// <summary>The worktree's root .gitignore (shared with everyone once committed).</summary>
+    GitIgnore,
+
+    /// <summary>The repository's info/exclude (this clone only).</summary>
+    InfoExclude,
+}
+
+public sealed record IgnorePreview(IReadOnlyList<string> Untracked, int TrackedCount);

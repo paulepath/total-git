@@ -15,8 +15,7 @@ public sealed record RebaseStep(RebaseAction Action, string Sha, string? Message
 /// <summary>Write operations, executed with the git CLI in a worktree folder.</summary>
 public static class GitActions
 {
-    public static Task StageAsync(string worktree, IEnumerable<string> paths) =>
-        GitCli.RunAsync(worktree, ["add", "-A", "--", .. paths]);
+    public static Task StageAsync(string worktree, IEnumerable<string> paths) => RunWithPathsAsync(worktree, ["add", "-A"], paths.ToArray());
 
     public static Task StageAllAsync(string worktree) => GitCli.RunAsync(worktree, "add", "-A");
 
@@ -24,10 +23,15 @@ public static class GitActions
     {
         var list = paths.ToArray();
         if (await HasHeadAsync(worktree))
-            await GitCli.RunAsync(worktree, ["restore", "--staged", "--", .. list]);
+            await RunWithPathsAsync(worktree, ["restore", "--staged"], list);
         else
-            await GitCli.RunAsync(worktree, ["rm", "--cached", "-r", "-q", "--", .. list]);
+            await RunWithPathsAsync(worktree, ["rm", "--cached", "-r", "-q"], list);
     }
+
+    /// <summary>Runs a command on paths; long lists go through stdin so they can't exceed the command-line limit.</summary>
+    private static Task RunWithPathsAsync(string worktree, string[] command, string[] paths) => paths.Length <= 50
+        ? GitCli.RunAsync(worktree, [.. command, "--", .. paths])
+        : GitCli.RunAsync(worktree, [.. command, "--pathspec-from-file=-", "--pathspec-file-nul"], stdin: string.Join('\0', paths));
 
     public static async Task UnstageAllAsync(string worktree)
     {
@@ -250,4 +254,49 @@ public static class GitActions
 
     private static async Task<bool> HasHeadAsync(string worktree) =>
         (await GitCli.RunAsync(worktree, ["rev-parse", "--verify", "--quiet", "HEAD"], throwOnError: false)).ExitCode == 0;
+
+    // ------------------------------------------------------------------ ignore rules
+
+    /// <summary>
+    /// What adding <paramref name="rules"/> (.gitignore lines) would do: the untracked files they would hide,
+    /// and how many tracked files match (ignore rules don't affect those).
+    /// </summary>
+    public static async Task<IgnorePreview> PreviewIgnoreAsync(string worktree, string rules, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(rules)) return new IgnorePreview([], 0);
+        var file = Path.GetTempFileName();
+        try
+        {
+            await File.WriteAllTextAsync(file, rules.ReplaceLineEndings("\n") + "\n", ct);
+            var untracked = GitCli.RunAsync(worktree, ["ls-files", "-z", "--others", "--ignored", $"--exclude-from={file}"], throwOnError: false, ct: ct);
+            var tracked = GitCli.RunAsync(worktree, ["ls-files", "-z", "--cached", "--ignored", $"--exclude-from={file}"], throwOnError: false, ct: ct);
+            return new IgnorePreview(SplitNul((await untracked).StdOut), SplitNul((await tracked).StdOut).Count);
+        }
+        finally
+        {
+            File.Delete(file);
+        }
+    }
+
+    /// <summary>Appends rules to the worktree's .gitignore or the repository's info/exclude, skipping ones already there.</summary>
+    public static async Task AddIgnoreRulesAsync(string worktree, string rules, IgnoreTarget target)
+    {
+        var path = target == IgnoreTarget.GitIgnore
+            ? Path.Combine(worktree, ".gitignore")
+            : Path.GetFullPath((await GitCli.RunAsync(worktree, "rev-parse", "--git-path", "info/exclude")).StdOut.Trim(), worktree);
+
+        var existing = File.Exists(path) ? await File.ReadAllTextAsync(path) : "";
+        var present = Lines(existing).ToHashSet();
+        var add = Lines(rules).Where(l => l.Length > 0 && present.Add(l)).ToList();
+        if (add.Count == 0) return;
+
+        var newline = existing.Contains("\r\n") ? "\r\n" : "\n";
+        var text = (existing.Length > 0 && !existing.EndsWith('\n') ? newline : "") + string.Join(newline, add) + newline;
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        await File.AppendAllTextAsync(path, text);
+    }
+
+    private static IEnumerable<string> Lines(string text) => text.ReplaceLineEndings("\n").Split('\n').Select(l => l.Trim());
+
+    private static List<string> SplitNul(string text) => text.Split('\0', StringSplitOptions.RemoveEmptyEntries).ToList();
 }

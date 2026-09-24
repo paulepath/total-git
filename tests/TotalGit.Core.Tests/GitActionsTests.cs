@@ -161,4 +161,63 @@ public sealed class GitActionsTests : IDisposable
         await GitActions.PushAsync(_repo.Root);
         Assert.Equal(_repo.Git("rev-parse", "HEAD"), TestRepo.RunGit(remote.Root, "rev-parse", "feature/x"));
     }
+
+    [Fact]
+    public async Task Stages_and_unstages_long_path_lists()
+    {
+        _repo.Commit("base");
+        var paths = Enumerable.Range(0, 120).Select(i => $"many/file {i}.txt").ToArray();
+        foreach (var p in paths) _repo.Write(p, p);
+
+        await GitActions.StageAsync(_repo.Root, paths);
+        Assert.Equal(120, _repo.Git("diff", "--cached", "--name-only").Split('\n').Length);
+
+        await GitActions.UnstageAsync(_repo.Root, paths);
+        Assert.Equal("", _repo.Git("diff", "--cached", "--name-only"));
+    }
+
+    [Fact]
+    public async Task Previews_ignore_rules()
+    {
+        _repo.Commit("base", "state/tracked.json", "{}");
+        _repo.Write("state/a.json", "a");
+        _repo.Write("state/a.json.attrs", "a");
+        _repo.Write("state/deep/b.json", "b");
+        _repo.Write("other.json", "c");
+
+        var folder = await GitActions.PreviewIgnoreAsync(_repo.Root, "/state/");
+        Assert.Equal(["state/a.json", "state/a.json.attrs", "state/deep/b.json"], folder.Untracked.Order());
+        Assert.Equal(1, folder.TrackedCount);
+
+        var ext = await GitActions.PreviewIgnoreAsync(_repo.Root, "*.attrs\r\n# comment\r\n/other.json");
+        Assert.Equal(["other.json", "state/a.json.attrs"], ext.Untracked.Order());
+        Assert.Equal(0, ext.TrackedCount);
+    }
+
+    [Fact]
+    public async Task Adds_ignore_rules_once_after_a_newline()
+    {
+        _repo.Commit("base", ".gitignore", "bin/");
+        _repo.Write("obj/x.dll", "x");
+
+        await GitActions.AddIgnoreRulesAsync(_repo.Root, "/obj/\nbin/", IgnoreTarget.GitIgnore);
+        await GitActions.AddIgnoreRulesAsync(_repo.Root, "/obj/", IgnoreTarget.GitIgnore);
+
+        Assert.Equal("bin/\n/obj/\n", File.ReadAllText(Path.Combine(_repo.Root, ".gitignore")));
+        Assert.Equal("M .gitignore", _repo.Git("status", "--porcelain"));
+    }
+
+    [Fact]
+    public async Task Adds_ignore_rules_to_info_exclude_from_a_linked_worktree()
+    {
+        _repo.Commit("base");
+        var wt = Path.Combine(_repo.Root, ".worktrees", "wt");
+        _repo.Git("worktree", "add", "-q", "-b", "wt-branch", wt);
+        File.WriteAllText(Path.Combine(wt, "local.log"), "x");
+
+        await GitActions.AddIgnoreRulesAsync(wt, "*.log", IgnoreTarget.InfoExclude);
+
+        Assert.Contains("*.log", File.ReadAllText(Path.Combine(_repo.Root, ".git", "info", "exclude")));
+        Assert.Equal("", TestRepo.RunGit(wt, "status", "--porcelain"));
+    }
 }
