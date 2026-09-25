@@ -92,6 +92,7 @@ public sealed class CommitGraphView : Control
     private string? _headSha;
     private double _offset;
     private int _hoverRow = -1;
+    private bool _tipSuppressed;
     private ScrollBar? _scrollBar;
     private bool _syncingScrollBar;
 
@@ -346,6 +347,9 @@ public sealed class CommitGraphView : Control
             e.Handled = true;
             return;
         }
+        // A click hides the node's tooltip (it would cover the context menu) until the pointer leaves the node.
+        ToolTip.SetIsOpen(this, false);
+        _tipSuppressed = true;
         var row = RowAt(point.Position.Y);
         if (row >= 0)
         {
@@ -401,7 +405,8 @@ public sealed class CommitGraphView : Control
         // Tooltip only when the pointer is over the commit's node.
         var overNode = row >= 0 && Math.Abs(p.X - LaneX(Rows[row].Lane)) <= NodeRadius
                                 && Math.Abs(p.Y - (RowTop(row) + RowHeight / 2)) <= NodeRadius;
-        if (overNode)
+        if (!overNode) _tipSuppressed = false;
+        if (overNode && !_tipSuppressed)
         {
             var c = Rows[row].Commit;
             var tip = $"{c.Sha}\n{c.AuthorName} <{c.AuthorEmail}>\n{c.AuthorDate.LocalDateTime:f}\n\n{c.MessageShort}";
