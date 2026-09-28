@@ -5,15 +5,40 @@ using TotalGit.Core.Worktrees;
 namespace TotalGit.App.ViewModels;
 
 /// <summary>A context-menu entry; views turn these into MenuItems so sidebar and graph share one menu.</summary>
+/// <param name="Icon">A <see cref="MenuIcons"/> geometry key, or a bitmap (e.g. a branch-kind icon).</param>
 public sealed record MenuAction(
     string Header,
     ICommand? Command = null,
     object? Parameter = null,
     IReadOnlyList<MenuAction>? Children = null,
-    bool IsEnabled = true)
+    bool IsEnabled = true,
+    object? Icon = null)
 {
     public static MenuAction Separator { get; } = new("-");
     public bool IsSeparator => Header == "-";
+}
+
+/// <summary>Keys of the icon geometries in App.axaml used by context menus.</summary>
+public static class MenuIcons
+{
+    public const string Branch = "BranchIcon";
+    public const string Tag = "TagIcon";
+    public const string Copy = "CopyIcon";
+    public const string Delete = "DeleteIcon";
+    public const string Checkout = "CheckoutIcon";
+    public const string Rebase = "RebaseIcon";
+    public const string Reset = "ResetIcon";
+    public const string Open = "OpenIcon";
+    public const string Merge = "MergeIcon";
+    public const string Worktree = "WorktreeIcon";
+    public const string Code = "CodeIcon";
+    public const string VisualStudio = "VisualStudioIcon";
+    public const string Folder = "FolderIcon";
+    public const string Pop = "PopIcon";
+    public const string Push = "PushIcon";
+    public const string Stash = "StashIcon";
+    public const string Plus = "PlusIcon";
+    public const string Ignore = "IgnoreIcon";
 }
 
 /// <summary>A branch, tag or worktree that actions can target.</summary>
@@ -50,6 +75,7 @@ public interface IDialogService
     Task<bool> ShowFormAsync(FormSpec spec);
     Task<bool> ShowInteractiveRebaseAsync(InteractiveRebaseViewModel viewModel);
     Task<bool> ShowAddIgnoreAsync(AddIgnoreViewModel viewModel);
+    Task<bool> ShowBranchCleanupAsync(BranchCleanupViewModel viewModel);
     Task CopyToClipboardAsync(string text);
     Task RevealFolderAsync(string path);
 }

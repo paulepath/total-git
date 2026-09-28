@@ -12,6 +12,27 @@ public enum RebaseAction
 /// <param name="Message">New message for <see cref="RebaseAction.Reword"/>.</param>
 public sealed record RebaseStep(RebaseAction Action, string Sha, string? Message = null);
 
+public enum PushRejection
+{
+    /// <summary>The branch's history was rewritten (rebase, amend): the remote has commits it no longer contains.</summary>
+    NonFastForward,
+
+    /// <summary>The remote has commits that were never fetched: someone else pushed.</summary>
+    FetchFirst,
+
+    /// <summary>A force push was refused because the remote branch moved since the last fetch.</summary>
+    StaleLease,
+
+    /// <summary>
+    /// A force push was refused because the remote branch has fetched commits that were never on the local branch
+    /// (someone else pushed, or it was changed on the server), so replacing them may lose work.
+    /// </summary>
+    UnseenRemoteCommits,
+}
+
+/// <param name="UnpushedCount">Commits on the branch that no remote branch contains.</param>
+public sealed record BranchSummary(string Name, DateTimeOffset LastCommit, string Subject, int UnpushedCount);
+
 /// <summary>Write operations, executed with the git CLI in a worktree folder.</summary>
 public static class GitActions
 {
@@ -76,6 +97,26 @@ public static class GitActions
     /// <summary>Deletes a local branch. Without <paramref name="force"/> git refuses unmerged branches.</summary>
     public static Task DeleteBranchAsync(string worktree, string branch, bool force = false) =>
         GitCli.RunAsync(worktree, "branch", force ? "-D" : "-d", branch);
+
+    /// <summary>
+    /// For branches about to be cleaned up: each tip's date and subject, and how many of its commits are on no
+    /// remote branch. That count is only a hint: after a squash merge the work is on main under other commits.
+    /// </summary>
+    public static async Task<IReadOnlyList<BranchSummary>> GetBranchSummariesAsync(string worktree, IEnumerable<string> branches)
+    {
+        var wanted = branches.ToHashSet(StringComparer.Ordinal);
+        var refs = await GitCli.RunAsync(worktree, "for-each-ref", "--format=%(refname:short)%09%(committerdate:unix)%09%(contents:subject)", "refs/heads");
+        var result = new List<BranchSummary>();
+        foreach (var line in refs.StdOut.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var parts = line.TrimEnd('\r').Split('\t', 3);
+            if (parts.Length < 2 || !wanted.Contains(parts[0])) continue;
+            var when = long.TryParse(parts[1], out var unix) ? DateTimeOffset.FromUnixTimeSeconds(unix) : DateTimeOffset.MinValue;
+            var count = await GitCli.RunAsync(worktree, "rev-list", "--count", $"refs/heads/{parts[0]}", "--not", "--remotes");
+            result.Add(new BranchSummary(parts[0], when, parts.Length > 2 ? parts[2] : "", int.TryParse(count.StdOut.Trim(), out var n) ? n : 0));
+        }
+        return result;
+    }
 
     /// <summary>Creates a tag at <paramref name="sha"/>: annotated when a message is given, else lightweight.</summary>
     public static Task CreateTagAsync(string worktree, string name, string sha, string? message = null) =>
@@ -268,13 +309,22 @@ public static class GitActions
 
     public static Task PullAsync(string worktree) => GitCli.RunAsync(worktree, "pull");
 
-    /// <summary>Pushes the current branch, setting the upstream to <paramref name="remote"/> when it has none.</summary>
-    public static async Task PushAsync(string worktree, string? remote = null)
+    /// <summary>
+    /// Pushes the current branch, setting the upstream to <paramref name="remote"/> when it has none.
+    /// <paramref name="force"/> replaces the remote branch (after a rebase or amend), but only if it is still where
+    /// our last fetch saw it, so commits someone else pushed meanwhile are never silently dropped.
+    /// </summary>
+    /// <param name="replaceUnseen">
+    /// With <paramref name="force"/>: also replace remote commits that were fetched but never on the local branch
+    /// (drops <c>--force-if-includes</c>; the lease still refuses commits that were never fetched).
+    /// </param>
+    public static async Task PushAsync(string worktree, string? remote = null, bool force = false, bool replaceUnseen = false)
     {
+        string[] forceFlags = !force ? [] : replaceUnseen ? ["--force-with-lease"] : ["--force-with-lease", "--force-if-includes"];
         var upstream = await GitCli.RunAsync(worktree, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"], throwOnError: false);
         if (upstream.ExitCode == 0)
         {
-            await GitCli.RunAsync(worktree, "push");
+            await GitCli.RunAsync(worktree, ["push", .. forceFlags]);
             return;
         }
 
@@ -282,7 +332,27 @@ public static class GitActions
         if (branch.Length == 0) throw new InvalidOperationException("Cannot push a detached HEAD.");
         remote ??= await DefaultRemoteAsync(worktree)
             ?? throw new InvalidOperationException("This repository has no remotes to push to.");
-        await GitCli.RunAsync(worktree, "push", "-u", remote, branch);
+        await GitCli.RunAsync(worktree, ["push", .. forceFlags, "-u", remote, branch]);
+    }
+
+    /// <summary>Commits on the current branch's upstream that HEAD doesn't have: what a force push drops from the remote.</summary>
+    public static async Task<IReadOnlyList<string>> CommitsOnlyOnUpstreamAsync(string worktree)
+    {
+        var result = await GitCli.RunAsync(worktree, ["log", "--format=%h %s", "HEAD..@{u}"], throwOnError: false);
+        return result.ExitCode == 0
+            ? result.StdOut.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            : [];
+    }
+
+    /// <summary>Recognises why git refused a push, or null for other errors.</summary>
+    public static PushRejection? ClassifyPushError(string message)
+    {
+        if (message.Contains("stale info", StringComparison.Ordinal)) return PushRejection.StaleLease;
+        if (!message.Contains("[rejected]", StringComparison.Ordinal)) return null;
+        if (message.Contains("remote ref updated since checkout", StringComparison.Ordinal)) return PushRejection.UnseenRemoteCommits;
+        if (message.Contains("fetch first", StringComparison.Ordinal)) return PushRejection.FetchFirst;
+        if (message.Contains("non-fast-forward", StringComparison.Ordinal)) return PushRejection.NonFastForward;
+        return null;
     }
 
     public static async Task<string?> DefaultRemoteAsync(string worktree)

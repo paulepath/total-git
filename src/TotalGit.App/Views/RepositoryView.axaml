@@ -56,7 +56,7 @@
               </StackPanel>
             </StackPanel>
           </Button>
-          <Button Classes="tool" Command="{Binding PushCommand}" ToolTip.Tip="Push the current branch">
+          <Button Classes="tool" Command="{Binding PushCommand}" ToolTip.Tip="{Binding PushToolTip}">
             <StackPanel>
               <PathIcon Data="{StaticResource PushIcon}" />
               <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
@@ -78,6 +78,12 @@
             </StackPanel>
           </Button>
           <Border Width="1" Background="#3A3F47" Margin="8,6" />
+          <Button Classes="tool" Command="{Binding CreateBranchAtHeadCommand}" ToolTip.Tip="Create a branch from HEAD">
+            <StackPanel>
+              <PathIcon Data="{StaticResource BranchIcon}" />
+              <TextBlock Classes="label" Text="Branch" />
+            </StackPanel>
+          </Button>
           <Button Classes="tool" Command="{Binding CreateWorktreeCommand}" ToolTip.Tip="Create a worktree with a new branch from HEAD">
             <StackPanel>
               <PathIcon Data="{StaticResource WorktreeIcon}" />
@@ -88,6 +94,12 @@
             <StackPanel>
               <PathIcon Data="{StaticResource CodeIcon}" Foreground="#3FA0F0" />
               <TextBlock Classes="label" Text="VS Code" />
+            </StackPanel>
+          </Button>
+          <Button Classes="tool" Command="{Binding OpenInVisualStudioCommand}" ToolTip.Tip="Open this worktree's solution (.sln/.slnx) in Visual Studio">
+            <StackPanel>
+              <PathIcon Data="{StaticResource VisualStudioIcon}" Foreground="#A77BDB" />
+              <TextBlock Classes="label" Text="Visual Studio" />
             </StackPanel>
           </Button>
         </StackPanel>

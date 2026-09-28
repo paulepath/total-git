@@ -1,5 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Media;
+using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.Input;
 using TotalGit.App.Services;
 using TotalGit.App.ViewModels;
@@ -46,7 +48,7 @@ public partial class RepositoryView : UserControl
             if (_vm is null) return;
             var actions = _vm.ActionsForDiffLine(diff.Path, line, column);
             if (DiffView.HasSelection)
-                actions = [new MenuAction("Copy", new RelayCommand(() => _ = DiffView.CopySelectionAsync())), MenuAction.Separator, .. actions];
+                actions = [new MenuAction("Copy", new RelayCommand(() => _ = DiffView.CopySelectionAsync()), Icon: MenuIcons.Copy), MenuAction.Separator, .. actions];
             ShowMenu(DiffView, actions);
         };
         DetailsView.FileContextRequested += (file, control) =>
@@ -120,5 +122,23 @@ public partial class RepositoryView : UserControl
             CommandParameter = action.Parameter,
             IsEnabled = action.IsEnabled,
             ItemsSource = action.Children?.Select(ToMenuItem).ToList(),
+            Icon = MenuIcon(action),
         };
+
+    private static Control? MenuIcon(MenuAction action)
+    {
+        switch (action.Icon)
+        {
+            case Bitmap bitmap:
+                return new Image { Source = bitmap, Width = 16, Height = 16 };
+            case string key when Application.Current?.FindResource(key) is Geometry geometry:
+                var icon = new PathIcon { Data = geometry, Width = 14, Height = 14 };
+                // VS Code keeps its blue, as on the toolbar.
+                if (key == MenuIcons.Code) icon.Foreground = new SolidColorBrush(Color.Parse("#3FA0F0"));
+                else if (key == MenuIcons.VisualStudio) icon.Foreground = new SolidColorBrush(Color.Parse("#A77BDB"));
+                return icon;
+            default:
+                return null;
+        }
+    }
 }

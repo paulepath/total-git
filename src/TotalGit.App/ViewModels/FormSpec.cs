@@ -27,8 +27,11 @@ public sealed class FormField(FormFieldKind kind, string label)
     /// <summary>A checkbox that must be ticked for this field to be enabled (e.g. "Annotated" → message).</summary>
     public FormField? EnabledBy { get; init; }
 
-    public static FormField TextBox(string label, string text = "", string? placeholder = null) =>
-        new(FormFieldKind.Text, label) { Text = text, Placeholder = placeholder };
+    /// <summary>False puts the caret after the initial text instead of selecting it (for a prefix such as "feature/").</summary>
+    public bool SelectText { get; init; } = true;
+
+    public static FormField TextBox(string label, string text = "", string? placeholder = null, bool selectText = true) =>
+        new(FormFieldKind.Text, label) { Text = text, Placeholder = placeholder, SelectText = selectText };
 
     public static FormField CheckBox(string label, bool isChecked = false) =>
         new(FormFieldKind.CheckBox, label) { IsChecked = isChecked };

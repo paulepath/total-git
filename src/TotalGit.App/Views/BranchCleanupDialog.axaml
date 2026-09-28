@@ -1,0 +1,58 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:TotalGit.App.ViewModels"
+        x:Class="TotalGit.App.Views.BranchCleanupDialog"
+        x:DataType="vm:BranchCleanupViewModel"
+        Title="Clean up branches"
+        Width="760" Height="560" MinWidth="520" MinHeight="360"
+        WindowStartupLocation="CenterOwner"
+        Background="#23272D">
+  <DockPanel Margin="20">
+    <StackPanel DockPanel.Dock="Top" Spacing="8" Margin="0,0,0,12">
+      <TextBlock Text="Clean up branches" FontSize="18" FontWeight="SemiBold" Foreground="#E6E8EB" />
+      <TextBlock Foreground="#A9AFB8" TextWrapping="Wrap"
+                 Text="These local branches tracked a remote branch that has since been deleted (usually after a PR was merged). Deleting is a force delete: commits that are only on these branches are lost." />
+      <Border Background="#4A3A12" CornerRadius="4" Padding="10,6" IsVisible="{Binding FetchFailed}" HorizontalAlignment="Left">
+        <TextBlock Foreground="#F5D48B" TextWrapping="Wrap" Text="Couldn't reach the remote, so this list is from the last fetch." />
+      </Border>
+    </StackPanel>
+
+    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,12,0,0">
+      <Button Content="Cancel" IsCancel="True" Click="OnCancel" />
+      <Button Content="{Binding DeleteText}" IsDefault="True" Classes="accent" IsEnabled="{Binding CanDelete}" Click="OnDelete" />
+    </StackPanel>
+
+    <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*" Margin="10,0,0,4">
+      <CheckBox IsChecked="{Binding AllChecked}" Content="Select all" Foreground="#E6E8EB" />
+      <TextBlock Grid.Column="1" Text="{Binding SelectionText}" Foreground="#8A9099" HorizontalAlignment="Right" VerticalAlignment="Center" />
+    </Grid>
+
+    <Border Background="#1C1F24" CornerRadius="4">
+      <ListBox ItemsSource="{Binding Items}" Background="Transparent" SelectionMode="Single">
+        <ListBox.Styles>
+          <Style Selector="ListBoxItem">
+            <Setter Property="Padding" Value="10,6" />
+          </Style>
+        </ListBox.Styles>
+        <ListBox.ItemTemplate>
+          <DataTemplate x:DataType="vm:BranchCleanupItem">
+            <Grid ColumnDefinitions="Auto,*,Auto" Opacity="{Binding IsSelectable, Converter={x:Static vm:Converters.DimWhenFalse}}">
+              <CheckBox IsChecked="{Binding IsChecked}" IsEnabled="{Binding IsSelectable}" VerticalAlignment="Top" Margin="0,-4,4,0" />
+              <StackPanel Grid.Column="1" Spacing="2">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <Image Source="{Binding KindIcon}" IsVisible="{Binding HasKindIcon}" Width="14" Height="14" VerticalAlignment="Center" />
+                  <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Foreground="#E6E8EB" />
+                  <TextBlock Text="{Binding Upstream}" FontSize="12" Foreground="#8A9099" VerticalAlignment="Center" />
+                </StackPanel>
+                <TextBlock Text="{Binding Subject}" FontSize="12" Foreground="#A9AFB8" TextTrimming="CharacterEllipsis" />
+                <TextBlock Text="{Binding UnpushedText}" IsVisible="{Binding HasUnpushed}" FontSize="12" Foreground="#F5C26B" />
+                <TextBlock Text="{Binding Reason}" IsVisible="{Binding HasReason}" FontSize="12" Foreground="#F5C26B" />
+              </StackPanel>
+              <TextBlock Grid.Column="2" Text="{Binding When}" FontSize="12" Foreground="#8A9099" VerticalAlignment="Top" Margin="12,0,0,0" />
+            </Grid>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+    </Border>
+  </DockPanel>
+</Window>

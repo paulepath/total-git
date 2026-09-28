@@ -143,10 +143,11 @@ public sealed partial class RepositoryViewModel
         if (_worktrees.FirstOrDefault(w => w.Path == commit.WorktreePath) is not { } wt) return [];
         return
         [
-            new MenuAction("Open worktree in tab", OpenWorktreeInTabCommand, wt),
-            new MenuAction("Open worktree in VS Code", OpenInVsCodeCommand, wt.Path),
+            new MenuAction("Open worktree in tab", OpenWorktreeInTabCommand, wt, Icon: MenuIcons.Open),
+            new MenuAction("Open worktree in VS Code", OpenInVsCodeCommand, wt.Path, Icon: MenuIcons.Code),
+            new MenuAction("Open worktree in Visual Studio", OpenInVisualStudioCommand, wt.Path, Icon: MenuIcons.VisualStudio),
             MenuAction.Separator,
-            new MenuAction("Copy path", CopyCommand, wt.Path),
+            new MenuAction("Copy path", CopyCommand, wt.Path, Icon: MenuIcons.Copy),
         ];
     }
 

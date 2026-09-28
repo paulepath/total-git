@@ -24,23 +24,23 @@ public sealed partial class RepositoryViewModel
         {
             if (node.IsFolder)
             {
-                actions.Add(new MenuAction("Add folder to .gitignore…", AddToIgnoreCommand, "/" + GitIgnore.Escape(path)));
+                actions.Add(new MenuAction("Add folder to .gitignore…", AddToIgnoreCommand, "/" + GitIgnore.Escape(path), Icon: MenuIcons.Ignore));
             }
             else
             {
                 var name = node.File!.FileName;
                 var ext = Path.GetExtension(name);
-                var choices = new List<MenuAction> { new("This file…", AddToIgnoreCommand, "/" + GitIgnore.Escape(path)) };
-                if (ext.Length > 1 && ext.Length < name.Length) choices.Add(new($"All {ext} files…", AddToIgnoreCommand, "*" + GitIgnore.Escape(ext)));
-                choices.Add(new($"Files named {name}…", AddToIgnoreCommand, GitIgnore.Escape(name)));
-                actions.Add(new MenuAction("Add to .gitignore", Children: choices));
+                var choices = new List<MenuAction> { new("This file…", AddToIgnoreCommand, "/" + GitIgnore.Escape(path), Icon: MenuIcons.Ignore) };
+                if (ext.Length > 1 && ext.Length < name.Length) choices.Add(new($"All {ext} files…", AddToIgnoreCommand, "*" + GitIgnore.Escape(ext), Icon: MenuIcons.Ignore));
+                choices.Add(new($"Files named {name}…", AddToIgnoreCommand, GitIgnore.Escape(name), Icon: MenuIcons.Ignore));
+                actions.Add(new MenuAction("Add to .gitignore", Children: choices, Icon: MenuIcons.Ignore));
             }
         }
 
         var folder = Path.Combine(_state.WorkingDirectory, node.FolderPath ?? node.File!.Change.Directory ?? "");
         actions.Add(MenuAction.Separator);
-        actions.Add(new MenuAction("Copy path", CopyCommand, path));
-        actions.Add(new MenuAction("Reveal folder", RevealCommand, folder));
+        actions.Add(new MenuAction("Copy path", CopyCommand, path, Icon: MenuIcons.Copy));
+        actions.Add(new MenuAction("Reveal folder", RevealCommand, folder, Icon: MenuIcons.Folder));
         return actions;
     }
 
@@ -51,11 +51,11 @@ public sealed partial class RepositoryViewModel
         var exists = File.Exists(Path.Combine(folder, path));
         var actions = new List<MenuAction>();
         if (line is { } l && exists)
-            actions.Add(new MenuAction($"Open in VS Code at line {l}", OpenFileInVsCodeCommand, new FileTarget(path, l, column, folder)));
+            actions.Add(new MenuAction($"Open in VS Code at line {l}", OpenFileInVsCodeCommand, new FileTarget(path, l, column, folder), Icon: MenuIcons.Code));
         actions.Add(OpenInVsCodeAction(path, folder));
         actions.Add(MenuAction.Separator);
-        actions.Add(new MenuAction("Copy path", CopyCommand, path));
-        if (line is { } n) actions.Add(new MenuAction("Copy line number", CopyCommand, n.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+        actions.Add(new MenuAction("Copy path", CopyCommand, path, Icon: MenuIcons.Copy));
+        if (line is { } n) actions.Add(new MenuAction("Copy line number", CopyCommand, n.ToString(System.Globalization.CultureInfo.InvariantCulture), Icon: MenuIcons.Copy));
         return actions;
     }
 
@@ -68,8 +68,8 @@ public sealed partial class RepositoryViewModel
         [
             OpenInVsCodeAction(file.Path, folder),
             MenuAction.Separator,
-            new MenuAction("Copy path", CopyCommand, file.Path),
-            new MenuAction("Reveal folder", RevealCommand, Path.Combine(folder, file.Change.Directory ?? "")),
+            new MenuAction("Copy path", CopyCommand, file.Path, Icon: MenuIcons.Copy),
+            new MenuAction("Reveal folder", RevealCommand, Path.Combine(folder, file.Change.Directory ?? ""), Icon: MenuIcons.Folder),
         ];
     }
 
@@ -78,7 +78,7 @@ public sealed partial class RepositoryViewModel
         folder ??= _state?.WorkingDirectory;
         var exists = folder is not null && File.Exists(Path.Combine(folder, path));
         return new MenuAction(exists ? "Open in VS Code" : "Open in VS Code (file no longer exists)",
-            OpenFileInVsCodeCommand, new FileTarget(path, Folder: folder), IsEnabled: exists);
+            OpenFileInVsCodeCommand, new FileTarget(path, Folder: folder), IsEnabled: exists, Icon: MenuIcons.Code);
     }
 
     [RelayCommand]

@@ -141,6 +141,9 @@ public partial class MainWindow : Window, IDialogService
     public Task<bool> ShowAddIgnoreAsync(AddIgnoreViewModel viewModel) =>
         new AddIgnoreDialog { DataContext = viewModel }.ShowDialog<bool>(this);
 
+    public Task<bool> ShowBranchCleanupAsync(BranchCleanupViewModel viewModel) =>
+        new BranchCleanupDialog { DataContext = viewModel }.ShowDialog<bool>(this);
+
     public async Task CopyToClipboardAsync(string text)
     {
         if (Clipboard is { } clipboard) await clipboard.SetTextAsync(text);

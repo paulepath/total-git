@@ -32,6 +32,9 @@ public sealed class AppSettings
     /// <summary>Optional explicit path to VS Code (Code.exe or code.cmd).</summary>
     public string? VsCodePath { get; set; }
 
+    /// <summary>The solution last opened in Visual Studio, by worktree folder (when it has several).</summary>
+    public Dictionary<string, string> LastSolutions { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
     public double SidebarWidth { get; set; } = 240;
     public double DetailsWidth { get; set; } = 380;
 

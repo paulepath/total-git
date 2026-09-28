@@ -56,10 +56,11 @@ public sealed class FormDialog : Window
 
         Opened += (_, _) =>
         {
-            if (_controls.Select(c => c.Control).OfType<TextBox>().FirstOrDefault() is { } first)
+            if (_controls.FirstOrDefault(c => c.Control is TextBox) is (var field, TextBox first))
             {
                 first.Focus();
-                first.SelectAll();
+                if (field.SelectText) first.SelectAll();
+                else first.CaretIndex = first.Text?.Length ?? 0;
             }
         };
         UpdateEnabled();
@@ -96,6 +97,8 @@ public sealed class FormDialog : Window
         };
         text.TextChanged += (_, _) =>
         {
+            // Also raised for the initial text: that isn't the user typing, so don't show errors yet.
+            if ((text.Text ?? "") == field.Text) return;
             field.Text = text.Text ?? "";
             _touched = true;
             Validate();

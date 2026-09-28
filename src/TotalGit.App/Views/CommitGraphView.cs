@@ -638,7 +638,7 @@ public sealed class CommitGraphView : Control
         if (!ShowMetaColumns) return;
         var author = Text(c.AuthorName, 12, MutedTextBrush, _typeface, AuthorColumnWidth - 12);
         ctx.DrawText(author, new Point(AuthorLeft, top + (RowHeight - author.Height) / 2));
-        var date = Text(FormatDate(c.AuthorDate), 12, MutedTextBrush, _typeface, DateColumnWidth - 12);
+        var date = Text(DateText.Relative(c.AuthorDate), 12, MutedTextBrush, _typeface, DateColumnWidth - 12);
         ctx.DrawText(date, new Point(DateLeft, top + (RowHeight - date.Height) / 2));
     }
 
@@ -739,21 +739,6 @@ public sealed class CommitGraphView : Control
             ft.Trimming = TextTrimming.CharacterEllipsis;
         }
         return ft;
-    }
-
-    private static string FormatDate(DateTimeOffset when)
-    {
-        var age = DateTimeOffset.Now - when;
-        return age.TotalMinutes switch
-        {
-            < 1 => "just now",
-            < 60 => $"{(int)age.TotalMinutes} min ago",
-            < 120 => "1 hour ago",
-            < 60 * 24 => $"{(int)age.TotalHours} hours ago",
-            < 60 * 24 * 2 => "yesterday",
-            < 60 * 24 * 7 => $"{(int)age.TotalDays} days ago",
-            _ => when.LocalDateTime.ToString("yyyy-MM-dd HH:mm", CultureInfo.CurrentCulture),
-        };
     }
 
     /// <summary>One pill in the branch/tag column; local and remote branches with the same name share a pill.</summary>

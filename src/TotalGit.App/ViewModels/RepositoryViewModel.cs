@@ -6,6 +6,7 @@ using TotalGit.App.Services;
 using TotalGit.Core.Avatars;
 using TotalGit.Core.Git;
 using TotalGit.Core.Graph;
+using TotalGit.Core.Projects;
 using TotalGit.Core.Worktrees;
 
 namespace TotalGit.App.ViewModels;
@@ -182,6 +183,9 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     public partial string? BehindText { get; set; }
+
+    [ObservableProperty]
+    public partial string PushToolTip { get; set; } = "Push the current branch";
 
     public bool HasRepository => Graph is not null;
     public bool HasWorktreeName => WorktreeName is not null;
@@ -404,6 +408,9 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
         var current = state.Refs.FirstOrDefault(r => r is { Kind: RefKind.LocalBranch, IsCurrent: true });
         AheadText = current is { Ahead: > 0 } ? current.Ahead.ToString() : null;
         BehindText = current is { Behind: > 0 } ? current.Behind.ToString() : null;
+        PushToolTip = current is { Ahead: > 0, Behind: > 0 }
+            ? "Push the current branch. It has diverged from the remote (after a rebase or amend): right-click the branch to force push."
+            : "Push the current branch";
 
         HasStashes = state.Stashes.Count > 0;
         UpdateOperationBanner();
@@ -648,6 +655,30 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
             Banner = new Banner(ex.Message, true, [new MenuAction("Stash changes…", StashCommand)]);
             return false;
         }
+        catch (GitCommandException ex) when (GitActions.ClassifyPushError(ex.Message) is { } rejection)
+        {
+            // git's own text is a wall of hints: say what happened and offer the next step instead.
+            var branch = CurrentBranch;
+            Banner = rejection switch
+            {
+                PushRejection.NonFastForward => new Banner(
+                    $"The remote {branch} has commits your branch doesn't, as happens after a rebase or amend. " +
+                    "Force push to replace it with your branch, or pull to combine them.", true,
+                    [new MenuAction("Force push…", ForcePushCommand), new MenuAction("Pull", PullCommand)]),
+                PushRejection.FetchFirst => new Banner(
+                    $"Someone else pushed to {branch}. Pull their changes first, or force push to replace them.", true,
+                    [new MenuAction("Pull", PullCommand), new MenuAction("Force push…", ForcePushCommand)]),
+                PushRejection.UnseenRemoteCommits => new Banner(
+                    $"Force push refused: the remote {branch} has commits that were never on your branch (someone else pushed, " +
+                    "or they were made on the server). Check them in the graph, then pull them in or force push anyway.", true,
+                    [new MenuAction("Pull", PullCommand), new MenuAction("Force push anyway…", ForcePushAnywayCommand)]),
+                _ => new Banner(
+                    $"Force push refused: {branch} changed on the remote since your last fetch, so it would drop commits " +
+                    "you haven't seen. Fetch and check what's there first.", true,
+                    [new MenuAction("Fetch", FetchCommand)]),
+            };
+            return false;
+        }
         catch (Exception ex) when (ex is GitCommandException or InvalidOperationException or IOException or System.ComponentModel.Win32Exception)
         {
             ShowError(ex.Message);
@@ -663,16 +694,67 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
     }
 
     [RelayCommand]
-    private Task FetchAsync() => _state is null ? Task.CompletedTask
-        : RunGitAsync("Fetching…", () => GitActions.FetchAsync(_state.WorkingDirectory), "Fetched all remotes.");
+    private async Task FetchAsync()
+    {
+        if (_state is null) return;
+        if (await RunGitAsync("Fetching…", () => GitActions.FetchAsync(_state.WorkingDirectory), "Fetched all remotes."))
+            OfferCleanUp("Fetched all remotes.");
+    }
 
     [RelayCommand]
-    private Task PullAsync() => _state is null ? Task.CompletedTask
-        : RunGitAsync("Pulling…", () => GitActions.PullAsync(_state.WorkingDirectory), $"Pulled {CurrentBranch}.");
+    private async Task PullAsync()
+    {
+        if (_state is null) return;
+        var message = $"Pulled {CurrentBranch}.";
+        if (await RunGitAsync("Pulling…", () => GitActions.PullAsync(_state.WorkingDirectory), message))
+            OfferCleanUp(message);
+    }
+
+    /// <summary>After a fetch or pull: mention local branches whose remote branch is now gone, with a Clean up button.</summary>
+    private void OfferCleanUp(string message)
+    {
+        var gone = GoneBranches().Count;
+        if (gone == 0) return;
+        var what = gone == 1 ? "1 local branch has lost its remote branch" : $"{gone} local branches have lost their remote branch";
+        Banner = new Banner($"{message} {what} (deleted on the remote).", false,
+            [new MenuAction("Clean up…", CleanUpBranchesCommand)]);
+    }
 
     [RelayCommand]
     private Task PushAsync() => _state is null ? Task.CompletedTask
         : RunGitAsync("Pushing…", () => GitActions.PushAsync(_state.WorkingDirectory), $"Pushed {CurrentBranch}.");
+
+    /// <summary>Replaces the remote branch with the local one (after a rebase or amend), after confirming.</summary>
+    [RelayCommand]
+    private Task ForcePushAsync() => ForcePushCoreAsync(replaceUnseen: false);
+
+    /// <summary>After a refused force push: also replace remote commits that were never on this branch.</summary>
+    [RelayCommand]
+    private Task ForcePushAnywayAsync() => ForcePushCoreAsync(replaceUnseen: true);
+
+    private async Task ForcePushCoreAsync(bool replaceUnseen)
+    {
+        if (_state?.CurrentBranch is not { } branch || Dialogs is null) return;
+        var wt = _state.WorkingDirectory;
+        var upstream = _state.Refs.FirstOrDefault(r => r is { Kind: RefKind.LocalBranch, IsCurrent: true })?.Upstream ?? $"the remote {branch}";
+
+        const int shown = 15;
+        var replaced = await GitActions.CommitsOnlyOnUpstreamAsync(wt);
+        var details = replaced.Take(shown).ToList();
+        if (replaced.Count > shown) details.Add($"… and {replaced.Count - shown} more");
+        var message = replaceUnseen
+            ? $"{upstream} has commits that were never on your branch: someone else pushed them, or they were made on the server. " +
+              "Force pushing anyway deletes them from the remote. Check them in the graph first."
+            : $"This replaces {upstream} with your local {branch}. Use it after a rebase or amend. " +
+              "It's refused if the remote has commits that were never on your branch.";
+        if (replaced.Count > 0)
+            message += replaceUnseen
+                ? $"\n\nThese commits on {upstream} will be removed:"
+                : $"\n\nThese commits on {upstream} will be replaced (after a rebase, they're the old copies of yours):";
+
+        if (!await Dialogs.ConfirmAsync($"Force push {branch}?", message, details, replaceUnseen ? "Force push anyway" : "Force push")) return;
+        await RunGitAsync("Force pushing…", () => GitActions.PushAsync(wt, force: true, replaceUnseen: replaceUnseen), $"Force pushed {branch}.");
+    }
 
     [RelayCommand]
     private async Task CheckoutAsync(BranchTarget target)
@@ -721,6 +803,52 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
         catch (Exception ex) when (ex is FileNotFoundException or System.ComponentModel.Win32Exception)
         {
             ShowError(ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Opens the worktree's solution (.sln/.slnx) with its default program, usually Visual Studio. With several
+    /// solutions the user picks one; the choice is remembered per folder and preselected next time.
+    /// </summary>
+    [RelayCommand]
+    private async Task OpenInVisualStudioAsync(string? folder)
+    {
+        folder ??= _state?.WorkingDirectory;
+        if (folder is null) return;
+        var solutions = await Task.Run(() => SolutionFinder.Find(folder));
+        if (solutions.Count == 0)
+        {
+            ShowInfo($"No .sln or .slnx file found in {Path.GetFileName(folder.TrimEnd('\\', '/'))}.");
+            return;
+        }
+
+        var solution = solutions[0];
+        if (solutions.Count > 1)
+        {
+            if (Dialogs is null) return;
+            var choices = solutions
+                .Select(s => new FormChoice(Path.GetFileName(s), Path.GetRelativePath(folder, Path.GetDirectoryName(s)!) is var dir && dir != "." ? dir : "(top folder)"))
+                .ToList();
+            var last = _settings.LastSolutions.GetValueOrDefault(folder);
+            var pick = FormField.Choice("Solution", choices, Math.Max(0, solutions.ToList().FindIndex(s => s == last)));
+            if (!await Dialogs.ShowFormAsync(new FormSpec("Open in Visual Studio", $"{solutions.Count} solutions were found. Which one?", "Open", [pick])))
+                return;
+            solution = solutions[pick.SelectedIndex];
+            _settings.LastSolutions[folder] = solution;
+            _settings.Save();
+        }
+
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(solution)
+            {
+                UseShellExecute = true,
+                WorkingDirectory = Path.GetDirectoryName(solution),
+            })?.Dispose();
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            ShowError($"Couldn't open {Path.GetFileName(solution)}: {ex.Message}");
         }
     }
 
@@ -900,7 +1028,7 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
                     $"Couldn't finish removing '{name}': {relative} is in use by another program. " +
                     "Close any VS Code window, terminal or dev server using this worktree, then try again.",
                     true,
-                    [new MenuAction("Try again", RetryRemoveCommand, path), new MenuAction("Reveal folder", RevealCommand, path)]);
+                    [new MenuAction("Try again", RetryRemoveCommand, path), new MenuAction("Reveal folder", RevealCommand, path, Icon: MenuIcons.Folder)]);
                 break;
             }
             catch (Exception ex) when (ex is GitCommandException or IOException or UnauthorizedAccessException)
@@ -925,8 +1053,9 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
 
     private IReadOnlyList<MenuAction> WorktreeOpenActions(WorktreeInfo wt) =>
     [
-        new("Open in Total Git", OpenWorktreeCommand, wt),
-        new("Open in VS Code", OpenInVsCodeCommand, wt.Path),
+        new("Open in Total Git", OpenWorktreeCommand, wt, Icon: MenuIcons.Open),
+        new("Open in VS Code", OpenInVsCodeCommand, wt.Path, Icon: MenuIcons.Code),
+        new("Open in Visual Studio", OpenInVisualStudioCommand, wt.Path, Icon: MenuIcons.VisualStudio),
     ];
 
     /// <summary>Context menu for a branch, tag or worktree (shared by sidebar and graph).</summary>
@@ -939,19 +1068,20 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
 
         if (wt is not null && (target.Kind == RefKind.LocalBranch || fromWorktreeSection))
         {
-            if (!isCurrentWorktree) actions.Add(new MenuAction("Open worktree in Total Git", OpenWorktreeCommand, wt, IsEnabled: !wt.IsPrunable));
-            actions.Add(new MenuAction(isCurrentWorktree ? "Open in VS Code" : "Open worktree in VS Code", OpenInVsCodeCommand, wt.Path, IsEnabled: !wt.IsPrunable));
-            actions.Add(new MenuAction("Reveal folder", RevealCommand, wt.Path, IsEnabled: !wt.IsPrunable));
+            if (!isCurrentWorktree) actions.Add(new MenuAction("Open worktree in Total Git", OpenWorktreeCommand, wt, IsEnabled: !wt.IsPrunable, Icon: MenuIcons.Open));
+            actions.Add(new MenuAction(isCurrentWorktree ? "Open in VS Code" : "Open worktree in VS Code", OpenInVsCodeCommand, wt.Path, IsEnabled: !wt.IsPrunable, Icon: MenuIcons.Code));
+            actions.Add(new MenuAction(isCurrentWorktree ? "Open in Visual Studio" : "Open worktree in Visual Studio", OpenInVisualStudioCommand, wt.Path, IsEnabled: !wt.IsPrunable, Icon: MenuIcons.VisualStudio));
+            actions.Add(new MenuAction("Reveal folder", RevealCommand, wt.Path, IsEnabled: !wt.IsPrunable, Icon: MenuIcons.Folder));
             if (!wt.IsMain)
             {
                 actions.Add(MenuAction.Separator);
-                actions.Add(new MenuAction("Remove worktree…", RemoveWorktreeCommand, wt));
+                actions.Add(new MenuAction("Remove worktree…", RemoveWorktreeCommand, wt, Icon: MenuIcons.Delete));
             }
             if (wt.IsPrunable) actions.Add(new MenuAction("Prune stale worktrees", PruneWorktreesCommand));
             if (fromWorktreeSection)
             {
                 actions.Add(MenuAction.Separator);
-                actions.Add(new MenuAction("Copy path", CopyCommand, wt.Path));
+                actions.Add(new MenuAction("Copy path", CopyCommand, wt.Path, Icon: MenuIcons.Copy));
                 return actions;
             }
             actions.Add(MenuAction.Separator);
@@ -962,25 +1092,35 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
         switch (target.Kind)
         {
             case RefKind.LocalBranch:
-                if (!isCheckedOutHere && wt is null) actions.Add(new MenuAction($"Checkout {target.Name}", CheckoutCommand, target));
-                if (wt is null) actions.Add(new MenuAction("Create worktree…", CreateWorktreeCommand, target));
-                if (isCheckedOutHere && wt is null) actions.Add(new MenuAction("Open in VS Code", OpenInVsCodeCommand, current));
-                actions.Add(new MenuAction("Create tag here…", CreateTagCommand, target));
-                actions.Add(new MenuAction("Copy branch name", CopyCommand, target.Name));
-                if (!isCheckedOutHere && wt is null) dangerous.Add(new MenuAction("Delete branch…", DeleteBranchCommand, target));
+                if (!isCheckedOutHere && wt is null) actions.Add(new MenuAction($"Checkout {target.Name}", CheckoutCommand, target, Icon: MenuIcons.Checkout));
+                if (wt is null) actions.Add(new MenuAction("Create worktree…", CreateWorktreeCommand, target, Icon: MenuIcons.Worktree));
+                if (isCheckedOutHere && wt is null)
+                {
+                    actions.Add(new MenuAction("Open in VS Code", OpenInVsCodeCommand, current, Icon: MenuIcons.Code));
+                    actions.Add(new MenuAction("Open in Visual Studio", OpenInVisualStudioCommand, current, Icon: MenuIcons.VisualStudio));
+                }
+                actions.Add(new MenuAction("Create branch here…", CreateBranchCommand, target, Icon: MenuIcons.Branch));
+                actions.Add(new MenuAction("Create tag here…", CreateTagCommand, target, Icon: MenuIcons.Tag));
+                actions.Add(new MenuAction("Copy branch name", CopyCommand, target.Name, Icon: MenuIcons.Copy));
+                if (isCheckedOutHere && _state!.Refs.Any(r => r is { Kind: RefKind.LocalBranch, IsCurrent: true, Upstream: not null, UpstreamGone: false }))
+                    dangerous.Add(new MenuAction("Force push…", ForcePushCommand, Icon: MenuIcons.Push));
+                if (!isCheckedOutHere && wt is null) dangerous.Add(new MenuAction("Delete branch…", DeleteBranchCommand, target, Icon: MenuIcons.Delete));
+                if (_state?.Refs.Any(r => r is { Kind: RefKind.LocalBranch, UpstreamGone: true } && r.Name == target.Name) == true)
+                    dangerous.Add(new MenuAction("Clean up branches deleted on remote…", CleanUpBranchesCommand, Icon: MenuIcons.Delete));
                 break;
             case RefKind.RemoteBranch:
-                actions.Add(new MenuAction($"Checkout {target.ShortName}", CheckoutCommand, target));
-                actions.Add(new MenuAction("Create worktree…", CreateWorktreeCommand, target));
-                actions.Add(new MenuAction("Create tag here…", CreateTagCommand, target));
-                actions.Add(new MenuAction("Copy branch name", CopyCommand, target.Name));
+                actions.Add(new MenuAction($"Checkout {target.ShortName}", CheckoutCommand, target, Icon: MenuIcons.Checkout));
+                actions.Add(new MenuAction("Create worktree…", CreateWorktreeCommand, target, Icon: MenuIcons.Worktree));
+                actions.Add(new MenuAction("Create branch here…", CreateBranchCommand, target, Icon: MenuIcons.Branch));
+                actions.Add(new MenuAction("Create tag here…", CreateTagCommand, target, Icon: MenuIcons.Tag));
+                actions.Add(new MenuAction("Copy branch name", CopyCommand, target.Name, Icon: MenuIcons.Copy));
                 break;
             case RefKind.Tag:
-                actions.Add(new MenuAction("Create worktree from tag…", CreateWorktreeCommand, target));
-                actions.Add(new MenuAction("Push tag", PushTagCommand, target));
-                actions.Add(new MenuAction("Copy tag name", CopyCommand, target.Name));
-                dangerous.Add(new MenuAction("Delete tag…", DeleteTagCommand, target));
-                dangerous.Add(new MenuAction("Delete tag from remote…", DeleteRemoteTagCommand, target));
+                actions.Add(new MenuAction("Create worktree from tag…", CreateWorktreeCommand, target, Icon: MenuIcons.Worktree));
+                actions.Add(new MenuAction("Push tag", PushTagCommand, target, Icon: MenuIcons.Push));
+                actions.Add(new MenuAction("Copy tag name", CopyCommand, target.Name, Icon: MenuIcons.Copy));
+                dangerous.Add(new MenuAction("Delete tag…", DeleteTagCommand, target, Icon: MenuIcons.Delete));
+                dangerous.Add(new MenuAction("Delete tag from remote…", DeleteRemoteTagCommand, target, Icon: MenuIcons.Delete));
                 break;
         }
 
@@ -1003,7 +1143,11 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
     {
         if (commit.IsOtherWorktree) return ActionsForOtherWip(commit);
         if (commit.IsWorkingTree)
-            return [new MenuAction("Open in VS Code", OpenInVsCodeCommand, _state?.WorkingDirectory)];
+            return
+            [
+                new MenuAction("Open in VS Code", OpenInVsCodeCommand, _state?.WorkingDirectory, Icon: MenuIcons.Code),
+                new MenuAction("Open in Visual Studio", OpenInVisualStudioCommand, _state?.WorkingDirectory, Icon: MenuIcons.VisualStudio),
+            ];
 
         var actions = new List<MenuAction>();
         var refs = Graph?.Refs.Where(r => r.TargetSha == commit.Sha && r.Kind != RefKind.DetachedHead).ToList() ?? [];
@@ -1016,18 +1160,18 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
 
         var here = new BranchTarget(RefKind.DetachedHead, commit.ShortSha, commit.Sha);
         var isCheckedOut = _state?.HeadSha == commit.Sha && _state.CurrentBranch is null;
-        actions.Add(new MenuAction("Check out this commit…", CheckoutCommitCommand, commit, IsEnabled: !isCheckedOut && !IsOperationInProgress));
-        actions.Add(new MenuAction("Create branch here…", CreateBranchCommand, here));
-        actions.Add(new MenuAction("Create tag here…", CreateTagCommand, here));
-        actions.Add(new MenuAction("Create worktree from this commit…", CreateWorktreeCommand, here));
-        actions.Add(new MenuAction("Copy commit SHA", CopyCommand, commit.Sha));
-        actions.Add(new MenuAction("Copy commit message", CopyCommand, commit.MessageShort));
+        actions.Add(new MenuAction("Check out this commit…", CheckoutCommitCommand, commit, IsEnabled: !isCheckedOut && !IsOperationInProgress, Icon: MenuIcons.Checkout));
+        actions.Add(new MenuAction("Create branch here…", CreateBranchCommand, here, Icon: MenuIcons.Branch));
+        actions.Add(new MenuAction("Create tag here…", CreateTagCommand, here, Icon: MenuIcons.Tag));
+        actions.Add(new MenuAction("Create worktree from this commit…", CreateWorktreeCommand, here, Icon: MenuIcons.Worktree));
+        actions.Add(new MenuAction("Copy commit SHA", CopyCommand, commit.Sha, Icon: MenuIcons.Copy));
+        actions.Add(new MenuAction("Copy commit message", CopyCommand, commit.MessageShort, Icon: MenuIcons.Copy));
 
         var rewrite = MergeRebaseActions(here, isCurrentTip: _state?.HeadSha == commit.Sha).ToList();
         if (_state?.CurrentBranch is not null && !IsOperationInProgress)
-            rewrite.Add(new MenuAction("Interactive rebase from here…", InteractiveRebaseCommand, commit));
+            rewrite.Add(new MenuAction("Interactive rebase from here…", InteractiveRebaseCommand, commit, Icon: MenuIcons.Rebase));
         if (_state is not null && !IsOperationInProgress)
-            rewrite.Add(new MenuAction($"Reset {_state.CurrentBranch ?? "HEAD"} to here…", ResetToCommitCommand, commit));
+            rewrite.Add(new MenuAction($"Reset {_state.CurrentBranch ?? "HEAD"} to here…", ResetToCommitCommand, commit, Icon: MenuIcons.Reset));
         if (rewrite.Count > 0)
         {
             actions.Add(MenuAction.Separator);
@@ -1042,33 +1186,41 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
         {
             return
             [
-                new MenuAction("Create worktree with new branch…", CreateWorktreeCommand),
+                new MenuAction("Create worktree with new branch…", CreateWorktreeCommand, Icon: MenuIcons.Worktree),
                 new MenuAction("Prune stale worktrees", PruneWorktreesCommand),
             ];
         }
+        if (node.IsFolder && node.BranchPrefix is { } prefix)
+            return [new MenuAction($"Create branch in {prefix}…", CreateBranchInFolderCommand, prefix, Icon: (object?)node.KindIcon ?? MenuIcons.Branch)];
         if (node.IsSection && node.Label == "LOCAL")
         {
             var gone = GoneBranches().Count;
-            return [new MenuAction($"Delete branches whose remote is gone ({gone})…", DeleteGoneBranchesCommand, IsEnabled: gone > 0)];
+            return
+            [
+                new MenuAction("Create branch…", CreateBranchAtHeadCommand, Icon: MenuIcons.Branch),
+                MenuAction.Separator,
+                new MenuAction(gone > 0 ? $"Clean up branches deleted on remote ({gone})…" : "Clean up branches deleted on remote…",
+                    CleanUpBranchesCommand, Icon: MenuIcons.Delete),
+            ];
         }
         if (node.Stash is { } stash)
         {
             return
             [
-                new MenuAction("Apply stash", ApplyStashCommand, stash),
-                new MenuAction("Pop stash", PopStashCommand, stash),
+                new MenuAction("Apply stash", ApplyStashCommand, stash, Icon: MenuIcons.Pop),
+                new MenuAction("Pop stash", PopStashCommand, stash, Icon: MenuIcons.Pop),
                 MenuAction.Separator,
-                new MenuAction("Delete stash…", DropStashCommand, stash),
+                new MenuAction("Delete stash…", DropStashCommand, stash, Icon: MenuIcons.Delete),
             ];
         }
         if (node.LeftoverPath is { } leftover)
         {
             return
             [
-                new MenuAction("Delete leftover folder…", DeleteLeftoverCommand, leftover),
-                new MenuAction("Reveal folder", RevealCommand, leftover),
+                new MenuAction("Delete leftover folder…", DeleteLeftoverCommand, leftover, Icon: MenuIcons.Delete),
+                new MenuAction("Reveal folder", RevealCommand, leftover, Icon: MenuIcons.Folder),
                 MenuAction.Separator,
-                new MenuAction("Copy path", CopyCommand, leftover),
+                new MenuAction("Copy path", CopyCommand, leftover, Icon: MenuIcons.Copy),
             ];
         }
         if (node.IsWorktree && node.Worktree is { } wt)

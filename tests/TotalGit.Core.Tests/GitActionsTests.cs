@@ -163,6 +163,101 @@ public sealed class GitActionsTests : IDisposable
     }
 
     [Fact]
+    public async Task Force_push_replaces_rewritten_history()
+    {
+        using var remote = new TestRepo(bare: true);
+        _repo.Commit("base");
+        _repo.Git("remote", "add", "origin", remote.Root);
+        _repo.Commit("first try");
+        await GitActions.PushAsync(_repo.Root);
+
+        // Rewrite the pushed commit, as a rebase or amend does.
+        _repo.Git("commit", "-q", "--amend", "-m", "second try");
+        var ex = await Assert.ThrowsAsync<GitCommandException>(() => GitActions.PushAsync(_repo.Root));
+        Assert.Equal(PushRejection.NonFastForward, GitActions.ClassifyPushError(ex.Message));
+        Assert.Equal("first try", Assert.Single(await GitActions.CommitsOnlyOnUpstreamAsync(_repo.Root)).Split(' ', 2)[1]);
+
+        await GitActions.PushAsync(_repo.Root, force: true);
+        Assert.Equal(_repo.Git("rev-parse", "HEAD"), TestRepo.RunGit(remote.Root, "rev-parse", "main"));
+        Assert.Empty(await GitActions.CommitsOnlyOnUpstreamAsync(_repo.Root));
+    }
+
+    [Fact]
+    public async Task Force_push_refuses_to_drop_commits_it_has_not_fetched()
+    {
+        using var remote = new TestRepo(bare: true);
+        _repo.Commit("base");
+        _repo.Git("remote", "add", "origin", remote.Root);
+        await GitActions.PushAsync(_repo.Root);
+
+        // Someone else pushes to the same branch.
+        using var other = new TestRepo(path: Path.Combine(Path.GetTempPath(), "totalgit-tests", Guid.NewGuid().ToString("N")[..12] + "-clone"));
+        other.Git("pull", "-q", remote.Root, "main");
+        other.Commit("theirs");
+        other.Git("push", "-q", remote.Root, "main");
+        var theirs = other.Git("rev-parse", "HEAD");
+
+        // We rewrite our branch without fetching and try to force push.
+        _repo.Git("commit", "-q", "--amend", "-m", "ours");
+        var plain = await Assert.ThrowsAsync<GitCommandException>(() => GitActions.PushAsync(_repo.Root));
+        Assert.NotNull(GitActions.ClassifyPushError(plain.Message));
+        var ex = await Assert.ThrowsAsync<GitCommandException>(() => GitActions.PushAsync(_repo.Root, force: true));
+        Assert.Equal(PushRejection.StaleLease, GitActions.ClassifyPushError(ex.Message));
+        Assert.Equal(theirs, TestRepo.RunGit(remote.Root, "rev-parse", "main"));
+    }
+
+    [Fact]
+    public async Task Force_push_asks_before_replacing_fetched_commits_never_on_the_branch()
+    {
+        using var remote = new TestRepo(bare: true);
+        _repo.Commit("base");
+        _repo.Git("remote", "add", "origin", remote.Root);
+        await GitActions.PushAsync(_repo.Root);
+
+        using var other = new TestRepo(path: Path.Combine(Path.GetTempPath(), "totalgit-tests", Guid.NewGuid().ToString("N")[..12] + "-clone"));
+        other.Git("pull", "-q", remote.Root, "main");
+        other.Commit("theirs");
+        other.Git("push", "-q", remote.Root, "main");
+
+        // We fetch their commit but never take it into our branch, then rewrite ours.
+        await GitActions.FetchAsync(_repo.Root);
+        _repo.Git("commit", "-q", "--amend", "-m", "ours");
+
+        var ex = await Assert.ThrowsAsync<GitCommandException>(() => GitActions.PushAsync(_repo.Root, force: true));
+        Assert.Equal(PushRejection.UnseenRemoteCommits, GitActions.ClassifyPushError(ex.Message));
+
+        await GitActions.PushAsync(_repo.Root, force: true, replaceUnseen: true);
+        Assert.Equal(_repo.Git("rev-parse", "HEAD"), TestRepo.RunGit(remote.Root, "rev-parse", "main"));
+    }
+
+    [Fact]
+    public async Task Branch_summaries_report_subject_and_commits_on_no_remote()
+    {
+        using var remote = new TestRepo(bare: true);
+        _repo.Commit("base");
+        _repo.Git("remote", "add", "origin", remote.Root);
+        _repo.Git("push", "-q", "-u", "origin", "main");
+        _repo.Git("switch", "-q", "-c", "feature/done");
+        _repo.Commit("finished work");
+        _repo.Git("push", "-q", "-u", "origin", "feature/done");
+        _repo.Git("switch", "-q", "main");
+
+        // The PR was merged and the remote branch deleted.
+        TestRepo.RunGit(remote.Root, "branch", "-D", "feature/done");
+        await GitActions.FetchAsync(_repo.Root);
+
+        // Its commit is on no remote branch any more.
+        var summary = Assert.Single(await GitActions.GetBranchSummariesAsync(_repo.Root, ["feature/done"]));
+        Assert.Equal("feature/done", summary.Name);
+        Assert.Equal("finished work", summary.Subject);
+        Assert.Equal(1, summary.UnpushedCount);
+        Assert.True(summary.LastCommit > DateTimeOffset.Now.AddHours(-1));
+
+        // main is on the remote.
+        Assert.Equal(0, Assert.Single(await GitActions.GetBranchSummariesAsync(_repo.Root, ["main"])).UnpushedCount);
+    }
+
+    [Fact]
     public async Task Checkout_can_merge_or_discard_conflicting_local_changes()
     {
         _repo.Commit("base", "f.txt", "one\n");

@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using TotalGit.Core.Git;
+using TotalGit.Core.Worktrees;
 
 namespace TotalGit.App.ViewModels;
 
@@ -42,22 +43,96 @@ public partial class RepositoryViewModel
                     && !_worktrees.Any(w => w.Branch == r.Name))
         .ToList() ?? [];
 
+    /// <summary>
+    /// Fetches (pruning deleted remote branches), then lets the user pick which local branches whose remote branch
+    /// is gone to delete. The current branch and branches checked out in other worktrees are listed but can't be picked.
+    /// </summary>
     [RelayCommand]
-    private async Task DeleteGoneBranchesAsync()
+    private async Task CleanUpBranchesAsync()
     {
         if (_state is null || Dialogs is null) return;
-        var gone = GoneBranches();
-        if (gone.Count == 0) return;
-        if (!await Dialogs.ConfirmAsync("Delete branches",
-                "These local branches track remote branches that were deleted. Delete them (including any unmerged commits)?",
-                gone.Select(r => $"{r.Name}  ({r.Upstream})").ToList(), $"Delete {gone.Count}"))
-            return;
-
         var wt = _state.WorkingDirectory;
-        await RunGitAsync("Deleting branches…", async () =>
+
+        var fetchFailed = false;
+        IsBusy = true;
+        BusyText = "Fetching and pruning…";
+        try
         {
-            foreach (var r in gone) await GitActions.DeleteBranchAsync(wt, r.Name, force: true);
-        }, $"Deleted {gone.Count} branch{(gone.Count == 1 ? "" : "es")}.");
+            await GitActions.FetchAsync(wt);
+        }
+        catch (Exception ex) when (ex is GitCommandException or IOException or System.ComponentModel.Win32Exception)
+        {
+            fetchFailed = true;
+        }
+        finally
+        {
+            IsBusy = false;
+            BusyText = null;
+        }
+        await RefreshRefsAsync();
+        if (_state is null) return;
+
+        var gone = _state.Refs.Where(r => r is { Kind: RefKind.LocalBranch, UpstreamGone: true }).OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase).ToList();
+        if (gone.Count == 0)
+        {
+            ShowInfo(fetchFailed
+                ? "Couldn't reach the remote. No local branches had a deleted remote branch at the last fetch."
+                : "No local branches have a deleted remote branch. Nothing to clean up.");
+            return;
+        }
+
+        IReadOnlyList<BranchSummary> summaries;
+        try
+        {
+            summaries = await GitActions.GetBranchSummariesAsync(wt, gone.Select(r => r.Name));
+        }
+        catch (GitCommandException)
+        {
+            summaries = [];
+        }
+        var items = gone.Select(r =>
+        {
+            var summary = summaries.FirstOrDefault(s => s.Name == r.Name);
+            var otherWorktree = _worktrees.FirstOrDefault(w => w.Branch == r.Name && !WorktreeService.SamePath(w.Path, wt));
+            var reason = r.IsCurrent ? "The branch you're on: switch to another branch first."
+                : otherWorktree is not null ? $"Checked out in the worktree {otherWorktree.Name}: remove the worktree first."
+                : null;
+            return new BranchCleanupItem(r.Name, r.Upstream, summary?.Subject ?? "", summary?.LastCommit, summary?.UnpushedCount ?? 0, reason);
+        });
+
+        var dialog = new BranchCleanupViewModel(items, fetchFailed);
+        if (!await Dialogs.ShowBranchCleanupAsync(dialog)) return;
+
+        var selected = dialog.Selected.Select(i => i.Name).ToList();
+        var failed = new List<string>();
+        IsBusy = true;
+        BusyText = $"Deleting {selected.Count} branch{(selected.Count == 1 ? "" : "es")}…";
+        try
+        {
+            // Keep going past a failure, so one stuck branch doesn't leave the rest behind.
+            foreach (var name in selected)
+            {
+                try
+                {
+                    await GitActions.DeleteBranchAsync(wt, name, force: true);
+                }
+                catch (GitCommandException ex)
+                {
+                    failed.Add($"{name} ({ex.Message.Trim()})");
+                }
+            }
+        }
+        finally
+        {
+            IsBusy = false;
+            BusyText = null;
+        }
+
+        var deleted = selected.Count - failed.Count;
+        var message = $"Deleted {deleted} branch{(deleted == 1 ? "" : "es")}.";
+        if (failed.Count > 0) ShowError($"{message} Couldn't delete {string.Join(", ", failed)}.");
+        else ShowInfo(message);
+        await RefreshRefsAsync();
     }
 
     // ------------------------------------------------------------------ merge / rebase
@@ -286,8 +361,8 @@ public partial class RepositoryViewModel
     {
         if (_state?.CurrentBranch is not { } current || IsOperationInProgress || isCurrentTip) yield break;
         var label = target.Kind == RefKind.DetachedHead ? "this commit" : target.Name;
-        yield return new MenuAction($"Merge {label} into {current}…", MergeCommand, target);
-        yield return new MenuAction($"Rebase {current} onto {label}…", RebaseOntoCommand, target);
+        yield return new MenuAction($"Merge {label} into {current}…", MergeCommand, target, Icon: MenuIcons.Merge);
+        yield return new MenuAction($"Rebase {current} onto {label}…", RebaseOntoCommand, target, Icon: MenuIcons.Rebase);
     }
 
     // ------------------------------------------------------------------ stash
@@ -389,11 +464,27 @@ public partial class RepositoryViewModel
     }
 
     [RelayCommand]
-    private async Task CreateBranchAsync(BranchTarget target)
+    private Task CreateBranchAsync(BranchTarget target) => CreateBranchAtAsync(target);
+
+    /// <summary>Toolbar and LOCAL section: a new branch from HEAD.</summary>
+    [RelayCommand]
+    private Task CreateBranchAtHeadAsync() => HeadTarget() is { } head ? CreateBranchAtAsync(head) : Task.CompletedTask;
+
+    /// <summary>Right-click on a LOCAL folder: a new branch from HEAD, its name starting with the folder ("feature/").</summary>
+    [RelayCommand]
+    private Task CreateBranchInFolderAsync(string prefix) => HeadTarget() is { } head ? CreateBranchAtAsync(head, prefix) : Task.CompletedTask;
+
+    private BranchTarget? HeadTarget() => _state is { HeadSha: { } sha } state
+        ? state.CurrentBranch is { } branch
+            ? new BranchTarget(RefKind.LocalBranch, branch, sha)
+            : new BranchTarget(RefKind.DetachedHead, sha[..Math.Min(7, sha.Length)], sha)
+        : null;
+
+    private async Task CreateBranchAtAsync(BranchTarget target, string prefix = "")
     {
         if (_state is null || Dialogs is null) return;
         var existing = _state.Refs.Where(r => r.Kind == RefKind.LocalBranch).Select(r => r.Name).ToHashSet();
-        var name = FormField.TextBox("Branch name", placeholder: "feature/my-change");
+        var name = FormField.TextBox("Branch name", prefix, placeholder: "feature/my-change", selectText: prefix.Length == 0);
         var checkout = FormField.CheckBox("Check it out", isChecked: true);
 
         var where = target.Kind == RefKind.DetachedHead ? $"commit {target.Name}" : $"{target.Name} ({target.Sha[..Math.Min(7, target.Sha.Length)]})";
@@ -401,6 +492,7 @@ public partial class RepositoryViewModel
         {
             var n = name.Text.Trim();
             if (n.Length == 0) return "Enter a branch name.";
+            if (prefix.Length > 0 && n == prefix) return $"Enter a branch name after {prefix}";
             if (!GitActions.IsValidRefName(n)) return "That isn't a valid branch name.";
             if (existing.Contains(n)) return $"A branch named '{n}' already exists.";
             return null;

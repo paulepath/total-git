@@ -46,6 +46,9 @@ public partial class SidebarNode : ObservableObject
 
     /// <summary>Set for a folder under .worktrees that git no longer tracks.</summary>
     public string? LeftoverPath { get; init; }
+
+    /// <summary>For a folder under LOCAL: the name prefix of branches inside it ("feature/", "feature/team/").</summary>
+    public string? BranchPrefix { get; init; }
     public bool IsCurrent { get; init; }
     public int Count { get; init; }
     public string? Ahead { get; init; }
@@ -250,6 +253,7 @@ public partial class SidebarViewModel : ObservableObject
                     KindIcon = i == categoryDepth ? BranchIcons.ForFolder(parts[i]) : null,
                     IsExpanded = !_collapsed.Contains(key) || Filter.Trim().Length > 0,
                     ToolTip = key,
+                    BranchPrefix = section.Label == "LOCAL" ? string.Join('/', parts[..(i + 1)]) + "/" : null,
                 };
                 // Folders sort before leaves, like a file tree.
                 var insertAt = parent.Children.TakeWhile(c => c.IsFolder).Count();
