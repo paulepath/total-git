@@ -164,6 +164,8 @@ public sealed class RepositorySession : IDisposable
                 if (indexKind is { } ik)
                     staged.Add(new FileChange(e.FilePath, e.HeadToIndexRenameDetails?.OldFilePath, ik));
 
+                if (s == FileStatus.NewInWorkdir && IsIgnoredFolderLink(e.FilePath)) continue;
+
                 ChangeKind? workKind =
                     s.HasFlag(FileStatus.NewInWorkdir) ? ChangeKind.Untracked :
                     s.HasFlag(FileStatus.RenamedInWorkdir) ? ChangeKind.Renamed :
@@ -178,6 +180,26 @@ public sealed class RepositorySession : IDisposable
                 unstaged.OrderBy(f => f.Path, StringComparer.OrdinalIgnoreCase).ToArray(),
                 staged.OrderBy(f => f.Path, StringComparer.OrdinalIgnoreCase).ToArray());
         }
+    }
+
+    /// <summary>
+    /// libgit2 reports a link to a folder (a Windows junction or a symlink, e.g. a worktree's node_modules linked to
+    /// the main checkout's) as a single untracked file, so folder-only rules like "node_modules/" don't match it.
+    /// git itself treats it as ignored; check the rules as for a folder to agree.
+    /// </summary>
+    private bool IsIgnoredFolderLink(string path)
+    {
+        var full = Path.Combine(_repo.Info.WorkingDirectory, path);
+        try
+        {
+            var attributes = File.GetAttributes(full);
+            if (!attributes.HasFlag(FileAttributes.Directory) || !attributes.HasFlag(FileAttributes.ReparsePoint)) return false;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+        return _repo.Ignore.IsPathIgnored(path.TrimEnd('/') + "/");
     }
 
     public CommitDetails GetCommitDetails(string sha)

@@ -9,6 +9,36 @@ public sealed class RepositorySessionTests : IDisposable
     public void Dispose() => _repo.Dispose();
 
     [Fact]
+    public void Ignored_folder_linked_by_a_junction_is_not_listed_as_untracked()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        _repo.Commit("base", ".gitignore", "node_modules/\n");
+
+        // A worktree's node_modules is often a junction to the main checkout's folder.
+        var target = Path.Combine(Path.GetTempPath(), "totalgit-tests", Guid.NewGuid().ToString("N")[..12] + "-modules");
+        Directory.CreateDirectory(target);
+        File.WriteAllText(Path.Combine(target, "pkg.js"), "");
+        var link = Path.Combine(_repo.Root, "app", "node_modules");
+        Directory.CreateDirectory(Path.GetDirectoryName(link)!);
+        using (var mklink = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("cmd", $"/c mklink /J \"{link}\" \"{target}\"")
+               { CreateNoWindow = true, UseShellExecute = false }))
+            mklink!.WaitForExit();
+        _repo.Write("app/real.txt", "new");
+
+        try
+        {
+            using var session = RepositorySession.Open(_repo.Root);
+            var untracked = session.GetStatus().Unstaged.Select(f => f.Path).ToList();
+            Assert.Equal(["app/real.txt"], untracked);
+        }
+        finally
+        {
+            Directory.Delete(link);
+            Directory.Delete(target, recursive: true);
+        }
+    }
+
+    [Fact]
     public void Pages_through_history_without_duplicates()
     {
         for (var i = 0; i < 25; i++) _repo.Commit($"c{i}");
