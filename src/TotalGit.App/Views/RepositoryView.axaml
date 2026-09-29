@@ -40,7 +40,9 @@
           </StackPanel>
         </StackPanel>
 
-        <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="2" IsEnabled="{Binding HasRepository}">
+        <!-- Shrinks the buttons when there isn't room (narrow window, or zoomed in) instead of overlapping the sides. -->
+        <Viewbox Grid.Column="2" Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Center" Margin="12,0">
+        <StackPanel Orientation="Horizontal" Spacing="2" IsEnabled="{Binding HasRepository}">
           <Button Classes="tool" Command="{Binding FetchCommand}" ToolTip.Tip="Fetch all remotes">
             <StackPanel>
               <PathIcon Data="{StaticResource FetchIcon}" />
@@ -103,6 +105,7 @@
             </StackPanel>
           </Button>
         </StackPanel>
+        </Viewbox>
 
         <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center" Spacing="8" Margin="0,0,10,0">
           <ProgressBar IsIndeterminate="True" Width="60" IsVisible="{Binding IsBusy}" />

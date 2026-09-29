@@ -1180,6 +1180,24 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
         return actions;
     }
 
+    /// <summary>Context menu for one ref picked from a commit's fanned-out refs in the graph.</summary>
+    public IReadOnlyList<MenuAction> ActionsForRef(RefInfo r)
+    {
+        if (r.Kind == RefKind.DetachedHead || Graph is null) return [];
+        Graph.WorktreesByBranch.TryGetValue(r.Kind == RefKind.LocalBranch ? r.Name : "", out var wt);
+        return ActionsFor(BranchTarget.From(r, wt));
+    }
+
+    /// <summary>Double-click on a ref in the graph's fan: check the branch out, as double-clicking it in the sidebar does.</summary>
+    public void ActivateRef(RefInfo r)
+    {
+        if (r.Kind is not (RefKind.LocalBranch or RefKind.RemoteBranch) || Graph is null) return;
+        Graph.WorktreesByBranch.TryGetValue(r.Kind == RefKind.LocalBranch ? r.Name : "", out var wt);
+        var target = BranchTarget.From(r, wt);
+        if (target.Kind == RefKind.LocalBranch && _state?.CurrentBranch == target.Name) return;
+        CheckoutCommand.Execute(target);
+    }
+
     public IReadOnlyList<MenuAction> ActionsForSidebar(SidebarNode node)
     {
         if (node.IsWorktreesSection)

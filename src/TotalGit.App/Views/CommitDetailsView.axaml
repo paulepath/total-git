@@ -30,8 +30,14 @@
 
         <WrapPanel Orientation="Horizontal">
           <TextBlock Text="commit" FontSize="11" Foreground="#8A9099" VerticalAlignment="Center" Margin="0,0,6,0" />
-          <Button x:Name="CopyShaButton" Content="{Binding ShortSha}" FontFamily="Cascadia Mono, Consolas, monospace" FontSize="11"
-                  Padding="6,1" MinHeight="0" ToolTip.Tip="Copy full SHA" />
+          <Button x:Name="CopyShaButton" FontFamily="Cascadia Mono, Consolas, monospace" FontSize="11"
+                  Padding="6,1" MinHeight="0" ToolTip.Tip="Click to copy the full SHA">
+            <StackPanel Orientation="Horizontal" Spacing="5">
+              <TextBlock x:Name="ShaText" Text="{Binding ShortSha}" VerticalAlignment="Center" />
+              <TextBlock x:Name="CopiedText" Text="Copied ✓" Foreground="#4CC38A" VerticalAlignment="Center" IsVisible="False" />
+              <PathIcon Data="{StaticResource CopyIcon}" Width="10" Height="10" Foreground="#8A9099" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
           <TextBlock Text="parents" FontSize="11" Foreground="#8A9099" VerticalAlignment="Center" Margin="12,0,6,0" />
           <ItemsControl ItemsSource="{Binding Parents}">
             <ItemsControl.ItemsPanel>

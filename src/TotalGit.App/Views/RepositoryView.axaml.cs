@@ -26,6 +26,11 @@ public partial class RepositoryView : UserControl
         {
             if (_vm is not null) ShowMenu(Graph, _vm.ActionsForCommit(commit));
         };
+        Graph.RefContextRequested += r =>
+        {
+            if (_vm is not null) ShowMenu(Graph, _vm.ActionsForRef(r));
+        };
+        Graph.RefActivated += r => _vm?.ActivateRef(r);
 
         Sidebar.NodeActivated += node => _vm?.OnSidebarNodeActivated(node);
         Sidebar.NodeDoubleTapped += node =>
@@ -123,16 +128,19 @@ public partial class RepositoryView : UserControl
             IsEnabled = action.IsEnabled,
             ItemsSource = action.Children?.Select(ToMenuItem).ToList(),
             Icon = MenuIcon(action),
+            // Menus are popups outside the zoomed window content, so they follow the zoom themselves.
+            FontSize = 14 * Zoom.Level,
         };
 
     private static Control? MenuIcon(MenuAction action)
     {
+        var z = Zoom.Level;
         switch (action.Icon)
         {
             case Bitmap bitmap:
-                return new Image { Source = bitmap, Width = 16, Height = 16 };
+                return new Image { Source = bitmap, Width = 16 * z, Height = 16 * z };
             case string key when Application.Current?.FindResource(key) is Geometry geometry:
-                var icon = new PathIcon { Data = geometry, Width = 14, Height = 14 };
+                var icon = new PathIcon { Data = geometry, Width = 14 * z, Height = 14 * z };
                 // VS Code keeps its blue, as on the toolbar.
                 if (key == MenuIcons.Code) icon.Foreground = new SolidColorBrush(Color.Parse("#3FA0F0"));
                 else if (key == MenuIcons.VisualStudio) icon.Foreground = new SolidColorBrush(Color.Parse("#A77BDB"));

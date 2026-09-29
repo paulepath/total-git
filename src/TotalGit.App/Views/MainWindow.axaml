@@ -57,6 +57,10 @@
       </StackPanel>
     </Border>
 
+    <Panel>
+    <!-- Everything below the title row zooms (Ctrl + wheel, Ctrl +/-, Ctrl 0). -->
+    <LayoutTransformControl x:Name="ZoomHost">
+    <DockPanel>
     <!-- Tab strip -->
     <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,Auto,*,Auto" Background="#16191D">
       <ListBox Grid.Column="0" x:Name="TabStrip" ItemsSource="{Binding Tabs}" SelectedItem="{Binding SelectedTab}"
@@ -111,5 +115,15 @@
         </DataTemplate>
       </ItemsControl.ItemTemplate>
     </ItemsControl>
+    </DockPanel>
+    </LayoutTransformControl>
+
+    <!-- Shows the zoom level for a moment after it changes. -->
+    <Border x:Name="ZoomIndicator" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,24,24"
+            Background="#E62B2F36" BorderBrush="#4A505A" BorderThickness="1" CornerRadius="8" Padding="14,6"
+            IsVisible="False" IsHitTestVisible="False">
+      <TextBlock x:Name="ZoomText" FontSize="16" FontWeight="SemiBold" Foreground="#E6E8EB" />
+    </Border>
+    </Panel>
   </DockPanel>
 </Window>

@@ -57,6 +57,10 @@ public sealed class CommitGraphView : Control
     private static readonly IBrush PrimaryTextBrush = new SolidColorBrush(Color.Parse("#E6E8EB"));
     private static readonly IBrush MutedTextBrush = new SolidColorBrush(Color.Parse("#8A9099"));
     private static readonly IBrush HoverBrush = new SolidColorBrush(Color.FromArgb(0x18, 0xFF, 0xFF, 0xFF));
+    private static readonly IBrush FanBackgroundBrush = new SolidColorBrush(Color.Parse("#23272D"));
+    private static readonly IBrush FanShadowBrush = new SolidColorBrush(Color.FromArgb(0x70, 0, 0, 0));
+    private static readonly IBrush FanHoverBrush = new SolidColorBrush(Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF));
+    private static readonly IPen FanBorderPen = new Pen(new SolidColorBrush(Color.Parse("#4A505A")), 1);
     private static readonly IPen SeparatorPen = new Pen(new SolidColorBrush(Color.Parse("#30353C")), 1);
 
     private static readonly Geometry CheckIcon = Geometry.Parse("M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z");
@@ -83,6 +87,7 @@ public sealed class CommitGraphView : Control
     private readonly IBrush[] _bandBrushes = LanePalette.Select(c => (IBrush)new SolidColorBrush(c, 0.13)).ToArray();
     private readonly IBrush[] _strongBandBrushes = LanePalette.Select(c => (IBrush)new SolidColorBrush(c, 0.55)).ToArray();
     private readonly IBrush[] _pillBrushes = LanePalette.Select(c => (IBrush)new SolidColorBrush(c, 0.35)).ToArray();
+    private readonly IBrush[] _stackBrushes = LanePalette.Select(c => (IBrush)new SolidColorBrush(c, 0.2)).ToArray();
 
     private static readonly IPen WipPen = new Pen(new SolidColorBrush(Color.Parse("#A0A7B0")), 1.5, new DashStyle([2, 2], 0));
 
@@ -93,6 +98,10 @@ public sealed class CommitGraphView : Control
     private double _offset;
     private int _hoverRow = -1;
     private bool _tipSuppressed;
+
+    // The row whose refs are fanned out (hovering a pill that stands for several refs), and the hovered ref in it.
+    private int _fanRow = -1;
+    private int _fanHover = -1;
     private ScrollBar? _scrollBar;
     private bool _syncingScrollBar;
 
@@ -131,6 +140,12 @@ public sealed class CommitGraphView : Control
 
     /// <summary>Raised on right-click with the commit under the pointer.</summary>
     public event Action<CommitInfo, Point>? CommitContextRequested;
+
+    /// <summary>Raised on right-click on one ref in a fanned-out list of a commit's refs.</summary>
+    public event Action<RefInfo>? RefContextRequested;
+
+    /// <summary>Raised on double-click on one ref in a fanned-out list (check it out, as in the sidebar).</summary>
+    public event Action<RefInfo>? RefActivated;
 
     /// <summary>Raised when the user finishes resizing a column.</summary>
     public event Action? ColumnsChanged;
@@ -190,6 +205,7 @@ public sealed class CommitGraphView : Control
 
             RebuildIndexes();
             _hoverRow = -1;
+            _fanRow = _fanHover = -1;
             // Refreshes of the same worktree keep the scroll position; switching repos goes to the top.
             var sameView = old is not null && data is not null && old.CurrentWorktreePath == data.CurrentWorktreePath;
             if (!sameView && SelectedSha is not null && !_rowBySha.ContainsKey(SelectedSha)) SelectedSha = null;
@@ -318,6 +334,7 @@ public sealed class CommitGraphView : Control
     {
         base.OnPointerExited(e);
         _hoverRow = -1;
+        _fanRow = _fanHover = -1;
         ToolTip.SetIsOpen(this, false);
         InvalidateVisual();
     }
@@ -350,6 +367,21 @@ public sealed class CommitGraphView : Control
         // A click hides the node's tooltip (it would cover the context menu) until the pointer leaves the node.
         ToolTip.SetIsOpen(this, false);
         _tipSuppressed = true;
+
+        // In an open fan, a click belongs to the ref under the pointer, not to the row underneath.
+        if (Fan() is { } fan && fan.Panel.Contains(point.Position))
+        {
+            SelectedSha = Rows[_fanRow].Commit.Sha;
+            if (FanIndexAt(fan, point.Position) is var k and >= 0)
+            {
+                var r = fan.Items[k].Badge.Ref;
+                if (point.Properties.IsRightButtonPressed) RefContextRequested?.Invoke(r);
+                else if (e.ClickCount == 2) RefActivated?.Invoke(r);
+            }
+            e.Handled = true;
+            return;
+        }
+
         var row = RowAt(point.Position.Y);
         if (row >= 0)
         {
@@ -395,6 +427,26 @@ public sealed class CommitGraphView : Control
 
     private void UpdateHover(Point p)
     {
+        // An open fan stays open while the pointer is inside it; it covers the rows (and nodes) beneath.
+        if (Fan() is { } fan && fan.Panel.Contains(p))
+        {
+            var k = FanIndexAt(fan, p);
+            if (k != _fanHover)
+            {
+                _fanHover = k;
+                InvalidateVisual();
+            }
+            ToolTip.SetIsOpen(this, false);
+            return;
+        }
+        var fanRow = FanTriggerRow(p);
+        if (fanRow != _fanRow)
+        {
+            _fanRow = fanRow;
+            _fanHover = fanRow >= 0 ? 0 : -1;
+            InvalidateVisual();
+        }
+
         var row = RowAt(p.Y);
         if (row != _hoverRow)
         {
@@ -453,6 +505,8 @@ public sealed class CommitGraphView : Control
                 {
                     for (var i = first; i <= last; i++) DrawBadges(ctx, i);
                 }
+                // Over everything else, and free to extend past the ref column.
+                DrawFan(ctx);
             }
         }
 
@@ -648,14 +702,14 @@ public sealed class CommitGraphView : Control
     private const double KindIconSize = 14;
     private const double BadgeCircle = 22; // icon circle at the left end of a ref label
     private const double PillLeft = 4;
+    private const double StackOffset = 3; // shift of each card drawn behind a pill that stands for several refs
+    private const double ChipHeight = 16;
 
-    /// <summary>Lays out a row's first ref pill (at y = 0): its icons, trimmed name, rectangle and "+N".</summary>
-    private (List<Geometry> Icons, FormattedText Name, Rect Pill, FormattedText? More) LayoutBadges(List<RefBadge> badges)
+    /// <summary>One pill's icons, (possibly trimmed) name and total width.</summary>
+    private sealed record PillLayout(List<Geometry> Icons, FormattedText Name, double Width);
+
+    private PillLayout LayoutPill(RefBadge badge, double maxWidth)
     {
-        var badge = badges[0];
-        var more = badges.Count > 1 ? Text($"+{badges.Count - 1}", 11, MutedTextBrush, _typeface) : null;
-        var maxWidth = RefColumnWidth - 12 - (more is not null ? more.Width + 8 : 0);
-
         var icons = new List<Geometry>();
         if (badge.HasLocal) icons.Add(LaptopIcon);
         if (badge.HasRemote) icons.Add(Data?.GitHubRepo is not null ? GitHubIcon : CloudIcon);
@@ -666,60 +720,153 @@ public sealed class CommitGraphView : Control
 
         var name = Text(badge.Name, 12, Brushes.White, badge.IsCurrent ? _boldTypeface : _typeface,
             Math.Max(10, maxWidth - leading - trailing));
-        var pillWidth = Math.Max(0, Math.Min(maxWidth, leading + name.Width + trailing));
-        return (icons, name, new Rect(PillLeft, 0, pillWidth, BadgeCircle), more);
+        return new PillLayout(icons, name, Math.Max(0, Math.Min(maxWidth, leading + name.Width + trailing)));
     }
 
-    /// <summary>Where a row's pill (and its "+N") ends, so the connector can start there.</summary>
+    private static int StackCards(List<RefBadge> badges) => Math.Min(2, badges.Count - 1);
+
+    private static double ChipWidth(FormattedText count) => count.Width + 10;
+
+    /// <summary>Room taken after the pill by the stacked cards and the "+N" chip.</summary>
+    private static double StackExtra(List<RefBadge> badges, FormattedText? count) =>
+        count is null ? 0 : StackCards(badges) * StackOffset + 5 + ChipWidth(count);
+
+    /// <summary>A row's first pill, trimmed so it, its stack and its "+N" chip fit the column.</summary>
+    private (PillLayout Pill, FormattedText? Count) LayoutRowBadges(List<RefBadge> badges)
+    {
+        var count = badges.Count > 1 ? Text($"+{badges.Count - 1}", 11, Brushes.White, _boldTypeface) : null;
+        return (LayoutPill(badges[0], RefColumnWidth - 12 - StackExtra(badges, count)), count);
+    }
+
+    /// <summary>Where a row's pill (with its stack and "+N") ends, so the connector can start there.</summary>
     private double BadgeRight(List<RefBadge> badges)
     {
-        var (_, _, pill, more) = LayoutBadges(badges);
-        return pill.Right + (more is not null ? 4 + more.Width : 0) + 4;
+        var (pill, count) = LayoutRowBadges(badges);
+        return PillLeft + pill.Width + StackExtra(badges, count) + 4;
     }
 
     private void DrawBadges(DrawingContext ctx, int i)
     {
         var row = Rows[i];
         if (!_badgesBySha.TryGetValue(row.Commit.Sha, out var badges)) return;
+        var (pill, count) = LayoutRowBadges(badges);
+        var cy = RowTop(i) + RowHeight / 2;
+        var ci = row.ColorIndex;
 
-        const double pillHeight = PillHeight;
+        if (count is not null)
+        {
+            // Cards peeking out behind the pill: this commit has more refs than the one shown.
+            for (var k = StackCards(badges); k >= 1; k--)
+            {
+                var card = new Rect(PillLeft + BadgeCircle / 2 + k * StackOffset, cy - PillHeight / 2 - k * StackOffset,
+                    Math.Max(0, pill.Width - BadgeCircle / 2), PillHeight);
+                ctx.DrawRectangle(_stackBrushes[ci], _connectorPens[ci], new RoundedRect(card, PillHeight / 2));
+            }
+        }
+
+        DrawPill(ctx, badges[0], pill, PillLeft, cy, ci);
+
+        if (count is not null)
+        {
+            var chip = new Rect(PillLeft + pill.Width + StackCards(badges) * StackOffset + 5, cy - ChipHeight / 2, ChipWidth(count), ChipHeight);
+            ctx.DrawRectangle(_laneBrushes[ci], null, new RoundedRect(chip, ChipHeight / 2));
+            ctx.DrawText(count, new Point(chip.X + 5, cy - count.Height / 2));
+        }
+    }
+
+    /// <summary>Draws one ref pill with its left edge at <paramref name="left"/>, centred on <paramref name="cy"/>.</summary>
+    private void DrawPill(DrawingContext ctx, RefBadge badge, PillLayout layout, double left, double cy, int colorIndex)
+    {
         const double iconSize = PillIconSize;
-        const double gap = PillGap;
-        var badge = badges[0];
-        var top = RowTop(i) + (RowHeight - pillHeight) / 2;
-        var (icons, name, layout, moreText) = LayoutBadges(badges);
-        var pill = layout.WithY(RowTop(i) + (RowHeight - BadgeCircle) / 2);
-        var laneBrush = _laneBrushes[row.ColorIndex];
+        var top = cy - PillHeight / 2;
 
         // The label box starts under the circle (so its left edge is hidden and square) and has a rounded right end.
-        var box = new Rect(pill.X + BadgeCircle / 2, top, Math.Max(0, pill.Width - BadgeCircle / 2), pillHeight);
-        ctx.DrawRectangle(badge.IsCurrent ? laneBrush : _pillBrushes[row.ColorIndex], null,
-            new RoundedRect(box, new CornerRadius(0, pillHeight / 2, pillHeight / 2, 0)));
+        var box = new Rect(left + BadgeCircle / 2, top, Math.Max(0, layout.Width - BadgeCircle / 2), PillHeight);
+        ctx.DrawRectangle(badge.IsCurrent ? _laneBrushes[colorIndex] : _pillBrushes[colorIndex], null,
+            new RoundedRect(box, new CornerRadius(0, PillHeight / 2, PillHeight / 2, 0)));
 
         // Black circle with a lane-coloured ring holding the branch-kind icon.
-        var center = new Point(pill.X + BadgeCircle / 2, top + pillHeight / 2);
-        ctx.DrawEllipse(Brushes.Black, _lanePens[row.ColorIndex], center, BadgeCircle / 2 - 1, BadgeCircle / 2 - 1);
+        var center = new Point(left + BadgeCircle / 2, cy);
+        ctx.DrawEllipse(Brushes.Black, _lanePens[colorIndex], center, BadgeCircle / 2 - 1, BadgeCircle / 2 - 1);
         if (badge.KindIcon is { } kindIcon)
             ctx.DrawImage(kindIcon, new Rect(center.X - KindIconSize / 2, center.Y - KindIconSize / 2, KindIconSize, KindIconSize));
         else
             DrawIcon(ctx, badge.IsTag ? TagIcon : BranchGlyph, center.X - 6, center.Y - 6, 12);
 
-        var x = pill.X + BadgeCircle + 5;
+        var x = left + BadgeCircle + 5;
         if (badge.IsCurrent)
         {
-            DrawIcon(ctx, CheckIcon, x, top + (pillHeight - iconSize) / 2, iconSize);
-            x += iconSize + gap;
+            DrawIcon(ctx, CheckIcon, x, cy - iconSize / 2, iconSize);
+            x += iconSize + PillGap;
         }
-        ctx.DrawText(name, new Point(x, top + (pillHeight - name.Height) / 2));
-        x += name.Width + gap;
-        foreach (var icon in icons)
+        ctx.DrawText(layout.Name, new Point(x, cy - layout.Name.Height / 2));
+        x += layout.Name.Width + PillGap;
+        foreach (var icon in layout.Icons)
         {
-            DrawIcon(ctx, icon, x, top + (pillHeight - iconSize) / 2, iconSize);
-            x += iconSize + gap;
+            DrawIcon(ctx, icon, x, cy - iconSize / 2, iconSize);
+            x += iconSize + PillGap;
         }
+    }
 
-        if (moreText is not null)
-            ctx.DrawText(moreText, new Point(pill.Right + 4, top + (pillHeight - moreText.Height) / 2));
+    // ---------------------------------------------------------------- ref fan-out
+
+    /// <summary>The open fan: its panel and each ref's pill, one per line.</summary>
+    private sealed record FanLayout(Rect Panel, List<(RefBadge Badge, PillLayout Pill, double CenterY)> Items);
+
+    /// <summary>
+    /// Layout of the fan for <see cref="_fanRow"/>: every ref on the commit, untrimmed, one row apart, starting at
+    /// the row itself and going down (or up, when there's no room below). Drawn over the rows it covers.
+    /// </summary>
+    private FanLayout? Fan()
+    {
+        if (_fanRow < 0 || _fanRow >= Rows.Count
+            || !_badgesBySha.TryGetValue(Rows[_fanRow].Commit.Sha, out var badges) || badges.Count < 2)
+            return null;
+
+        var maxWidth = Math.Max(120, Bounds.Width - PillLeft - 24);
+        var cy = RowTop(_fanRow) + RowHeight / 2;
+        var down = cy + (badges.Count - 1) * RowHeight + RowHeight / 2 <= HeaderHeight + BodyHeight;
+        var items = badges
+            .Select((b, k) => (b, LayoutPill(b, maxWidth), down ? cy + k * RowHeight : cy - k * RowHeight))
+            .ToList();
+
+        var top = items.Min(it => it.Item3) - RowHeight / 2;
+        var bottom = items.Max(it => it.Item3) + RowHeight / 2;
+        // At least as wide as the row's pill with its stack and "+N", so none of it peeks out from under the panel.
+        var width = Math.Max(PillLeft + items.Max(it => it.Item2.Width) + 8, Math.Min(BadgeRight(badges), RefColumnWidth) + 2);
+        return new FanLayout(new Rect(0, top, width, bottom - top), items);
+    }
+
+    /// <summary>The fan item under <paramref name="p"/>, or -1.</summary>
+    private static int FanIndexAt(FanLayout fan, Point p)
+    {
+        if (!fan.Panel.Contains(p)) return -1;
+        return fan.Items.FindIndex(it => Math.Abs(p.Y - it.CenterY) <= RowHeight / 2);
+    }
+
+    /// <summary>The row whose pill (or its stack and "+N") is under <paramref name="p"/>, when it has several refs.</summary>
+    private int FanTriggerRow(Point p)
+    {
+        var row = RowAt(p.Y);
+        if (row < 0 || !_badgesBySha.TryGetValue(Rows[row].Commit.Sha, out var badges) || badges.Count < 2) return -1;
+        return p.X >= 0 && p.X <= Math.Min(BadgeRight(badges), RefColumnWidth) ? row : -1;
+    }
+
+    private void DrawFan(DrawingContext ctx)
+    {
+        if (Fan() is not { } fan) return;
+        var ci = Rows[_fanRow].ColorIndex;
+
+        var panel = new RoundedRect(fan.Panel, 8);
+        ctx.DrawRectangle(FanShadowBrush, null, new RoundedRect(fan.Panel.Translate(new Vector(2, 3)), 8));
+        ctx.DrawRectangle(FanBackgroundBrush, FanBorderPen, panel);
+        for (var k = 0; k < fan.Items.Count; k++)
+        {
+            var (badge, pill, cy) = fan.Items[k];
+            if (k == _fanHover)
+                ctx.DrawRectangle(FanHoverBrush, null, new RoundedRect(new Rect(2, cy - RowHeight / 2 + 2, fan.Panel.Width - 4, RowHeight - 4), 6));
+            DrawPill(ctx, badge, pill, PillLeft, cy, ci);
+        }
     }
 
     private static void DrawIcon(DrawingContext ctx, Geometry icon, double x, double y, double size, IBrush? brush = null)
@@ -747,10 +894,13 @@ public sealed class CommitGraphView : Control
         /// <summary>Icon replacing a feature/, bug/ or hot-fix/ prefix; Name is then shown without it.</summary>
         public Bitmap? KindIcon { get; init; }
 
-        private static RefBadge Branch(string fullName, bool isCurrent, bool hasLocal, bool hasRemote, bool hasWorktree = false)
+        /// <summary>The ref this pill stands for (the local branch when it also has a remote one).</summary>
+        public required RefInfo Ref { get; init; }
+
+        private static RefBadge Branch(RefInfo r, string fullName, bool isCurrent, bool hasLocal, bool hasRemote, bool hasWorktree = false)
         {
             var (kind, shortName) = BranchCategory.Classify(fullName);
-            return new RefBadge(shortName, isCurrent, hasLocal, hasRemote, false, hasWorktree) { KindIcon = BranchIcons.For(kind) };
+            return new RefBadge(shortName, isCurrent, hasLocal, hasRemote, false, hasWorktree) { KindIcon = BranchIcons.For(kind), Ref = r };
         }
 
         public static Dictionary<string, List<RefBadge>> Build(GraphData data)
@@ -769,10 +919,10 @@ public sealed class CommitGraphView : Control
                     // Worktree icon: the branch is checked out in a worktree other than the one being viewed.
                     var inOtherWorktree = data.WorktreesByBranch.TryGetValue(local.Name, out var wt)
                         && !string.Equals(wt.Path, data.CurrentWorktreePath, StringComparison.OrdinalIgnoreCase);
-                    badges.Add(Branch(local.Name, local.IsCurrent, true, match is not null, inOtherWorktree));
+                    badges.Add(Branch(local, local.Name, local.IsCurrent, true, match is not null, inOtherWorktree));
                 }
-                badges.AddRange(remotes.Select(r => Branch(ShortRemoteName(r.Name), false, false, true)));
-                badges.AddRange(group.Where(r => r.Kind == RefKind.Tag).Select(r => new RefBadge(r.Name, false, false, false, true)));
+                badges.AddRange(remotes.Select(r => Branch(r, ShortRemoteName(r.Name), false, false, true)));
+                badges.AddRange(group.Where(r => r.Kind == RefKind.Tag).Select(r => new RefBadge(r.Name, false, false, false, true) { Ref = r }));
 
                 result[group.Key] = badges
                     .OrderByDescending(b => b.IsCurrent)

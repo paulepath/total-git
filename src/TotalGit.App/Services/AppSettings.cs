@@ -35,6 +35,9 @@ public sealed class AppSettings
     /// <summary>The solution last opened in Visual Studio, by worktree folder (when it has several).</summary>
     public Dictionary<string, string> LastSolutions { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>Whole-UI zoom (1 = 100%), changed with Ctrl + wheel or Ctrl +/-.</summary>
+    public double Zoom { get; set; } = 1.0;
+
     public double SidebarWidth { get; set; } = 240;
     public double DetailsWidth { get; set; } = 380;
 

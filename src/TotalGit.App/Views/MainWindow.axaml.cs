@@ -3,8 +3,10 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
+using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.VisualTree;
+using TotalGit.App.Services;
 using TotalGit.App.ViewModels;
 
 namespace TotalGit.App.Views;
@@ -42,6 +44,40 @@ public partial class MainWindow : Window, IDialogService
                 tab.CloseDiffCommand.Execute(null);
                 e.Handled = true;
             }
+        };
+
+        // Zoom: Ctrl + wheel and Ctrl +/-/0. Tunnel handlers run before the graph, diff and text boxes see the input.
+        AddHandler(KeyDownEvent, (_, e) =>
+        {
+            if (!e.KeyModifiers.HasFlag(KeyModifiers.Control) || e.KeyModifiers.HasFlag(KeyModifiers.Alt)) return;
+            switch (e.Key)
+            {
+                case Key.OemPlus or Key.Add:
+                    Zoom.ZoomIn();
+                    break;
+                case Key.OemMinus or Key.Subtract:
+                    Zoom.ZoomOut();
+                    break;
+                case Key.D0 or Key.NumPad0:
+                    Zoom.Reset();
+                    break;
+                default:
+                    return;
+            }
+            e.Handled = true;
+        }, RoutingStrategies.Tunnel);
+        AddHandler(PointerWheelChangedEvent, (_, e) =>
+        {
+            if (!e.KeyModifiers.HasFlag(KeyModifiers.Control) || e.Delta.Y == 0) return;
+            if (e.Delta.Y > 0) Zoom.ZoomIn();
+            else Zoom.ZoomOut();
+            e.Handled = true;
+        }, RoutingStrategies.Tunnel);
+        Zoom.Changed += () => ApplyZoom(showIndicator: true);
+        _zoomIndicatorTimer.Tick += (_, _) =>
+        {
+            _zoomIndicatorTimer.Stop();
+            ZoomIndicator.IsVisible = false;
         };
 
         // Other worktrees aren't watched: check them when coming back to the app (e.g. after editing in VS Code).
@@ -84,6 +120,8 @@ public partial class MainWindow : Window, IDialogService
         if (_shell is null) return;
 
         _shell.Dialogs = this;
+        Zoom.Initialize(_shell.Settings);
+        ApplyZoom(showIndicator: false);
         _shell.PropertyChanging += OnShellPropertyChanging;
         _shell.PropertyChanged += OnShellPropertyChanged;
     }
@@ -99,6 +137,38 @@ public partial class MainWindow : Window, IDialogService
     {
         if (e.PropertyName == nameof(ShellViewModel.SelectedTab) && _shell is not null)
             ActiveView()?.ApplyLayout(_shell.Settings);
+    }
+
+    private readonly Avalonia.Threading.DispatcherTimer _zoomIndicatorTimer = new() { Interval = TimeSpan.FromSeconds(1.2) };
+
+    /// <summary>Scales the window content and tooltips to <see cref="Zoom.Level"/>.</summary>
+    private void ApplyZoom(bool showIndicator)
+    {
+        var z = Zoom.Level;
+        ZoomHost.LayoutTransform = Math.Abs(z - 1) < 0.001 ? null : new ScaleTransform(z, z);
+        // Tooltips are popups outside the scaled content; only they use this theme resource.
+        if (Application.Current is { } app) app.Resources["ToolTipContentThemeFontSize"] = 12 * z;
+
+        if (!showIndicator) return;
+        ZoomText.Text = $"{Math.Round(z * 100)}%";
+        ZoomIndicator.IsVisible = true;
+        _zoomIndicatorTimer.Stop();
+        _zoomIndicatorTimer.Start();
+    }
+
+    /// <summary>Dialogs are separate windows: scale their content (and fixed sizes) to the current zoom.</summary>
+    private static T Zoomed<T>(T dialog) where T : Window
+    {
+        var z = Zoom.Level;
+        if (Math.Abs(z - 1) < 0.001 || dialog.Content is not Control content) return dialog;
+        // Detach first: a control can only have one parent.
+        dialog.Content = null;
+        dialog.Content = new LayoutTransformControl { LayoutTransform = new ScaleTransform(z, z), Child = content };
+        if (!double.IsNaN(dialog.Width)) dialog.Width *= z;
+        if (!double.IsNaN(dialog.Height)) dialog.Height *= z;
+        dialog.MinWidth *= z;
+        dialog.MinHeight *= z;
+        return dialog;
     }
 
     private RepositoryView? ActiveView() => _shell?.SelectedTab is { } tab
@@ -128,21 +198,21 @@ public partial class MainWindow : Window, IDialogService
     }
 
     public Task<bool> ConfirmAsync(string title, string message, IReadOnlyList<string>? details = null, string confirmText = "OK") =>
-        new ConfirmDialog(title, message, details, confirmText).ShowDialog<bool>(this);
+        Zoomed(new ConfirmDialog(title, message, details, confirmText)).ShowDialog<bool>(this);
 
     public Task<bool> ShowCreateWorktreeAsync(CreateWorktreeViewModel viewModel) =>
-        new CreateWorktreeDialog { DataContext = viewModel }.ShowDialog<bool>(this);
+        Zoomed(new CreateWorktreeDialog { DataContext = viewModel }).ShowDialog<bool>(this);
 
-    public Task<bool> ShowFormAsync(FormSpec spec) => new FormDialog(spec).ShowDialog<bool>(this);
+    public Task<bool> ShowFormAsync(FormSpec spec) => Zoomed(new FormDialog(spec)).ShowDialog<bool>(this);
 
     public Task<bool> ShowInteractiveRebaseAsync(InteractiveRebaseViewModel viewModel) =>
-        new InteractiveRebaseDialog { DataContext = viewModel }.ShowDialog<bool>(this);
+        Zoomed(new InteractiveRebaseDialog { DataContext = viewModel }).ShowDialog<bool>(this);
 
     public Task<bool> ShowAddIgnoreAsync(AddIgnoreViewModel viewModel) =>
-        new AddIgnoreDialog { DataContext = viewModel }.ShowDialog<bool>(this);
+        Zoomed(new AddIgnoreDialog { DataContext = viewModel }).ShowDialog<bool>(this);
 
     public Task<bool> ShowBranchCleanupAsync(BranchCleanupViewModel viewModel) =>
-        new BranchCleanupDialog { DataContext = viewModel }.ShowDialog<bool>(this);
+        Zoomed(new BranchCleanupDialog { DataContext = viewModel }).ShowDialog<bool>(this);
 
     public async Task CopyToClipboardAsync(string text)
     {
