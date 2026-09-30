@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using TotalGit.App.Services;
 using TotalGit.Core.Avatars;
+using TotalGit.Core.Hosting;
 using TotalGit.Core.Worktrees;
 
 namespace TotalGit.App.ViewModels;
@@ -15,14 +16,17 @@ public partial class ShellViewModel : ObservableObject
     private readonly AppSettings _settings;
     private readonly AvatarCache _avatars;
     private readonly UpdateService? _updates;
+    private readonly IPullRequestProviderFactory? _pullRequests;
     private DispatcherTimer? _updateTimer;
     private bool _restoring;
 
-    public ShellViewModel(AvatarService avatars, AppSettings settings, UpdateService? updates = null)
+    public ShellViewModel(AvatarService avatars, AppSettings settings, UpdateService? updates = null,
+        IPullRequestProviderFactory? pullRequests = null)
     {
         _settings = settings;
         _avatars = new AvatarCache(avatars);
         _updates = updates;
+        _pullRequests = pullRequests;
         AppVersion = updates?.CurrentVersion ?? "dev";
         StartUpdateChecks();
     }
@@ -74,8 +78,8 @@ public partial class ShellViewModel : ObservableObject
         _restoring = true;
         var paths = _settings.OpenTabs ?? (_settings.LastRepository is { } last ? [last] : []);
         foreach (var path in paths.Where(Directory.Exists).Distinct(StringComparer.OrdinalIgnoreCase))
-            AddTab(new RepositoryViewModel(_avatars, _settings, path));
-        if (Tabs.Count == 0) AddTab(new RepositoryViewModel(_avatars, _settings));
+            AddTab(NewTabViewModel(path));
+        if (Tabs.Count == 0) AddTab(NewTabViewModel());
 
         var index = Math.Clamp(_settings.SelectedTab, 0, Tabs.Count - 1);
         _restoring = false;
@@ -94,7 +98,7 @@ public partial class ShellViewModel : ObservableObject
             return;
         }
 
-        var tab = SelectedTab is { IsEmptyTab: true } empty ? empty : AddTab(new RepositoryViewModel(_avatars, _settings));
+        var tab = SelectedTab is { IsEmptyTab: true } empty ? empty : AddTab(NewTabViewModel());
         SelectedTab = tab;
         await tab.LoadAsync(path);
     }
@@ -107,8 +111,11 @@ public partial class ShellViewModel : ObservableObject
         if (path is not null) await OpenPathAsync(path);
     }
 
+    private RepositoryViewModel NewTabViewModel(string? path = null) =>
+        new(_avatars, _settings, path) { PullRequestProviders = _pullRequests };
+
     [RelayCommand]
-    private void NewTab() => SelectedTab = AddTab(new RepositoryViewModel(_avatars, _settings));
+    private void NewTab() => SelectedTab = AddTab(NewTabViewModel());
 
     [RelayCommand]
     private void CloseTab(RepositoryViewModel? tab)
@@ -121,7 +128,7 @@ public partial class ShellViewModel : ObservableObject
         if (Tabs.Count == 1)
         {
             // Keep one tab: closing the last one leaves an empty "New tab".
-            AddTab(new RepositoryViewModel(_avatars, _settings));
+            AddTab(NewTabViewModel());
         }
 
         var wasSelected = tab == SelectedTab;

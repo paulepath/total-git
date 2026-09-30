@@ -1,0 +1,105 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:TotalGit.App.ViewModels"
+             x:Class="TotalGit.App.Views.ReviewThreadView"
+             x:DataType="x:Object"
+             Padding="0,3,12,3">
+  <UserControl.Styles>
+    <Style Selector="Border.card">
+      <Setter Property="Background" Value="#262A31" />
+      <Setter Property="BorderBrush" Value="#3A404A" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="MaxWidth" Value="820" />
+      <Setter Property="HorizontalAlignment" Value="Left" />
+    </Style>
+    <Style Selector="Button.small">
+      <Setter Property="Padding" Value="10,3" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="FontSize" Value="12" />
+    </Style>
+    <Style Selector="Button.plain">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Padding" Value="4,2" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="#A9AFB8" />
+    </Style>
+    <Style Selector="TextBox.reply">
+      <Setter Property="AcceptsReturn" Value="True" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="MinHeight" Value="52" />
+      <Setter Property="FontSize" Value="12" />
+    </Style>
+  </UserControl.Styles>
+
+  <UserControl.DataTemplates>
+    <!-- An existing conversation on this line. -->
+    <DataTemplate DataType="vm:ReviewThreadViewModel">
+      <Border Classes="card">
+        <StackPanel>
+          <Grid ColumnDefinitions="*,Auto" Background="Transparent" Margin="10,6,6,6">
+            <Button Classes="plain" Command="{Binding ToggleExpandedCommand}" HorizontalAlignment="Left" HorizontalContentAlignment="Left">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <PathIcon Data="{StaticResource ChevronIcon}" Width="10" Height="10" RenderTransformOrigin="50%,50%"
+                          RenderTransform="{Binding IsExpanded, Converter={x:Static vm:Converters.ExpandedRotation}}" />
+                <TextBlock Text="{Binding Summary}" TextTrimming="CharacterEllipsis" FontSize="11" Foreground="#A9AFB8" />
+              </StackPanel>
+            </Button>
+            <Button Grid.Column="1" Classes="plain" Content="{Binding ResolveText}" Command="{Binding ToggleResolvedCommand}"
+                    IsVisible="{Binding CanResolve}" />
+          </Grid>
+          <StackPanel IsVisible="{Binding IsExpanded}" Margin="10,0,10,10" Spacing="10">
+            <ItemsControl ItemsSource="{Binding Comments}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="vm:CommentViewModel">
+                  <StackPanel Spacing="2" Margin="0,0,0,8">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <TextBlock Text="{Binding Author}" FontSize="12" FontWeight="SemiBold" Foreground="#E6E8EB" />
+                      <TextBlock Text="{Binding When}" FontSize="11" Foreground="#8A9099" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <SelectableTextBlock Text="{Binding Body}" FontSize="12" Foreground="#D5D8DD" TextWrapping="Wrap" />
+                  </StackPanel>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <StackPanel Spacing="6" IsVisible="{Binding CanReply}">
+              <TextBox Classes="reply" Text="{Binding ReplyText}" PlaceholderText="Reply…" />
+              <Button Classes="small accent" Content="Reply" Command="{Binding ReplyCommand}" HorizontalAlignment="Left" />
+            </StackPanel>
+          </StackPanel>
+        </StackPanel>
+      </Border>
+    </DataTemplate>
+
+    <!-- A new comment being written. -->
+    <DataTemplate DataType="vm:CommentComposerViewModel">
+      <Border Classes="card" BorderBrush="#3B82F6">
+        <StackPanel Margin="10" Spacing="8">
+          <TextBlock Text="{Binding Title}" FontSize="11" Foreground="#A9AFB8" />
+          <TextBox Classes="reply" x:Name="ComposerBox" Text="{Binding Text}" PlaceholderText="Leave a comment" MinHeight="64" />
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <Button Classes="small accent" Content="{Binding AddToReviewText}" Command="{Binding AddToReviewCommand}" />
+            <Button Classes="small" Content="Add single comment" Command="{Binding PostNowCommand}" />
+            <Button Classes="small" Content="Cancel" Command="{Binding CancelCommand}" />
+          </StackPanel>
+        </StackPanel>
+      </Border>
+    </DataTemplate>
+
+    <!-- A comment waiting to be sent with the review. -->
+    <DataTemplate DataType="vm:PendingCommentViewModel">
+      <Border Classes="card" BorderBrush="#E8B339">
+        <Grid ColumnDefinitions="*,Auto" Margin="10,8">
+          <StackPanel Spacing="3">
+            <TextBlock Text="Pending: sent when you submit your review" FontSize="11" Foreground="#E8B339" />
+            <SelectableTextBlock Text="{Binding Body}" FontSize="12" Foreground="#D5D8DD" TextWrapping="Wrap" />
+          </StackPanel>
+          <Button Grid.Column="1" Classes="plain" Content="Remove" Command="{Binding RemoveCommand}" VerticalAlignment="Top" />
+        </Grid>
+      </Border>
+    </DataTemplate>
+  </UserControl.DataTemplates>
+
+  <ContentControl Content="{Binding}" />
+</UserControl>

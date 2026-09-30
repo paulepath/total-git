@@ -1,5 +1,8 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Interactivity;
+using Avalonia.Threading;
+using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.Input;
@@ -17,6 +20,7 @@ public partial class RepositoryView : UserControl
     public RepositoryView()
     {
         InitializeComponent();
+        SetUpSidebarFolding();
         Graph.AttachScrollBar(GraphScrollBar);
         DiffView.AttachScrollBar(DiffScrollBar);
 
@@ -31,23 +35,42 @@ public partial class RepositoryView : UserControl
             if (_vm is not null) ShowMenu(Graph, _vm.ActionsForRef(r));
         };
         Graph.RefActivated += r => _vm?.ActivateRef(r);
+        Graph.RangeSelectRequested += (anchor, other) => _vm?.SelectRange(anchor, other);
+        Graph.RangeDropped += target => _vm?.RebaseRangeCommand.Execute(target);
 
         Sidebar.NodeActivated += node => _vm?.OnSidebarNodeActivated(node);
+        BannerBar.PointerEntered += (_, _) => _vm?.PauseBannerTimer(true);
+        BannerBar.PointerExited += (_, _) => _vm?.PauseBannerTimer(false);
+        Sidebar.BehindDoubleTapped += node =>
+        {
+            if (node.Target is { Kind: RefKind.LocalBranch } t) _vm?.UpdateBranchFromRemoteCommand.Execute(t);
+        };
+        Sidebar.GoneDoubleTapped += _ => _vm?.CleanUpBranchesCommand.Execute(null);
         Sidebar.NodeDoubleTapped += node =>
         {
             if (_vm is null) return;
             if (node.IsWorktree && node.Worktree is { } wt) _vm.OpenWorktreeCommand.Execute(wt);
             else if (node.Target is { Kind: RefKind.LocalBranch or RefKind.RemoteBranch } t) _vm.CheckoutCommand.Execute(t);
         };
-        Sidebar.NodeContextRequested += (node, control) =>
+        // Anchored to the sidebar, not the row: right-clicking also selects the row, which can refresh the sidebar
+        // (opening a pull request fetches its refs) and replace the row, and a menu closes when its row goes.
+        Sidebar.NodeContextRequested += (node, _) =>
         {
-            if (_vm is not null) ShowMenu(control, _vm.ActionsForSidebar(node));
+            if (_vm is null || ShowMenu(Sidebar, _vm.ActionsForSidebar(node)) is not { } menu) return;
+            _sidebarMenuOpen = true;
+            menu.Closed += (_, _) => _sidebarMenuOpen = false;
         };
         Sidebar.AddWorktreeRequested += () => _vm?.CreateWorktreeCommand.Execute(null);
+        Sidebar.RefreshPullRequestsRequested += () => _vm?.RefreshPullRequestListCommand.Execute(null);
+        PullRequestPane.FileContextRequested += (file, control) =>
+        {
+            if (_vm is not null) ShowMenu(control, _vm.ActionsForFile(file));
+        };
         StagingPane.NodeContextRequested += (node, control) =>
         {
             if (_vm is not null) ShowMenu(control, _vm.ActionsForStagingNode(node));
         };
+        DiffView.AddCommentRequested += (_, lineIndex) => _vm?.StartComment(lineIndex);
         DiffView.LineContextRequested += (diff, line, column) =>
         {
             if (_vm is null) return;
@@ -69,23 +92,49 @@ public partial class RepositoryView : UserControl
         };
     }
 
-    public void FocusFilter() => Sidebar.FocusFilter();
+    public void FocusFilter()
+    {
+        if (!_sidebarPinned) ExpandSidebar();
+        Sidebar.FocusFilter();
+    }
 
     protected override void OnDataContextChanged(EventArgs e)
     {
         base.OnDataContextChanged(e);
-        if (_vm is not null) _vm.ScrollToShaRequested -= Graph.ScrollToSha;
+        if (_vm is not null)
+        {
+            _vm.ScrollToShaRequested -= Graph.ScrollToSha;
+            _vm.PropertyChanged -= OnViewModelPropertyChanged;
+        }
         _vm = DataContext as RepositoryViewModel;
         if (_vm is null) return;
 
         _vm.ScrollToShaRequested += Graph.ScrollToSha;
+        _vm.PropertyChanged += OnViewModelPropertyChanged;
         ApplyLayout(_vm.Settings);
+        ShowDiffThreads();
+    }
+
+    private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(RepositoryViewModel.DiffThreads) or nameof(RepositoryViewModel.CanCommentOnDiff)) ShowDiffThreads();
+    }
+
+    /// <summary>Review threads and comment boxes go between the diff's lines as real controls (new ones each time).</summary>
+    private void ShowDiffThreads()
+    {
+        if (_vm is null) return;
+        DiffView.CanAddComments = _vm.CanCommentOnDiff;
+        DiffView.Annotations = _vm.DiffThreads
+            .Select(t => new DiffAnnotation(t.LineIndex, new ReviewThreadView { DataContext = t.ViewModel }))
+            .ToList();
     }
 
     /// <summary>Pane and column widths are shared by all tabs; apply the saved ones when this tab is shown.</summary>
     public void ApplyLayout(AppSettings s)
     {
-        MainGrid.ColumnDefinitions[0].Width = new GridLength(s.SidebarWidth);
+        _sidebarWidth = s.SidebarWidth;
+        ApplySidebarPin(s.SidebarPinned);
         MainGrid.ColumnDefinitions[4].Width = new GridLength(s.DetailsWidth);
         Graph.Columns = new GraphColumns(s.RefColumnWidth, s.GraphColumnWidth, s.AuthorColumnWidth, s.DateColumnWidth);
     }
@@ -93,7 +142,9 @@ public partial class RepositoryView : UserControl
     /// <summary>Stores this tab's pane and column widths (when hiding it or closing the window).</summary>
     public void SaveLayout(AppSettings s)
     {
-        if (MainGrid.ColumnDefinitions[0].ActualWidth > 0) s.SidebarWidth = MainGrid.ColumnDefinitions[0].ActualWidth;
+        // Folded, the column is only the rail: keep the width the sidebar opens to.
+        if (_sidebarPinned && MainGrid.ColumnDefinitions[0].ActualWidth > 0) s.SidebarWidth = MainGrid.ColumnDefinitions[0].ActualWidth;
+        else if (!_sidebarPinned) s.SidebarWidth = _sidebarWidth;
         if (MainGrid.ColumnDefinitions[4].ActualWidth > 0) s.DetailsWidth = MainGrid.ColumnDefinitions[4].ActualWidth;
         SaveGraphColumns(null, s);
     }
@@ -107,15 +158,114 @@ public partial class RepositoryView : UserControl
         save?.Save();
     }
 
-    private static void ShowMenu(Control target, IReadOnlyList<MenuAction> actions)
+    private static ContextMenu? ShowMenu(Control target, IReadOnlyList<MenuAction> actions)
     {
-        if (actions.Count == 0) return;
+        if (actions.Count == 0) return null;
         var menu = new ContextMenu
         {
             ItemsSource = actions.Select(ToMenuItem).ToList(),
             Placement = PlacementMode.Pointer,
         };
         menu.Open(target);
+        return menu;
+    }
+
+    // ------------------------------------------------------------------ folding sidebar
+
+    private const double RailWidth = 40;
+    private bool _sidebarPinned = true;
+    private bool _sidebarExpanded;
+    private double _sidebarWidth = 240;
+    private bool _sidebarMenuOpen;
+    private bool _pointerInSidebar;
+    private readonly DispatcherTimer _expandTimer = new() { Interval = TimeSpan.FromMilliseconds(150) };
+    private readonly DispatcherTimer _collapseTimer = new() { Interval = TimeSpan.FromMilliseconds(400) };
+
+    private void SetUpSidebarFolding()
+    {
+        Sidebar.PinToggled += pinned =>
+        {
+            if (pinned == _sidebarPinned || _vm is null) return;
+            if (pinned) _sidebarWidth = Math.Max(_sidebarWidth, 160);
+            ApplySidebarPin(pinned);
+            _vm.Settings.SidebarPinned = pinned;
+            _vm.Settings.SidebarWidth = _sidebarWidth;
+            _vm.Settings.Save();
+        };
+        SidebarRail.PointerEntered += (_, _) => _expandTimer.Start();
+        SidebarRail.PointerExited += (_, _) => _expandTimer.Stop();
+        SidebarRail.PointerPressed += (_, _) => ExpandSidebar();
+        _expandTimer.Tick += (_, _) =>
+        {
+            _expandTimer.Stop();
+            ExpandSidebar();
+        };
+        // Where the pointer is, not enter/leave events: a tooltip popping up under the pointer "leaves" the sidebar
+        // without the pointer moving. Tunnel with handled events too, so every move in the tab is seen.
+        AddHandler(PointerMovedEvent, (_, e) =>
+        {
+            if (_sidebarPinned || !_sidebarExpanded) return;
+            _pointerInSidebar = IsInSidebar(e.GetPosition(Sidebar));
+            if (_pointerInSidebar) _collapseTimer.Stop();
+            else if (!_collapseTimer.IsEnabled) _collapseTimer.Start();
+        }, RoutingStrategies.Tunnel, handledEventsToo: true);
+        Sidebar.PointerExited += (_, e) =>
+        {
+            // Still inside the sidebar's area: something (a tooltip) opened over it.
+            if (IsInSidebar(e.GetPosition(Sidebar))) return;
+            _pointerInSidebar = false;
+            if (!_sidebarPinned && _sidebarExpanded) _collapseTimer.Start();
+        };
+        // Keeps checking while something holds the sidebar open (a menu from it, typing in its filter).
+        _collapseTimer.Tick += (_, _) =>
+        {
+            if (_sidebarPinned || !_sidebarExpanded || _pointerInSidebar)
+            {
+                _collapseTimer.Stop();
+                return;
+            }
+            if (_sidebarMenuOpen || Sidebar.IsFilterFocused) return;
+            _collapseTimer.Stop();
+            CollapseSidebar();
+        };
+    }
+
+    /// <summary>Pinned: the sidebar is a resizable column. Unpinned: a rail, with the sidebar opening over the graph.</summary>
+    private void ApplySidebarPin(bool pinned)
+    {
+        _sidebarPinned = pinned;
+        Sidebar.IsPinned = pinned;
+        _expandTimer.Stop();
+        _collapseTimer.Stop();
+        _sidebarExpanded = false;
+        SidebarRail.IsVisible = !pinned;
+        SidebarSplitter.IsVisible = pinned;
+        MainGrid.ColumnDefinitions[1].Width = new GridLength(pinned ? 4 : 0);
+        MainGrid.ColumnDefinitions[0].Width = new GridLength(pinned ? _sidebarWidth : RailWidth);
+        Grid.SetColumnSpan(Sidebar, pinned ? 1 : 3);
+        Sidebar.HorizontalAlignment = pinned ? HorizontalAlignment.Stretch : HorizontalAlignment.Left;
+        Sidebar.Width = pinned ? double.NaN : _sidebarWidth;
+        Sidebar.Effect = pinned ? null : new DropShadowEffect { BlurRadius = 18, OffsetX = 4, OffsetY = 0, Opacity = 0.55, Color = Colors.Black };
+        Sidebar.IsVisible = pinned;
+    }
+
+    private void ExpandSidebar()
+    {
+        if (_sidebarPinned || _sidebarExpanded) return;
+        _sidebarExpanded = true;
+        Sidebar.IsVisible = true;
+        // Opened by pointing at the rail (which it covers), or with Ctrl+Alt+F: then count down until the pointer comes in.
+        _pointerInSidebar = SidebarRail.IsPointerOver;
+        if (!_pointerInSidebar) _collapseTimer.Start();
+    }
+
+    private bool IsInSidebar(Point p) => p.X >= 0 && p.Y >= 0 && p.X < Sidebar.Bounds.Width && p.Y < Sidebar.Bounds.Height;
+
+    private void CollapseSidebar()
+    {
+        if (_sidebarPinned) return;
+        _sidebarExpanded = false;
+        Sidebar.IsVisible = false;
     }
 
     private static object ToMenuItem(MenuAction action) => action.IsSeparator

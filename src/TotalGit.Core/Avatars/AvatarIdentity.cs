@@ -10,9 +10,6 @@ public static partial class AvatarIdentity
     [GeneratedRegex(@"^(?:(?<id>\d+)\+)?(?<user>[^@]+)@users\.noreply\.github\.com$", RegexOptions.IgnoreCase)]
     private static partial Regex GitHubNoReply();
 
-    [GeneratedRegex(@"github\.com[:/](?<owner>[^/]+)/(?<repo>[^/]+?)(?:\.git)?/?$", RegexOptions.IgnoreCase)]
-    private static partial Regex GitHubRemote();
-
     public static string NormalizeEmail(string email) => email.Trim().ToLowerInvariant();
 
     /// <summary>Avatar URL for GitHub "noreply" commit emails, or null for any other address.</summary>
@@ -26,12 +23,8 @@ public static partial class AvatarIdentity
     }
 
     /// <summary>Extracts owner/repo from an https or ssh GitHub remote URL.</summary>
-    public static (string Owner, string Repo)? ParseGitHubRemote(string? url)
-    {
-        if (string.IsNullOrWhiteSpace(url)) return null;
-        var m = GitHubRemote().Match(url.Trim());
-        return m.Success ? (m.Groups["owner"].Value, m.Groups["repo"].Value) : null;
-    }
+    public static (string Owner, string Repo)? ParseGitHubRemote(string? url) =>
+        Hosting.RemoteHostParser.Parse(url) is { Kind: Hosting.HostKind.GitHub } host ? (host.Owner, host.Repo) : null;
 
     public static string GravatarUrl(string email) =>
         $"https://www.gravatar.com/avatar/{Sha256Hex(NormalizeEmail(email))}?s=64&d=404";

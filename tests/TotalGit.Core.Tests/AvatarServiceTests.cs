@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text;
 using TotalGit.Core.Avatars;
+using TotalGit.Core.Tests.Fakes;
 
 namespace TotalGit.Core.Tests;
 
@@ -18,41 +19,25 @@ public sealed class AvatarServiceTests : IDisposable
         if (Directory.Exists(_cacheDir)) Directory.Delete(_cacheDir, recursive: true);
     }
 
-    /// <summary>Serves canned responses by URL prefix and records every request.</summary>
-    private sealed class FakeHandler : HttpMessageHandler
+    private static HttpResponseMessage Json(string json) => FakeHttpHandler.Json(json);
+
+    private static HttpResponseMessage Bytes(byte[] b) => FakeHttpHandler.Bytes(b);
+
+    private static FakeHttpHandler Handler(bool commitAuthor = true, bool gravatar = true, bool rateLimited = false)
     {
-        public Dictionary<string, Func<HttpResponseMessage>> Routes { get; } = [];
-        public List<HttpRequestMessage> Requests { get; } = [];
-
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
-        {
-            Requests.Add(request);
-            var url = request.RequestUri!.ToString();
-            var route = Routes.FirstOrDefault(r => url.StartsWith(r.Key, StringComparison.Ordinal));
-            return Task.FromResult(route.Value?.Invoke() ?? new HttpResponseMessage(HttpStatusCode.NotFound));
-        }
-    }
-
-    private static HttpResponseMessage Json(string json) =>
-        new(HttpStatusCode.OK) { Content = new StringContent(json, Encoding.UTF8, "application/json") };
-
-    private static HttpResponseMessage Bytes(byte[] b) => new(HttpStatusCode.OK) { Content = new ByteArrayContent(b) };
-
-    private static FakeHandler Handler(bool commitAuthor = true, bool gravatar = true, bool rateLimited = false)
-    {
-        var h = new FakeHandler();
-        h.Routes["https://api.github.com/repos/owner/repo/commits/"] = () => rateLimited
+        var h = new FakeHttpHandler();
+        h.Routes["https://api.github.com/repos/owner/repo/commits/"] = _ => rateLimited
             ? new HttpResponseMessage(HttpStatusCode.Forbidden)
             : Json(commitAuthor ? """{"author":{"avatar_url":"https://avatars.githubusercontent.com/u/42?v=4"}}""" : """{"author":null}""");
-        h.Routes["https://api.github.com/search/users"] = () => rateLimited
+        h.Routes["https://api.github.com/search/users"] = _ => rateLimited
             ? new HttpResponseMessage(HttpStatusCode.Forbidden)
             : Json("""{"total_count":0,"items":[]}""");
-        h.Routes["https://avatars.githubusercontent.com/u/42"] = () => Bytes(GitHubImage);
-        h.Routes["https://www.gravatar.com/avatar/"] = () => gravatar ? Bytes(GravatarImage) : new HttpResponseMessage(HttpStatusCode.NotFound);
+        h.Routes["https://avatars.githubusercontent.com/u/42"] = _ => Bytes(GitHubImage);
+        h.Routes["https://www.gravatar.com/avatar/"] = _ => gravatar ? Bytes(GravatarImage) : new HttpResponseMessage(HttpStatusCode.NotFound);
         return h;
     }
 
-    private AvatarService Service(FakeHandler handler, string? token = "token") =>
+    private AvatarService Service(FakeHttpHandler handler, string? token = "token") =>
         new(_cacheDir, new HttpClient(handler), () => token);
 
     [Fact]
@@ -71,7 +56,7 @@ public sealed class AvatarServiceTests : IDisposable
     public async Task Finds_github_user_by_email_when_repo_is_not_on_github()
     {
         var handler = Handler();
-        handler.Routes["https://api.github.com/search/users"] = () =>
+        handler.Routes["https://api.github.com/search/users"] = _ =>
             Json("""{"total_count":1,"items":[{"avatar_url":"https://avatars.githubusercontent.com/u/42?v=4"}]}""");
         using var service = Service(handler);
 

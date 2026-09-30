@@ -1,8 +1,10 @@
 using System.Collections.ObjectModel;
+using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using TotalGit.App.Services;
 using TotalGit.Core.Git;
+using TotalGit.Core.Hosting;
 using TotalGit.Core.Worktrees;
 
 namespace TotalGit.App.ViewModels;
@@ -16,6 +18,9 @@ public enum SidebarNodeKind
     Tag,
     Worktree,
     Stash,
+    PullRequest,
+    /// <summary>A note in place of rows, e.g. "Loading…" or why pull requests can't be shown.</summary>
+    Message,
 }
 
 public partial class SidebarNode : ObservableObject
@@ -73,6 +78,24 @@ public partial class SidebarNode : ObservableObject
     public bool IsWorktree => Kind == SidebarNodeKind.Worktree;
     public bool IsStash => Kind == SidebarNodeKind.Stash;
     public bool IsWorktreesSection { get; init; }
+    public bool IsPullRequestsSection { get; init; }
+    public bool IsPullRequest => Kind == SidebarNodeKind.PullRequest;
+    public PullRequestSummary? PullRequest { get; init; }
+
+    /// <summary>A pull request's checks: green passed, red failed, amber running.</summary>
+    public IBrush? ChecksBrush => PullRequest?.Checks switch
+    {
+        ChecksState.Success => PrColors.Success,
+        ChecksState.Failure => PrColors.Failure,
+        ChecksState.Pending => PrColors.Pending,
+        _ => null,
+    };
+    public bool HasChecks => ChecksBrush is not null;
+    public bool IsApproved => PullRequest?.ReviewDecision == ReviewDecision.Approved;
+    public bool IsChangesRequested => PullRequest?.ReviewDecision == ReviewDecision.ChangesRequested;
+
+    /// <summary>You're asked to review this pull request.</summary>
+    public bool IsReviewRequested => PullRequest?.ViewerReviewRequested == true;
     public bool ShowCount => IsSection;
     public bool HasAhead => Ahead is not null;
     public bool HasBehind => Behind is not null;
@@ -90,6 +113,11 @@ public partial class SidebarViewModel : ObservableObject
     private IReadOnlyList<StashInfo> _stashes = [];
     private string? _currentWorktree;
     private readonly HashSet<string> _collapsed = ["REMOTE", "TAGS", "STASHES"];
+
+    // Pull requests come from the hosting service, separately from the git refresh.
+    private bool _showPullRequests;
+    private IReadOnlyList<PullRequestSummary> _pullRequests = [];
+    private string? _pullRequestsMessage;
 
     public ObservableCollection<SidebarNode> Nodes { get; } = [];
 
@@ -112,8 +140,23 @@ public partial class SidebarViewModel : ObservableObject
         Rebuild();
     }
 
+    /// <summary>
+    /// Shows the PULL REQUESTS section (hidden when <paramref name="visible"/> is false, e.g. the remote isn't on
+    /// a supported host). <paramref name="message"/> replaces the rows: "Loading…" or why they can't be shown.
+    /// </summary>
+    public void SetPullRequests(bool visible, IReadOnlyList<PullRequestSummary> pullRequests, string? message)
+    {
+        _showPullRequests = visible;
+        _pullRequests = pullRequests;
+        _pullRequestsMessage = message;
+        Rebuild();
+    }
+
     public void Clear()
     {
+        _showPullRequests = false;
+        _pullRequests = [];
+        _pullRequestsMessage = null;
         _refs = [];
         _stashes = [];
         _worktrees = [];
@@ -226,6 +269,43 @@ public partial class SidebarViewModel : ObservableObject
             });
         }
         Nodes.Add(wtSection);
+
+        if (!_showPullRequests) return;
+        var prs = _pullRequests.Where(p => Match($"#{p.Number} {p.Title}") || Match(p.Author.Login) || Match(p.HeadRef)).ToList();
+        var prSection = new SidebarNode(SidebarNodeKind.Section, "PULL REQUESTS")
+        {
+            Count = prs.Count,
+            IsPullRequestsSection = true,
+            IsExpanded = !_collapsed.Contains("PULL REQUESTS") || filter.Length > 0,
+        };
+        if (_pullRequestsMessage is { } message)
+            prSection.Children.Add(new SidebarNode(SidebarNodeKind.Message, message) { IsDimmed = true, ToolTip = message });
+        foreach (var p in prs)
+        {
+            var review = p.ReviewDecision switch
+            {
+                ReviewDecision.Approved => "\nApproved",
+                ReviewDecision.ChangesRequested => "\nChanges requested",
+                ReviewDecision.ReviewRequired => "\nReview required",
+                _ => "",
+            };
+            var checks = p.Checks switch
+            {
+                ChecksState.Success => "\nChecks passed",
+                ChecksState.Failure => "\nChecks failed",
+                ChecksState.Pending => "\nChecks running",
+                _ => "",
+            };
+            prSection.Children.Add(new SidebarNode(SidebarNodeKind.PullRequest, $"#{p.Number} {p.Title}")
+            {
+                PullRequest = p,
+                IsDimmed = p.IsDraft,
+                Subtitle = p.Author.Login,
+                ToolTip = $"#{p.Number} {p.Title}{(p.IsDraft ? " (draft)" : "")}\n{p.Author.Login}: {p.HeadRef} → {p.BaseRef}{review}{checks}"
+                    + (p.ViewerReviewRequested ? "\nYour review is requested" : ""),
+            });
+        }
+        Nodes.Add(prSection);
     }
 
     private SidebarNode Section(string name, int count) => new(SidebarNodeKind.Section, name)

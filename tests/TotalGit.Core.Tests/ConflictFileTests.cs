@@ -40,21 +40,38 @@ public sealed class ConflictFileTests
     [Fact]
     public void Unresolved_render_round_trips()
     {
-        Assert.Equal(Text, ConflictFile.Parse(Text).Render([]));
+        Assert.Equal(Text, ConflictFile.Parse(Text).Render());
         var crlf = Text.Replace("\n", "\r\n");
-        Assert.Equal(crlf, ConflictFile.Parse(crlf).Render([]));
+        Assert.Equal(crlf, ConflictFile.Parse(crlf).Render());
     }
 
     [Fact]
     public void Renders_choices()
     {
         var file = ConflictFile.Parse(Text);
+        MergeDocument Doc(Action<MergeDocument> resolve)
+        {
+            var doc = new MergeDocument(file);
+            resolve(doc);
+            return doc;
+        }
 
-        Assert.Equal("top\nours 1\nours 2\nmiddle\nb\nbottom\n", file.Render([ConflictChoice.Ours, ConflictChoice.Theirs]));
-        Assert.Equal("top\ntheirs 1\nours 1\nours 2\nmiddle\na\nb\nbottom\n",
-            file.Render([ConflictChoice.TheirsThenOurs, ConflictChoice.OursThenTheirs]));
-        Assert.True(ConflictFile.HasMarkers(file.Render([ConflictChoice.Ours])));
-        Assert.False(ConflictFile.HasMarkers(file.Render([ConflictChoice.Ours, ConflictChoice.Ours])));
+        Assert.Equal("top\nours 1\nours 2\nmiddle\nb\nbottom\n", Doc(d =>
+        {
+            d.Resolutions[0].Set(file.Conflicts[0], MergeSide.Ours);
+            d.Resolutions[1].Set(file.Conflicts[1], MergeSide.Theirs);
+        }).Render());
+        Assert.Equal("top\ntheirs 1\nours 1\nours 2\nmiddle\na\nb\nbottom\n", Doc(d =>
+        {
+            d.Resolutions[0].Set(file.Conflicts[0], MergeSide.Theirs, MergeSide.Ours);
+            d.Resolutions[1].Set(file.Conflicts[1], MergeSide.Ours, MergeSide.Theirs);
+        }).Render());
+        Assert.True(ConflictFile.HasMarkers(Doc(d => d.Resolutions[0].Set(file.Conflicts[0], MergeSide.Ours)).Render()));
+        Assert.False(ConflictFile.HasMarkers(Doc(d =>
+        {
+            d.Resolutions[0].UseNothing();
+            d.Resolutions[1].Set(file.Conflicts[1], MergeSide.Base);
+        }).Render()));
     }
 
     [Fact]
@@ -73,6 +90,6 @@ public sealed class ConflictFileTests
         var file = ConflictFile.Parse(text);
 
         Assert.Empty(file.Conflicts);
-        Assert.Equal(text, file.Render([]));
+        Assert.Equal(text, file.Render());
     }
 }

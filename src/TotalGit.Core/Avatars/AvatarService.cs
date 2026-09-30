@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
@@ -173,31 +172,7 @@ public sealed class AvatarService : IDisposable
     }
 
     /// <summary>GITHUB_TOKEN / GH_TOKEN, else the GitHub CLI's login, else anonymous.</summary>
-    private static string? DefaultGitHubToken()
-    {
-        foreach (var name in (string[])["GITHUB_TOKEN", "GH_TOKEN"])
-            if (Environment.GetEnvironmentVariable(name) is { Length: > 0 } env) return env;
-
-        try
-        {
-            var psi = new ProcessStartInfo("gh", "auth token")
-            {
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            };
-            using var p = Process.Start(psi);
-            if (p is null) return null;
-            var output = p.StandardOutput.ReadToEnd().Trim();
-            if (!p.WaitForExit(5000)) return null;
-            return p.ExitCode == 0 && output.Length > 0 ? output : null;
-        }
-        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
-        {
-            return null; // gh not installed
-        }
-    }
+    private static string? DefaultGitHubToken() => Hosting.ChainedCredentialSource.Default().GetToken("github.com");
 
     private bool IsRecentMiss(string key) =>
         _misses.TryGetValue(key, out var at) && DateTimeOffset.UtcNow - at < MissExpiry;

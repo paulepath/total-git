@@ -47,12 +47,24 @@
 
   <DockPanel Background="#23272D">
     <Border DockPanel.Dock="Top" Padding="8,8,8,6">
-      <TextBox x:Name="FilterBox" Text="{Binding Filter}" PlaceholderText="Filter (Ctrl+Alt+F)" FontSize="12"
-               MinHeight="28" Padding="6,4">
-        <TextBox.InnerRightContent>
-          <PathIcon Data="{StaticResource SearchIcon}" Width="12" Height="12" Margin="0,0,8,0" Foreground="#8A9099" />
-        </TextBox.InnerRightContent>
-      </TextBox>
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBox x:Name="FilterBox" Text="{Binding Filter}" PlaceholderText="Filter (Ctrl+Alt+F)" FontSize="12"
+                 MinHeight="28" Padding="6,4">
+          <TextBox.InnerRightContent>
+            <PathIcon Data="{StaticResource SearchIcon}" Width="12" Height="12" Margin="0,0,8,0" Foreground="#8A9099" />
+          </TextBox.InnerRightContent>
+        </TextBox>
+        <!-- Pinned: the sidebar stays open. Unpinned: it folds to a thin rail and opens while the pointer is over it. -->
+        <ToggleButton Grid.Column="1" x:Name="PinButton" Margin="6,0,0,0" Padding="6,0" MinHeight="28" Background="Transparent"
+                      ToolTip.Tip="Keep the sidebar open (unpin to fold it away until you point at it)">
+          <Panel>
+            <PathIcon Data="{StaticResource PinIcon}" Width="13" Height="13"
+                      IsVisible="{Binding $parent[ToggleButton].IsChecked}" />
+            <PathIcon Data="{StaticResource PinOffIcon}" Width="13" Height="13" Foreground="#8A9099"
+                      IsVisible="{Binding !$parent[ToggleButton].IsChecked}" />
+          </Panel>
+        </ToggleButton>
+      </Grid>
     </Border>
 
     <TreeView x:Name="Tree" ItemsSource="{Binding Nodes}" SelectedItem="{Binding SelectedNode}" Background="Transparent"
@@ -67,6 +79,8 @@
               <PathIcon Classes="node" Data="{StaticResource TagIcon}" IsVisible="{Binding IsTag}" />
               <PathIcon Classes="node" Data="{StaticResource StashIcon}" IsVisible="{Binding IsStash}" />
               <PathIcon Classes="node" Data="{StaticResource WorktreeIcon}" IsVisible="{Binding ShowWorktreeGlyph}" />
+              <PathIcon Classes="node" Data="{StaticResource PullRequestIcon}" IsVisible="{Binding IsPullRequest}"
+                        Foreground="{Binding IsReviewRequested, Converter={x:Static vm:Converters.ReviewRequestedBrush}}" />
               <Image Source="{Binding KindIcon}" IsVisible="{Binding HasKindIcon}" Width="14" Height="14" Margin="-1,0,5,0" />
             </Panel>
 
@@ -84,10 +98,21 @@
               <Ellipse Width="7" Height="7" Fill="#4CC38A" VerticalAlignment="Center" IsVisible="{Binding ShowCurrentDot}"
                        ToolTip.Tip="Contains the current branch" />
               <TextBlock Text="{Binding Ahead}" FontSize="11" Foreground="#4CC38A" IsVisible="{Binding HasAhead}" />
-              <TextBlock Text="{Binding Behind}" FontSize="11" Foreground="#E8B339" IsVisible="{Binding HasBehind}" />
+              <TextBlock Classes="behind" Text="{Binding Behind}" FontSize="11" Foreground="#E8B339" IsVisible="{Binding HasBehind}"
+                         Background="Transparent" ToolTip.Tip="New commits on the remote branch. Double-click to bring them into this branch." />
+              <PathIcon Classes="gone" Data="{StaticResource CloseIcon}" Width="9" Height="9" Foreground="#E5484D" VerticalAlignment="Center"
+                        IsVisible="{Binding IsUpstreamGone}" Background="Transparent"
+                        ToolTip.Tip="Deleted on the remote. Double-click to clean up branches deleted on the remote." />
+              <PathIcon Data="{StaticResource CheckIcon}" Width="11" Height="11" Foreground="#4CC38A" VerticalAlignment="Center"
+                        IsVisible="{Binding IsApproved}" ToolTip.Tip="Approved" />
               <PathIcon Data="{StaticResource CloseIcon}" Width="9" Height="9" Foreground="#E5484D" VerticalAlignment="Center"
-                        IsVisible="{Binding IsUpstreamGone}" ToolTip.Tip="Deleted on the remote" />
+                        IsVisible="{Binding IsChangesRequested}" ToolTip.Tip="Changes requested" />
+              <Ellipse Width="7" Height="7" Fill="{Binding ChecksBrush}" VerticalAlignment="Center" IsVisible="{Binding HasChecks}" />
               <TextBlock Text="{Binding Count}" FontSize="11" Foreground="#5AA9F2" IsVisible="{Binding ShowCount}" />
+              <Button IsVisible="{Binding IsPullRequestsSection}" Padding="4,0" MinHeight="0" Height="18" Background="Transparent"
+                      ToolTip.Tip="Refresh pull requests" Click="OnRefreshPullRequestsClick">
+                <PathIcon Data="{StaticResource RefreshIcon}" Width="11" Height="11" Foreground="#A9AFB8" />
+              </Button>
               <Button Content="+" IsVisible="{Binding IsWorktreesSection}" Padding="6,0" MinHeight="0" Height="18" FontSize="12"
                       ToolTip.Tip="Create worktree with new branch" Click="OnAddWorktreeClick" />
             </StackPanel>

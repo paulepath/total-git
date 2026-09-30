@@ -19,7 +19,7 @@ public sealed class RepositorySession : IDisposable
     private readonly Lock _lock = new();
     private IEnumerator<Commit>? _history;
     private bool _hasMore = true;
-    private string? _patchSha;
+    private string? _patchKey;
     private Patch? _patch;
 
     static RepositorySession()
@@ -207,18 +207,7 @@ public sealed class RepositorySession : IDisposable
         lock (_lock)
         {
             var c = _repo.Lookup<Commit>(sha) ?? throw new ArgumentException($"Commit {sha} not found.", nameof(sha));
-            var patch = CommitPatch(c);
-            var files = patch
-                .Select(p => new FileChange(
-                    p.Path,
-                    p.OldPath != p.Path ? p.OldPath : null,
-                    Map(p.Status),
-                    p.LinesAdded,
-                    p.LinesDeleted,
-                    p.IsBinaryComparison))
-                .OrderBy(f => f.Path, StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-
+            var files = ToChanges(CommitPatch(c));
             return new CommitDetails(ToInfo(c), c.Committer.Name, c.Committer.Email, c.Committer.When, c.Message, files);
         }
     }
@@ -228,9 +217,42 @@ public sealed class RepositorySession : IDisposable
         lock (_lock)
         {
             var c = _repo.Lookup<Commit>(sha) ?? throw new ArgumentException($"Commit {sha} not found.", nameof(sha));
-            var entry = CommitPatch(c)[path];
-            return entry is null ? new FileDiff(path, false, [], false) : ToFileDiff(path, entry.IsBinaryComparison, entry.Patch);
+            return ToFileDiff(path, CommitPatch(c)[path]);
         }
+    }
+
+    /// <summary>The SHA of the commit a ref or revspec points to (tags peeled), or null when it doesn't resolve.</summary>
+    public string? ResolveCommit(string revspec)
+    {
+        lock (_lock) return LookupCommit(revspec)?.Sha;
+    }
+
+    /// <summary>
+    /// The newest commit reachable from both revisions (SHAs or anything else the repository resolves), or null
+    /// when either can't be found or the histories are unrelated.
+    /// </summary>
+    public string? MergeBase(string a, string b)
+    {
+        lock (_lock)
+        {
+            if (LookupCommit(a) is not { } ca || LookupCommit(b) is not { } cb) return null;
+            return _repo.ObjectDatabase.FindMergeBase(ca, cb)?.Sha;
+        }
+    }
+
+    /// <summary>
+    /// Files changed between two commits' trees. With <paramref name="baseSha"/> the <see cref="MergeBase"/> of a
+    /// pull request's base and head, this is the "Files changed" list of the pull request.
+    /// </summary>
+    public IReadOnlyList<FileChange> GetRangeChanges(string baseSha, string headSha)
+    {
+        lock (_lock) return ToChanges(RangePatch(baseSha, headSha));
+    }
+
+    /// <summary>One file's diff between two commits' trees. For a renamed file <paramref name="path"/> is the new path.</summary>
+    public FileDiff GetRangeFileDiff(string baseSha, string headSha, string path)
+    {
+        lock (_lock) return ToFileDiff(path, RangePatch(baseSha, headSha)[path]);
     }
 
     /// <summary>Diff of a working-tree file: index vs HEAD when <paramref name="staged"/>, else working tree vs index.</summary>
@@ -272,14 +294,53 @@ public sealed class RepositorySession : IDisposable
         return new FileDiff(path, false, lines, truncated);
     }
 
-    private Patch CommitPatch(Commit c)
+    private Commit? LookupCommit(string revision)
     {
-        if (_patchSha == c.Sha && _patch is not null) return _patch;
-        _patch = _repo.Diff.Compare<Patch>(c.Parents.FirstOrDefault()?.Tree, c.Tree,
-            new CompareOptions { Similarity = SimilarityOptions.Renames });
-        _patchSha = c.Sha;
+        try
+        {
+            // Lookup<Commit> returns null for an annotated tag rather than peeling it.
+            var target = _repo.Lookup(revision);
+            while (target is TagAnnotation tag) target = tag.Target;
+            return target as Commit;
+        }
+        catch (LibGit2SharpException)
+        {
+            return null;
+        }
+    }
+
+    private Patch CommitPatch(Commit c) => TreePatch(c.Parents.FirstOrDefault()?.Tree, c.Tree);
+
+    private Patch RangePatch(string baseSha, string headSha)
+    {
+        var from = _repo.Lookup<Commit>(baseSha) ?? throw new ArgumentException($"Commit {baseSha} not found.", nameof(baseSha));
+        var to = _repo.Lookup<Commit>(headSha) ?? throw new ArgumentException($"Commit {headSha} not found.", nameof(headSha));
+        return TreePatch(from.Tree, to.Tree);
+    }
+
+    /// <summary>The diff between two trees (null: the empty tree), with renames detected. The last one is cached.</summary>
+    private Patch TreePatch(Tree? from, Tree to)
+    {
+        var key = $"{from?.Sha}..{to.Sha}";
+        if (_patchKey == key && _patch is not null) return _patch;
+        _patch = _repo.Diff.Compare<Patch>(from, to, new CompareOptions { Similarity = SimilarityOptions.Renames });
+        _patchKey = key;
         return _patch;
     }
+
+    private static FileChange[] ToChanges(Patch patch) => patch
+        .Select(p => new FileChange(
+            p.Path,
+            p.OldPath != p.Path ? p.OldPath : null,
+            Map(p.Status),
+            p.LinesAdded,
+            p.LinesDeleted,
+            p.IsBinaryComparison))
+        .OrderBy(f => f.Path, StringComparer.OrdinalIgnoreCase)
+        .ToArray();
+
+    private static FileDiff ToFileDiff(string path, PatchEntryChanges? entry) =>
+        entry is null ? new FileDiff(path, false, [], false) : ToFileDiff(path, entry.IsBinaryComparison, entry.Patch);
 
     private static FileDiff ToFileDiff(string path, bool binary, string patch)
     {

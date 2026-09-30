@@ -6,6 +6,8 @@ using TotalGit.App.Services;
 using TotalGit.App.ViewModels;
 using TotalGit.App.Views;
 using TotalGit.Core.Avatars;
+using TotalGit.Core.Hosting;
+using TotalGit.Core.Hosting.GitHub;
 
 namespace TotalGit.App;
 
@@ -23,12 +25,14 @@ public partial class App : Application
             var avatars = new AvatarService(Path.Combine(AppSettings.DataDirectory, "avatars"));
             var settings = AppSettings.Load();
             var updates = new UpdateService();
-            var shell = new ShellViewModel(avatars, settings, updates);
+            var pullRequests = new GitHubPullRequestProviderFactory(ChainedCredentialSource.Default());
+            var shell = new ShellViewModel(avatars, settings, updates, pullRequests);
             desktop.MainWindow = new MainWindow { DataContext = shell };
             desktop.Exit += (_, _) =>
             {
                 foreach (var tab in shell.Tabs) tab.Dispose();
                 avatars.Dispose();
+                pullRequests.Dispose();
                 updates.ApplyOnExit(); // a downloaded update the user didn't restart for
             };
 

@@ -146,10 +146,13 @@
     </Border>
 
     <!-- Banner -->
-    <Border DockPanel.Dock="Top" IsVisible="{Binding Banner, Converter={x:Static ObjectConverters.IsNotNull}}"
-            Background="{Binding Banner.IsError, Converter={x:Static vm:Converters.ErrorToBackground}, FallbackValue=Transparent}"
-            Padding="14,8">
-      <Grid ColumnDefinitions="*,Auto,Auto">
+    <Border x:Name="BannerBar" DockPanel.Dock="Top" IsVisible="{Binding Banner, Converter={x:Static ObjectConverters.IsNotNull}}"
+            Background="{Binding Banner.IsError, Converter={x:Static vm:Converters.ErrorToBackground}, FallbackValue=Transparent}">
+      <Panel>
+      <!-- Counts down to the banner closing itself (banners with actions stay). -->
+      <ProgressBar VerticalAlignment="Bottom" Height="2" MinHeight="0" Minimum="0" Maximum="1" Value="{Binding BannerTimeLeft}"
+                   IsVisible="{Binding BannerClosesItself}" Foreground="#66FFFFFF" Background="Transparent" CornerRadius="0" />
+      <Grid ColumnDefinitions="*,Auto,Auto" Margin="14,8">
         <SelectableTextBlock Text="{Binding Banner.Message}" TextWrapping="Wrap" VerticalAlignment="Center" Foreground="#F0F2F5" />
         <ItemsControl Grid.Column="1" ItemsSource="{Binding Banner.Actions}" Margin="12,0,0,0">
           <ItemsControl.ItemsPanel>
@@ -167,15 +170,28 @@
           <PathIcon Data="{StaticResource CloseIcon}" Width="12" Height="12" />
         </Button>
       </Grid>
+      </Panel>
     </Border>
 
     <Grid x:Name="MainGrid" ColumnDefinitions="240,4,*,4,380">
-      <views:SidebarView Grid.Column="0" x:Name="Sidebar" DataContext="{Binding Sidebar}" />
-      <GridSplitter Grid.Column="1" ResizeDirection="Columns" />
+      <!-- The folded sidebar (when unpinned): a thin rail; pointing at it opens the sidebar over the graph. -->
+      <Border Grid.Column="0" x:Name="SidebarRail" IsVisible="False" Background="#23272D" Cursor="Hand"
+              BorderBrush="#30353C" BorderThickness="0,0,1,0" ToolTip.Tip="Branches, worktrees and pull requests (point to open)">
+        <StackPanel Spacing="14" Margin="0,12,0,0" HorizontalAlignment="Center">
+          <PathIcon Data="{StaticResource ChevronIcon}" Width="14" Height="14" Foreground="#A9AFB8" />
+          <PathIcon Data="{StaticResource BranchIcon}" Width="14" Height="14" Foreground="#8A9099" />
+          <PathIcon Data="{StaticResource TagIcon}" Width="14" Height="14" Foreground="#8A9099" />
+          <PathIcon Data="{StaticResource StashIcon}" Width="14" Height="14" Foreground="#8A9099" />
+          <PathIcon Data="{StaticResource WorktreeIcon}" Width="14" Height="14" Foreground="#8A9099" />
+          <PathIcon Data="{StaticResource PullRequestIcon}" Width="14" Height="14" Foreground="#8A9099" />
+        </StackPanel>
+      </Border>
+      <views:SidebarView Grid.Column="0" x:Name="Sidebar" DataContext="{Binding Sidebar}" ZIndex="10" />
+      <GridSplitter Grid.Column="1" x:Name="SidebarSplitter" ResizeDirection="Columns" />
 
       <Panel Grid.Column="2">
         <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding HasRepository}">
-          <views:CommitGraphView Grid.Column="0" x:Name="Graph" Data="{Binding Graph}" SelectedSha="{Binding SelectedSha}" />
+          <views:CommitGraphView Grid.Column="0" x:Name="Graph" Data="{Binding Graph}" SelectedSha="{Binding SelectedSha}" SelectedRange="{Binding SelectedRange}" />
           <ScrollBar Grid.Column="1" x:Name="GraphScrollBar" Orientation="Vertical" AllowAutoHide="False" />
         </Grid>
 
@@ -235,7 +251,11 @@
         <StackPanel IsVisible="{Binding LoadError, Converter={x:Static ObjectConverters.IsNotNull}}"
                     HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12" MaxWidth="600">
           <TextBlock Text="{Binding LoadError}" Foreground="#F26B6B" TextWrapping="Wrap" HorizontalAlignment="Center" />
-          <Button Content="Open a different repository..." Command="{Binding OpenRepositoryCommand}" HorizontalAlignment="Center" />
+          <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
+            <Button Content="Trust this folder" Command="{Binding TrustFolderCommand}" Classes="accent" IsVisible="{Binding CanTrustFolder}"
+                    ToolTip.Tip="{Binding UntrustedPath, StringFormat='Adds {0} to the safe.directory list in your global git config'}" />
+            <Button Content="Open a different repository..." Command="{Binding OpenRepositoryCommand}" />
+          </StackPanel>
         </StackPanel>
       </Panel>
 
@@ -245,6 +265,8 @@
         <views:CommitDetailsView x:Name="DetailsView" DataContext="{Binding Details}" IsVisible="{Binding $parent[views:RepositoryView].((vm:RepositoryViewModel)DataContext).ShowDetails}" />
         <views:StagingView x:Name="StagingPane" DataContext="{Binding Staging}" IsVisible="{Binding $parent[views:RepositoryView].((vm:RepositoryViewModel)DataContext).ShowStaging}" />
         <views:WorktreeChangesView x:Name="WorktreeChangesPane" DataContext="{Binding WorktreeChanges}" IsVisible="{Binding $parent[views:RepositoryView].((vm:RepositoryViewModel)DataContext).ShowWorktreeChanges}" />
+        <views:CommitRangeView DataContext="{Binding Range}" IsVisible="{Binding $parent[views:RepositoryView].((vm:RepositoryViewModel)DataContext).ShowRange}" />
+        <views:PullRequestView x:Name="PullRequestPane" DataContext="{Binding PullRequest}" IsVisible="{Binding $parent[views:RepositoryView].((vm:RepositoryViewModel)DataContext).ShowPullRequest}" />
         <TextBlock Text="Select a commit to see its details" Foreground="{StaticResource MutedTextBrush}"
                    HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="12">
           <TextBlock.IsVisible>
@@ -252,6 +274,8 @@
               <Binding Path="!ShowDetails" />
               <Binding Path="!ShowStaging" />
               <Binding Path="!ShowWorktreeChanges" />
+              <Binding Path="!ShowPullRequest" />
+              <Binding Path="!ShowRange" />
               <Binding Path="HasRepository" />
             </MultiBinding>
           </TextBlock.IsVisible>

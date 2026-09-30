@@ -27,6 +27,10 @@ public sealed class CommitGraphView : Control
     public static readonly StyledProperty<string?> SelectedShaProperty =
         AvaloniaProperty.Register<CommitGraphView, string?>(nameof(SelectedSha), defaultBindingMode: BindingMode.TwoWay);
 
+    /// <summary>A run of commits picked with Shift+click (their SHAs), or null. Set by the view model.</summary>
+    public static readonly StyledProperty<IReadOnlyCollection<string>?> SelectedRangeProperty =
+        AvaloniaProperty.Register<CommitGraphView, IReadOnlyCollection<string>?>(nameof(SelectedRange), defaultBindingMode: BindingMode.TwoWay);
+
     private const double HeaderHeight = 26;
     private const double RowHeight = 28;
     private const double LaneWidth = 28;
@@ -57,6 +61,9 @@ public sealed class CommitGraphView : Control
     private static readonly IBrush PrimaryTextBrush = new SolidColorBrush(Color.Parse("#E6E8EB"));
     private static readonly IBrush MutedTextBrush = new SolidColorBrush(Color.Parse("#8A9099"));
     private static readonly IBrush HoverBrush = new SolidColorBrush(Color.FromArgb(0x18, 0xFF, 0xFF, 0xFF));
+    private static readonly IBrush RangeBrush = new SolidColorBrush(Color.FromArgb(0x48, 0x3B, 0x82, 0xF6));
+    private static readonly IBrush RangeAccentBrush = new SolidColorBrush(Color.Parse("#5AA9F2"));
+    private static readonly IPen RangeNodePen = new Pen(new SolidColorBrush(Color.Parse("#E6E8EB")), 2);
     private static readonly IBrush FanBackgroundBrush = new SolidColorBrush(Color.Parse("#23272D"));
     private static readonly IBrush FanShadowBrush = new SolidColorBrush(Color.FromArgb(0x70, 0, 0, 0));
     private static readonly IBrush FanHoverBrush = new SolidColorBrush(Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF));
@@ -118,7 +125,7 @@ public sealed class CommitGraphView : Control
 
     static CommitGraphView()
     {
-        AffectsRender<CommitGraphView>(DataProperty, SelectedShaProperty);
+        AffectsRender<CommitGraphView>(DataProperty, SelectedShaProperty, SelectedRangeProperty);
         FocusableProperty.OverrideDefaultValue<CommitGraphView>(true);
         ClipToBoundsProperty.OverrideDefaultValue<CommitGraphView>(true);
     }
@@ -134,6 +141,62 @@ public sealed class CommitGraphView : Control
         get => GetValue(SelectedShaProperty);
         set => SetValue(SelectedShaProperty, value);
     }
+
+    public IReadOnlyCollection<string>? SelectedRange
+    {
+        get => GetValue(SelectedRangeProperty);
+        set => SetValue(SelectedRangeProperty, value);
+    }
+
+    /// <summary>
+    /// Shift+click (or Shift+Up/Down): select the commits from <c>anchor</c> (the selected commit) to <c>other</c>.
+    /// The view model works out the run and sets <see cref="SelectedRange"/>.
+    /// </summary>
+    public event Action<string, string>? RangeSelectRequested;
+
+    // The far end of the range, moved by Shift+Up/Down.
+    private string? _rangeEnd;
+
+    /// <summary>The selected commits were dragged onto a branch: rebase them onto it (the view model asks first).</summary>
+    public event Action<string>? RangeDropped;
+
+    // Dragging the selected commits: where the press started (on a selected row), whether it has become a drag,
+    // and the row under the pointer.
+    private Point? _rangePress;
+    private int _rangePressRow = -1;
+    private IPointer? _rangePointer;
+    private bool _rangeDragging;
+    private Point _rangeDragPoint;
+    private int _dropRow = -1;
+    private const double DragThreshold = 5;
+
+    private static readonly IBrush DropBrush = new SolidColorBrush(Color.FromArgb(0x40, 0x4C, 0xC3, 0x8A));
+    private static readonly IPen DropPen = new Pen(new SolidColorBrush(Color.Parse("#4CC38A")), 2);
+    private static readonly IPen NoDropPen = new Pen(new SolidColorBrush(Color.Parse("#E5484D")), 2, new DashStyle([3, 3], 0));
+    private static readonly IBrush DragLabelBrush = new SolidColorBrush(Color.Parse("#2B2F36"));
+
+    /// <summary>The branch to rebase onto when dropping on a row: its local branch, else a remote one; null for none.</summary>
+    private string? DropBranch(int row)
+    {
+        if (row < 0 || row >= Rows.Count || InRange(Rows[row].Commit.Sha)) return null;
+        if (!_badgesBySha.TryGetValue(Rows[row].Commit.Sha, out var badges)) return null;
+        var branches = badges.Where(b => !b.IsTag).ToList();
+        return (branches.FirstOrDefault(b => b.HasLocal) ?? branches.FirstOrDefault())?.Ref.Name;
+    }
+
+    private void EndRangeDrag(IPointer? pointer)
+    {
+        _rangePointer = null;
+        _rangePress = null;
+        _rangePressRow = -1;
+        _rangeDragging = false;
+        _dropRow = -1;
+        pointer?.Capture(null);
+        Cursor = Cursor.Default;
+        InvalidateVisual();
+    }
+
+    private bool InRange(string sha) => SelectedRange?.Contains(sha) == true;
 
     /// <summary>Raised when the viewport nears the last loaded row, so more history can be loaded.</summary>
     public event Action? NearEnd;
@@ -279,6 +342,19 @@ public sealed class CommitGraphView : Control
             DragSplitter(p.X - _dragStartX);
             return;
         }
+        if (_rangePress is { } start)
+        {
+            if (!_rangeDragging && Math.Abs(p.Y - start.Y) + Math.Abs(p.X - start.X) < DragThreshold) return;
+            _rangeDragging = true;
+            _rangeDragPoint = p;
+            // Scroll when dragging past the top or bottom edge, so any branch can be reached.
+            if (p.Y < HeaderHeight + RowHeight / 2) SetOffset(_offset - RowHeight / 2);
+            else if (p.Y > Bounds.Height - RowHeight / 2) SetOffset(_offset + RowHeight / 2);
+            _dropRow = RowAt(Math.Clamp(p.Y, HeaderHeight, Bounds.Height - 1));
+            Cursor = new Cursor(DropBranch(_dropRow) is null ? StandardCursorType.No : StandardCursorType.DragMove);
+            InvalidateVisual();
+            return;
+        }
         Cursor = SplitterAt(p) != Splitter.None ? new Cursor(StandardCursorType.SizeWestEast) : Cursor.Default;
         UpdateHover(p);
     }
@@ -286,6 +362,21 @@ public sealed class CommitGraphView : Control
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         base.OnPointerReleased(e);
+        if (_rangePress is not null)
+        {
+            var dragged = _rangeDragging;
+            var target = dragged ? DropBranch(_dropRow) : null;
+            var pressRow = _rangePressRow;
+            EndRangeDrag(e.Pointer);
+            if (target is not null) RangeDropped?.Invoke(target);
+            else if (!dragged && pressRow >= 0 && pressRow < Rows.Count)
+            {
+                // A plain click on a selected commit: select just that one.
+                SelectedRange = null;
+                SelectedSha = Rows[pressRow].Commit.Sha;
+            }
+            return;
+        }
         if (_drag == Splitter.None) return;
         _drag = Splitter.None;
         e.Pointer.Capture(null);
@@ -385,8 +476,29 @@ public sealed class CommitGraphView : Control
         var row = RowAt(point.Position.Y);
         if (row >= 0)
         {
-            SelectedSha = Rows[row].Commit.Sha;
-            if (point.Properties.IsRightButtonPressed) CommitContextRequested?.Invoke(Rows[row].Commit, point.Position);
+            var sha = Rows[row].Commit.Sha;
+            if (point.Properties.IsLeftButtonPressed && e.KeyModifiers.HasFlag(KeyModifiers.Shift) && SelectedSha is { } anchor)
+            {
+                _rangeEnd = sha;
+                RangeSelectRequested?.Invoke(anchor, sha);
+            }
+            else if (point.Properties.IsRightButtonPressed && InRange(sha))
+            {
+                CommitContextRequested?.Invoke(Rows[row].Commit, point.Position);
+            }
+            else if (point.Properties.IsLeftButtonPressed && InRange(sha))
+            {
+                _rangePress = point.Position;
+                _rangePressRow = row;
+                _rangePointer = e.Pointer;
+                e.Pointer.Capture(this);
+            }
+            else
+            {
+                SelectedRange = null;
+                SelectedSha = sha;
+                if (point.Properties.IsRightButtonPressed) CommitContextRequested?.Invoke(Rows[row].Commit, point.Position);
+            }
         }
         e.Handled = true;
     }
@@ -395,6 +507,33 @@ public sealed class CommitGraphView : Control
     {
         base.OnKeyDown(e);
         if (Rows.Count == 0) return;
+
+        if (e.Key == Key.Escape && _rangeDragging)
+        {
+            EndRangeDrag(_rangePointer);
+            e.Handled = true;
+            return;
+        }
+        if (e.Key == Key.Escape && SelectedRange is not null)
+        {
+            SelectedRange = null;
+            e.Handled = true;
+            return;
+        }
+
+        // Shift+Up/Down moves the far end of the range.
+        if (e.KeyModifiers == KeyModifiers.Shift && e.Key is Key.Up or Key.Down && SelectedSha is { } anchor)
+        {
+            var end = _rangeEnd is not null && SelectedRange is not null && _rowBySha.TryGetValue(_rangeEnd, out var er) ? er
+                : _rowBySha.TryGetValue(anchor, out var ar) ? ar : -1;
+            if (end < 0) return;
+            var next = Math.Clamp(end + (e.Key == Key.Down ? 1 : -1), 0, Rows.Count - 1);
+            _rangeEnd = Rows[next].Commit.Sha;
+            RangeSelectRequested?.Invoke(anchor, _rangeEnd);
+            ScrollRowIntoView(next);
+            e.Handled = true;
+            return;
+        }
 
         var current = SelectedSha is not null && _rowBySha.TryGetValue(SelectedSha, out var r) ? r : -1;
         var page = Math.Max(1, (int)(BodyHeight / RowHeight) - 1);
@@ -411,11 +550,17 @@ public sealed class CommitGraphView : Control
         if (target is not { } t) return;
 
         t = Math.Clamp(t, 0, Rows.Count - 1);
+        SelectedRange = null;
         SelectedSha = Rows[t].Commit.Sha;
-        var top = t * RowHeight;
+        ScrollRowIntoView(t);
+        e.Handled = true;
+    }
+
+    private void ScrollRowIntoView(int row)
+    {
+        var top = row * RowHeight;
         if (top < _offset) SetOffset(top);
         else if (top + RowHeight > _offset + BodyHeight) SetOffset(top + RowHeight - BodyHeight);
-        e.Handled = true;
     }
 
     private int RowAt(double y)
@@ -499,6 +644,11 @@ public sealed class CommitGraphView : Control
                 {
                     for (var i = first; i <= last; i++) DrawSegments(ctx, i);
                     for (var i = first; i <= last; i++) DrawNode(ctx, i);
+                    for (var i = first; i <= last; i++)
+                    {
+                        if (InRange(rows[i].Commit.Sha))
+                            ctx.DrawEllipse(null, RangeNodePen, new Point(LaneX(rows[i].Lane), RowTop(i) + RowHeight / 2), NodeRadius + 2, NodeRadius + 2);
+                    }
                 }
                 for (var i = first; i <= last; i++) DrawRowText(ctx, i, width);
                 using (ctx.PushClip(new Rect(0, HeaderHeight, RefColumnWidth, BodyHeight)))
@@ -507,6 +657,7 @@ public sealed class CommitGraphView : Control
                 }
                 // Over everything else, and free to extend past the ref column.
                 DrawFan(ctx);
+                DrawRangeDrag(ctx, width);
             }
         }
 
@@ -536,6 +687,14 @@ public sealed class CommitGraphView : Control
             ctx.DrawLine(SeparatorPen, new Point(DateLeft - 8, 4), new Point(DateLeft - 8, HeaderHeight - 4));
             Title("DATE", DateLeft);
         }
+
+        if (SelectedRange is { Count: > 0 } range)
+        {
+            var label = Text(range.Count == 1 ? "1 commit selected · Esc to clear" : $"{range.Count} commits selected · Esc to clear", 10, Brushes.White, _boldTypeface);
+            var pill = new Rect(width - label.Width - 30, 4, label.Width + 16, HeaderHeight - 8);
+            ctx.DrawRectangle(RangeAccentBrush, null, new RoundedRect(pill, pill.Height / 2));
+            ctx.DrawText(label, new Point(pill.X + 8, pill.Y + (pill.Height - label.Height) / 2));
+        }
     }
 
     private void DrawRowBackground(DrawingContext ctx, int i, double width)
@@ -546,8 +705,15 @@ public sealed class CommitGraphView : Control
         var sha = row.Commit.Sha;
 
         if (i == _hoverRow) ctx.FillRectangle(HoverBrush, new Rect(0, top, width, RowHeight));
+        var inRange = InRange(sha);
+        if (inRange)
+        {
+            ctx.FillRectangle(RangeBrush, new Rect(0, top, width, RowHeight));
+            ctx.FillRectangle(RangeAccentBrush, new Rect(0, top, 4, RowHeight));
+            ctx.FillRectangle(RangeAccentBrush, new Rect(MessageLeft - 8, top + 3, 3, RowHeight - 6));
+        }
 
-        var strong = sha == SelectedSha || sha == _headSha;
+        var strong = sha == SelectedSha || sha == _headSha || inRange;
         // The band starts with a rounded end centred on the node, so it wraps around the circle.
         var bandTop = top + 1;
         var bandHeight = RowHeight - 2;
@@ -566,6 +732,26 @@ public sealed class CommitGraphView : Control
 
         // Right-edge accent stripe, as in GitKraken.
         ctx.FillRectangle(_laneBrushes[color], new Rect(width - 3, top + 1, 3, RowHeight - 2));
+    }
+
+    private void DrawRangeDrag(DrawingContext ctx, double width)
+    {
+        if (!_rangeDragging || SelectedRange is not { Count: > 0 } range) return;
+        var target = DropBranch(_dropRow);
+        if (_dropRow >= 0 && _dropRow < Rows.Count && !InRange(Rows[_dropRow].Commit.Sha))
+        {
+            var rect = new Rect(1, RowTop(_dropRow) + 1, width - 2, RowHeight - 2);
+            if (target is not null) ctx.FillRectangle(DropBrush, rect);
+            ctx.DrawRectangle(null, target is null ? NoDropPen : DropPen, rect, 4, 4);
+        }
+
+        var what = range.Count == 1 ? "1 commit" : $"{range.Count} commits";
+        var text = target is not null ? $"Rebase {what} onto {target}" : $"Drop {what} on a branch to rebase onto it";
+        var label = Text(text, 12, target is null ? MutedTextBrush : PrimaryTextBrush, _boldTypeface);
+        var box = new Rect(_rangeDragPoint.X + 14, _rangeDragPoint.Y + 10, label.Width + 20, label.Height + 10);
+        if (box.Right > width - 4) box = box.WithX(Math.Max(4, width - 4 - box.Width));
+        ctx.DrawRectangle(DragLabelBrush, target is null ? NoDropPen : DropPen, box, 6, 6);
+        ctx.DrawText(label, new Point(box.X + 10, box.Y + 5));
     }
 
     private void DrawConnector(DrawingContext ctx, int i)

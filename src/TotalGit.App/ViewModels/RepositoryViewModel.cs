@@ -190,7 +190,7 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
     public bool HasRepository => Graph is not null;
     public bool HasWorktreeName => WorktreeName is not null;
     public bool ShowEmptyState => Graph is null && !IsLoading && LoadError is null;
-    public bool ShowDetails => Details is not null;
+    public bool ShowDetails => Details is not null && Range is null;
     public bool ShowStaging => Staging is not null;
     public bool HasDiff => Diff is not null;
     public string? WorkingDirectory => _state?.WorkingDirectory;
@@ -252,6 +252,7 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
                 SelectedSha = null;
                 Details = null;
                 Staging = null;
+                PullRequest = null;
                 Diff = null;
                 Banner = null;
             }
@@ -259,6 +260,7 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
             _otherWip.Clear();
             ApplyState();
             RebuildGraph();
+            UpdatePullRequestHost();
             if (sameRepo) await ReloadSelectionAsync();
             _ = RefreshOtherWorktreesAsync();
 
@@ -276,9 +278,13 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
             }
             else
             {
+                _loadErrorPath = path;
                 LoadError = ex.Message;
                 Graph = null;
                 Sidebar.Clear();
+                _prHost = null;
+                _prProvider = null;
+                PullRequest = null;
             }
         }
         finally
@@ -465,6 +471,8 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
     {
         var request = ++_detailsRequest;
         Diff = null;
+        PullRequest = null;
+        SelectedRange = null;
 
         if (sha is null)
         {
@@ -568,6 +576,12 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
             load = () => changes.Session.GetWorkingFileDiff(wf.Path, wf.IsStaged);
             title = $"{wf.Path}  ({changes.Name}, {(wf.IsStaged ? "staged" : "unstaged")})";
         }
+        else if (PullRequest is { SelectedFile: { } pf, MergeBase: { } mergeBase, HeadSha: { } head } pr)
+        {
+            file = pf;
+            load = () => session.GetRangeFileDiff(mergeBase, head, pf.Path);
+            title = $"{pf.Path}  (#{pr.Number})";
+        }
         else if (Details is { SelectedFile: { } df } details)
         {
             file = df;
@@ -600,6 +614,7 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
         if (Details is not null) Details.SelectedFile = null;
         if (Staging is not null) Staging.SelectedFile = null;
         if (WorktreeChanges is not null) WorktreeChanges.SelectedFile = null;
+        if (PullRequest is not null) PullRequest.SelectedFile = null;
         Diff = null;
     }
 
@@ -625,6 +640,7 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
     {
         // Stash commits aren't in the graph; just show their changes in the details pane.
         if (node.Stash is { } stash) SelectedSha = stash.Sha;
+        else if (node.PullRequest is { } pr) OpenPullRequestCommand.Execute(pr);
         else if (node.Target?.Sha is { } sha) _ = SelectShaAsync(sha);
     }
 
@@ -663,26 +679,8 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
         }
         catch (GitCommandException ex) when (GitActions.ClassifyPushError(ex.Message) is { } rejection)
         {
-            // git's own text is a wall of hints: say what happened and offer the next step instead.
-            var branch = CurrentBranch;
-            Banner = rejection switch
-            {
-                PushRejection.NonFastForward => new Banner(
-                    $"The remote {branch} has commits your branch doesn't, as happens after a rebase or amend. " +
-                    "Force push to replace it with your branch, or pull to combine them.", true,
-                    [new MenuAction("Force push…", ForcePushCommand), new MenuAction("Pull", PullCommand)]),
-                PushRejection.FetchFirst => new Banner(
-                    $"Someone else pushed to {branch}. Pull their changes first, or force push to replace them.", true,
-                    [new MenuAction("Pull", PullCommand), new MenuAction("Force push…", ForcePushCommand)]),
-                PushRejection.UnseenRemoteCommits => new Banner(
-                    $"Force push refused: the remote {branch} has commits that were never on your branch (someone else pushed, " +
-                    "or they were made on the server). Check them in the graph, then pull them in or force push anyway.", true,
-                    [new MenuAction("Pull", PullCommand), new MenuAction("Force push anyway…", ForcePushAnywayCommand)]),
-                _ => new Banner(
-                    $"Force push refused: {branch} changed on the remote since your last fetch, so it would drop commits " +
-                    "you haven't seen. Fetch and check what's there first.", true,
-                    [new MenuAction("Fetch", FetchCommand)]),
-            };
+            // git's own text is a wall of hints: ask what to do next instead, once this operation has finished.
+            Dispatcher.UIThread.Post(() => _ = AskAfterPushRejectedAsync(rejection));
             return false;
         }
         catch (Exception ex) when (ex is GitCommandException or InvalidOperationException or IOException or System.ComponentModel.Win32Exception)
@@ -738,7 +736,67 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private Task ForcePushAnywayAsync() => ForcePushCoreAsync(replaceUnseen: true);
 
-    private async Task ForcePushCoreAsync(bool replaceUnseen)
+    /// <summary>A push was refused: explain why, list the remote commits involved, and do what the user picks.</summary>
+    private async Task AskAfterPushRejectedAsync(PushRejection rejection)
+    {
+        if (_state?.CurrentBranch is not { } branch || Dialogs is null) return;
+        var upstream = _state.Refs.FirstOrDefault(r => r is { Kind: RefKind.LocalBranch, IsCurrent: true })?.Upstream ?? $"the remote {branch}";
+        var remoteCommits = await RemoteOnlyCommitsAsync();
+        var list = remoteCommits.Count == 0 ? "" : $"\n\nCommits on {upstream} that aren't on your branch:";
+
+        switch (rejection)
+        {
+            case PushRejection.NonFastForward or PushRejection.FetchFirst:
+            {
+                var afterRebase = rejection == PushRejection.NonFastForward;
+                var message = (afterRebase
+                    ? $"{upstream} has commits your branch doesn't, as happens after a rebase or amend. " +
+                      "Force push to replace it with your branch, or pull to combine them."
+                    : $"Someone else pushed to {upstream}. Pull their changes to combine them with yours, or force push to replace them.") + list;
+                var force = new DialogChoice("Force push", IsPrimary: afterRebase, IsDanger: !afterRebase,
+                    "Replace the remote branch with yours. Refused if it has commits that were never on your branch.");
+                var pull = new DialogChoice("Pull", IsPrimary: !afterRebase, ToolTip: "Bring the remote commits in, then push again.");
+                var choice = await Dialogs.ChooseAsync("Push rejected", message, remoteCommits, afterRebase ? [pull, force] : [force, pull]);
+                if (choice is null) return;
+                var picked = (afterRebase ? new[] { pull, force } : [force, pull])[choice.Value];
+                if (picked == force) await ForcePushCoreAsync(replaceUnseen: false, confirmed: true);
+                else await PullAsync();
+                break;
+            }
+            case PushRejection.UnseenRemoteCommits:
+            {
+                var message = $"Force push refused: {upstream} has commits that were never on your branch (someone else pushed, " +
+                              "or they were made on the server). Force pushing anyway deletes them from the remote. " +
+                              "Check them in the graph, then pull them in or force push anyway." + list;
+                var choice = await Dialogs.ChooseAsync("Force push refused", message, remoteCommits,
+                    [new DialogChoice("Force push anyway", IsDanger: true), new DialogChoice("Pull", IsPrimary: true)]);
+                if (choice == 0) await ForcePushCoreAsync(replaceUnseen: true, confirmed: true);
+                else if (choice == 1) await PullAsync();
+                break;
+            }
+            default:
+            {
+                var choice = await Dialogs.ChooseAsync("Force push refused",
+                    $"{upstream} changed since your last fetch, so force pushing could drop commits you haven't seen. " +
+                    "Fetch and check what's there first.", null, [new DialogChoice("Fetch", IsPrimary: true)]);
+                if (choice == 0) await FetchAsync();
+                break;
+            }
+        }
+    }
+
+    /// <summary>"abc1234 subject" for the remote branch's commits that aren't on the local branch (at most 15 lines).</summary>
+    private async Task<IReadOnlyList<string>> RemoteOnlyCommitsAsync()
+    {
+        const int shown = 15;
+        var commits = await GitActions.CommitsOnlyOnUpstreamAsync(_state!.WorkingDirectory);
+        var lines = commits.Take(shown).ToList();
+        if (commits.Count > shown) lines.Add($"… and {commits.Count - shown} more");
+        return lines;
+    }
+
+    /// <param name="confirmed">The user already chose this in a dialog listing the commits; don't ask again.</param>
+    private async Task ForcePushCoreAsync(bool replaceUnseen, bool confirmed = false)
     {
         if (_state?.CurrentBranch is not { } branch || Dialogs is null) return;
         var wt = _state.WorkingDirectory;
@@ -758,7 +816,7 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
                 ? $"\n\nThese commits on {upstream} will be removed:"
                 : $"\n\nThese commits on {upstream} will be replaced (after a rebase, they're the old copies of yours):";
 
-        if (!await Dialogs.ConfirmAsync($"Force push {branch}?", message, details, replaceUnseen ? "Force push anyway" : "Force push")) return;
+        if (!confirmed && !await Dialogs.ConfirmAsync($"Force push {branch}?", message, details, replaceUnseen ? "Force push anyway" : "Force push")) return;
         await RunGitAsync("Force pushing…", () => GitActions.PushAsync(wt, force: true, replaceUnseen: replaceUnseen), $"Force pushed {branch}.");
     }
 
@@ -930,6 +988,14 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
                 startLabel = $"HEAD ({CurrentBranch})";
                 break;
         }
+        await CreateWorktreeFromAsync(source, branch, start, startLabel);
+    }
+
+    /// <summary>The create-worktree dialog, then the worktree: for a branch or a start point (a commit, tag or pull request).</summary>
+    private async Task CreateWorktreeFromAsync(WorktreeSource source, string branch, string? start, string startLabel)
+    {
+        if (_state is null || Dialogs is null) return;
+        var locals = _state.Refs.Where(r => r.Kind == RefKind.LocalBranch).ToDictionary(r => r.Name);
 
         // A branch can only be checked out in one worktree.
         if (source == WorktreeSource.LocalBranch)
@@ -1147,6 +1213,7 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
     /// <summary>Context menu for a graph row: one submenu per ref on the commit, then commit actions.</summary>
     public IReadOnlyList<MenuAction> ActionsForCommit(CommitInfo commit)
     {
+        if (ActionsForRange(commit) is { } rangeActions) return rangeActions;
         if (commit.IsOtherWorktree) return ActionsForOtherWip(commit);
         if (commit.IsWorkingTree)
             return
@@ -1214,6 +1281,10 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
                 new MenuAction("Prune stale worktrees", PruneWorktreesCommand),
             ];
         }
+        if (node.IsPullRequestsSection)
+            return [new MenuAction("Refresh pull requests", RefreshPullRequestListCommand, Icon: MenuIcons.Refresh)];
+        if (node.PullRequest is { } pullRequest)
+            return ActionsForPullRequest(pullRequest);
         if (node.IsFolder && node.BranchPrefix is { } prefix)
             return [new MenuAction($"Create branch in {prefix}…", CreateBranchInFolderCommand, prefix, Icon: (object?)node.KindIcon ?? MenuIcons.Branch)];
         if (node.IsSection && node.Label == "LOCAL")

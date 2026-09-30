@@ -1,0 +1,54 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:TotalGit.App.ViewModels"
+             xmlns:views="using:TotalGit.App.Views"
+             x:Class="TotalGit.App.Views.CommitRangeView"
+             x:DataType="vm:CommitRangeViewModel">
+  <Grid RowDefinitions="Auto,*">
+    <Border Padding="14,12" BorderBrush="#30353C" BorderThickness="0,0,0,1">
+      <StackPanel Spacing="8">
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <Border Width="4" Height="18" CornerRadius="2" Background="#5AA9F2" />
+          <TextBlock Text="{Binding Title}" FontSize="14" FontWeight="SemiBold" Foreground="#E6E8EB" />
+        </StackPanel>
+        <TextBlock Text="{Binding Subtitle}" FontSize="12" Foreground="#A9AFB8" TextWrapping="Wrap" />
+        <TextBlock Text="Shift+click or Shift+Up/Down to change the selection; Esc clears it." FontSize="11" Foreground="#6B727C" TextWrapping="Wrap" />
+        <WrapPanel Orientation="Horizontal">
+          <Button Classes="accent" Margin="0,0,8,4"
+                  Command="{Binding $parent[views:RepositoryView].((vm:RepositoryViewModel)DataContext).RebaseRangeCommand}">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <PathIcon Data="{StaticResource RebaseIcon}" Width="12" Height="12" />
+              <TextBlock Text="Rebase onto…" />
+            </StackPanel>
+          </Button>
+          <Button Content="Copy SHAs" Margin="0,0,8,4"
+                  Command="{Binding $parent[views:RepositoryView].((vm:RepositoryViewModel)DataContext).CopyRangeShasCommand}" />
+          <Button Content="Clear selection" Margin="0,0,8,4"
+                  Command="{Binding $parent[views:RepositoryView].((vm:RepositoryViewModel)DataContext).ClearRangeCommand}" />
+        </WrapPanel>
+      </StackPanel>
+    </Border>
+
+    <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled">
+      <ItemsControl ItemsSource="{Binding Commits}" Margin="14,8">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:RangeCommitItem">
+            <Grid ColumnDefinitions="Auto,*" Margin="0,4">
+              <Border Width="3" Background="#5AA9F2" CornerRadius="1" Margin="0,0,10,0" />
+              <StackPanel Grid.Column="1" Spacing="1">
+                <TextBlock Text="{Binding Subject}" FontSize="12" Foreground="#E6E8EB" TextTrimming="CharacterEllipsis" />
+                <TextBlock FontSize="11" Foreground="#8A9099">
+                  <Run Text="{Binding ShortSha}" FontFamily="Cascadia Mono, Consolas, monospace" />
+                  <Run Text=" · " />
+                  <Run Text="{Binding Author}" />
+                  <Run Text=" · " />
+                  <Run Text="{Binding Date}" />
+                </TextBlock>
+              </StackPanel>
+            </Grid>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </ScrollViewer>
+  </Grid>
+</UserControl>

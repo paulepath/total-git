@@ -48,11 +48,15 @@ public sealed partial class DiffView : Control
     private ScrollBar? _scrollBar;
     private bool _syncing;
     private IReadOnlyList<SplitRow> _splitRows = [];
+    private SplitRowLines[] _splitLines = [];
+    // For each diff line, the side-by-side row it is on.
+    private int[] _splitRowOf = [];
+    private DiffRowLayout _layout = new(0, LineHeight);
     private IntraLineHighlights _highlights = IntraLineHighlights.None;
 
     static DiffView()
     {
-        AffectsRender<DiffView>(DiffProperty, ModeProperty);
+        AffectsRender<DiffView>(DiffProperty, ModeProperty, CanAddCommentsProperty);
         ClipToBoundsProperty.OverrideDefaultValue<DiffView>(true);
         FocusableProperty.OverrideDefaultValue<DiffView>(true);
     }
@@ -71,7 +75,7 @@ public sealed partial class DiffView : Control
 
     private int RowCount => Mode == DiffViewMode.Split ? _splitRows.Count : Diff?.Lines.Count ?? 0;
     private int LineCount => RowCount + (Diff?.Truncated == true ? 1 : 0);
-    private double MaxOffset => Math.Max(0, LineCount * LineHeight - Bounds.Height);
+    private double MaxOffset => Math.Max(0, _layout.TotalHeight - Bounds.Height);
 
     public void AttachScrollBar(ScrollBar scrollBar)
     {
@@ -90,6 +94,14 @@ public sealed partial class DiffView : Control
         {
             var diff = change.GetNewValue<FileDiff?>();
             _splitRows = diff is not null ? SplitDiff.Build(diff.Lines) : [];
+            _splitLines = diff is not null ? SplitRowIndex.Build(diff.Lines, _splitRows) : [];
+            _splitRowOf = new int[diff?.Lines.Count ?? 0];
+            for (var row = 0; row < _splitLines.Length; row++)
+            {
+                if (_splitLines[row].Left >= 0) _splitRowOf[_splitLines[row].Left] = row;
+                if (_splitLines[row].Right >= 0) _splitRowOf[_splitLines[row].Right] = row;
+            }
+            ResetLayout();
             _highlights = diff is not null ? IntraLineDiff.Compute(diff.Lines) : IntraLineHighlights.None;
             var oldPath = change.GetOldValue<FileDiff?>()?.Path;
             var newPath = change.GetNewValue<FileDiff?>()?.Path;
@@ -103,7 +115,16 @@ public sealed partial class DiffView : Control
         else if (change.Property == ModeProperty)
         {
             ClearSelection();
+            ResetLayout();
             SetOffset(0);
+        }
+        else if (change.Property == AnnotationsProperty)
+        {
+            OnAnnotationsChanged(change.GetNewValue<IReadOnlyList<DiffAnnotation>?>());
+        }
+        else if (change.Property == CanAddCommentsProperty)
+        {
+            _hover = null;
         }
         else if (change.Property == BoundsProperty)
         {
@@ -113,7 +134,10 @@ public sealed partial class DiffView : Control
 
     private void SetOffset(double value)
     {
-        _offset = Math.Clamp(value, 0, MaxOffset);
+        var offset = Math.Clamp(value, 0, MaxOffset);
+        // The hovered line has moved away from the pointer.
+        if (offset != _offset) _hover = null;
+        _offset = offset;
         if (_scrollBar is not null)
         {
             _syncing = true;
@@ -124,6 +148,8 @@ public sealed partial class DiffView : Control
             _scrollBar.IsVisible = MaxOffset > 0;
             _syncing = false;
         }
+        // The comment threads move with the text.
+        if (_annotations.Count > 0) InvalidateArrange();
         InvalidateVisual();
     }
 
@@ -138,6 +164,7 @@ public sealed partial class DiffView : Control
         else
         {
             SetOffset(_offset - e.Delta.Y * LineHeight * 3);
+            if (!_selecting) UpdateHover(e);
         }
         e.Handled = true;
     }
@@ -145,6 +172,8 @@ public sealed partial class DiffView : Control
     protected override void OnKeyDown(KeyEventArgs e)
     {
         base.OnKeyDown(e);
+        // Keys typed into a comment box are the box's.
+        if (IsInAnnotation(e.Source)) return;
         if (OnSelectionKey(e))
         {
             e.Handled = true;
@@ -171,7 +200,14 @@ public sealed partial class DiffView : Control
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
         base.OnPointerPressed(e);
+        // A click on a comment thread is the thread's (and must not take the focus from its text box).
+        if (IsInAnnotation(e.Source)) return;
         Focus();
+        if (OnAddCommentPressed(e) || _layout.RowAt(e.GetPosition(this).Y + _offset).InGap)
+        {
+            e.Handled = true;
+            return;
+        }
         if (OnSelectionPressed(e))
         {
             e.Handled = true;
@@ -191,38 +227,74 @@ public sealed partial class DiffView : Control
 
     private (int? Line, int? Column) LineAt(FileDiff diff, Point p)
     {
-        var row = (int)((p.Y + _offset) / LineHeight);
-        DiffLine? line;
+        if (RowUnder(p) is not { } row) return (null, null);
+        int index;
         double textLeft;
         if (Mode == DiffViewMode.Split)
         {
-            if (row < 0 || row >= _splitRows.Count) return (null, null);
+            if (row >= _splitLines.Length) return (null, null);
             var half = Math.Floor(Bounds.Width / 2);
-            var r = _splitRows[row];
+            var (left, right) = _splitLines[row];
             // The right side is the new file; a left-only (removed) line maps to where it was.
-            line = p.X < half ? r.Left ?? r.Right : r.Right ?? r.Left;
+            index = p.X < half ? (left >= 0 ? left : right) : (right >= 0 ? right : left);
             textLeft = (p.X < half ? 0 : half + 1) + GutterWidth + 20;
         }
         else
         {
-            if (row < 0 || row >= diff.Lines.Count) return (null, null);
-            line = diff.Lines[row];
+            if (row >= diff.Lines.Count) return (null, null);
+            index = row;
             textLeft = GutterWidth * 2 + 20;
         }
-        if (line is not { } l) return (null, null);
+        if (index < 0) return (null, null);
 
-        var index = Mode == DiffViewMode.Split ? IndexOf(diff.Lines, l) : row;
+        var l = diff.Lines[index];
         var target = DiffLineMap.TargetLine(diff.Lines, index);
         // A column only means something on a line that is in the new file.
         int? column = l.NewLine is not null ? ColumnAt(l.Text, (p.X - textLeft + _hOffset) / _charWidth) : null;
         return (target, column);
     }
 
-    private static int IndexOf(IReadOnlyList<DiffLine> lines, DiffLine line)
+    /// <summary>The row under a point, or null over the space below a row or past the end.</summary>
+    private int? RowUnder(Point p)
     {
-        for (var i = 0; i < lines.Count; i++)
-            if (lines[i] == line) return i;
-        return -1;
+        var y = p.Y + _offset;
+        if (y < 0 || y >= _layout.TotalHeight) return null;
+        var (row, inGap) = _layout.RowAt(y);
+        return inGap ? null : row;
+    }
+
+    /// <summary>
+    /// The index in <see cref="FileDiff.Lines"/> of the line under a point (on the side under it in a
+    /// side-by-side diff), or null over a filler, a comment thread, or past the end.
+    /// </summary>
+    public int? LineIndexAt(Point p) => RowUnder(p) is { } row ? LineIndexOf(row, SideAt(p.X)) : null;
+
+    /// <summary>The diff line a row shows on a side (inline, the side is ignored).</summary>
+    private int? LineIndexOf(int row, int side)
+    {
+        if (Mode == DiffViewMode.Split)
+        {
+            if (row < 0 || row >= _splitLines.Length) return null;
+            var index = side == 0 ? _splitLines[row].Left : _splitLines[row].Right;
+            return index >= 0 ? index : null;
+        }
+        return row >= 0 && row < (Diff?.Lines.Count ?? 0) ? row : null;
+    }
+
+    /// <summary>The row a diff line is on, or -1.</summary>
+    private int RowOfLine(int index)
+    {
+        if (index < 0 || index >= (Diff?.Lines.Count ?? 0)) return -1;
+        return Mode == DiffViewMode.Split ? _splitRowOf[index] : index;
+    }
+
+    /// <summary>Starts the layout over for a new diff or mode (keeping the space for comment threads).</summary>
+    private void ResetLayout()
+    {
+        _hover = null;
+        _layout = new DiffRowLayout(LineCount, LineHeight);
+        UpdateExtras();
+        InvalidateMeasure();
     }
 
     /// <summary>1-based column in the raw text for a display position (tabs are drawn as four spaces).</summary>
@@ -261,11 +333,10 @@ public sealed partial class DiffView : Control
         var textLeft = GutterWidth * 2 + 20;
         ctx.FillRectangle(GutterBrush, new Rect(0, 0, GutterWidth * 2, Bounds.Height));
 
-        var first = Math.Max(0, (int)(_offset / LineHeight));
-        var last = Math.Min(LineCount - 1, (int)((_offset + Bounds.Height) / LineHeight));
-        for (var i = first; i <= last; i++)
+        for (var i = _layout.RowAt(_offset).Row; i < LineCount && _layout.TopOf(i) < _offset + Bounds.Height; i++)
         {
-            var y = i * LineHeight - _offset;
+            var y = _layout.TopOf(i) - _offset;
+            DrawGap(ctx, i, GutterWidth * 2);
             if (i >= diff.Lines.Count)
             {
                 ctx.DrawText(Text($"Diff truncated after {diff.Lines.Count:N0} lines.", NoticeBrush), new Point(textLeft, y + 2));
@@ -293,21 +364,21 @@ public sealed partial class DiffView : Control
                 DrawLineText(ctx, line, brush, new Point(textLeft - _hOffset, y + 2), i, 0);
             }
         }
+        DrawAddCommentButton(ctx);
     }
 
     private void RenderSplit(DrawingContext ctx, FileDiff diff)
     {
         var width = Bounds.Width;
         var half = Math.Floor(width / 2);
-        var first = Math.Max(0, (int)(_offset / LineHeight));
-        var last = Math.Min(LineCount - 1, (int)((_offset + Bounds.Height) / LineHeight));
+        var first = _layout.RowAt(_offset).Row;
 
         ctx.FillRectangle(GutterBrush, new Rect(0, 0, GutterWidth, Bounds.Height));
         ctx.FillRectangle(GutterBrush, new Rect(half + 1, 0, GutterWidth, Bounds.Height));
 
-        for (var i = first; i <= last; i++)
+        for (var i = first; i < LineCount && _layout.TopOf(i) < _offset + Bounds.Height; i++)
         {
-            var y = i * LineHeight - _offset;
+            var y = _layout.TopOf(i) - _offset;
             if (i >= _splitRows.Count)
             {
                 ctx.DrawText(Text($"Diff truncated after {diff.Lines.Count:N0} lines.", NoticeBrush), new Point(GutterWidth + 20, y + 2));
@@ -328,6 +399,10 @@ public sealed partial class DiffView : Control
         }
 
         ctx.FillRectangle(DividerBrush, new Rect(half, 0, 1, Bounds.Height));
+        // Comment threads span both sides, so their space goes over the divider.
+        for (var i = first; i < LineCount && _layout.TopOf(i) < _offset + Bounds.Height; i++)
+            DrawGap(ctx, i, GutterWidth);
+        DrawAddCommentButton(ctx);
     }
 
     private void DrawSide(DrawingContext ctx, DiffLine? line, double x, double w, double y, int row, bool left)

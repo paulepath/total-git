@@ -39,6 +39,9 @@ public sealed class AppSettings
     public double Zoom { get; set; } = 1.0;
 
     public double SidebarWidth { get; set; } = 240;
+
+    /// <summary>The sidebar stays open; unpinned it folds to a rail and opens while pointed at.</summary>
+    public bool SidebarPinned { get; set; } = true;
     public double DetailsWidth { get; set; } = 380;
 
     // Commit graph columns; a null graph width means sized to the lanes.
@@ -58,6 +61,9 @@ public sealed class AppSettings
 
     /// <summary>A commit's (or another worktree's) changed files grouped by folder (otherwise a flat list).</summary>
     public bool ChangedFilesTree { get; set; } = true;
+
+    /// <summary>The merge tool shows the common ancestor next to the two sides (when git has one).</summary>
+    public bool MergeShowBase { get; set; } = true;
 
     public Dictionary<string, RepoSettings> Repositories { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 

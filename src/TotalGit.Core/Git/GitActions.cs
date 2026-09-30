@@ -180,6 +180,41 @@ public static class GitActions
         await GitCli.RunAsync(worktree, "add", "--", path);
     }
 
+    /// <summary>
+    /// The conflicted file with the common ancestor's text in each conflict (diff3-style markers), rebuilt from
+    /// the index's base/ours/theirs versions. Null when there is no ancestor (added on both sides), when the file
+    /// already has base sections, or when it no longer matches a fresh merge (e.g. it was edited by hand).
+    /// </summary>
+    /// <param name="current">The file's text as it is now (without a BOM).</param>
+    public static async Task<string?> ConflictWithBaseAsync(string worktree, string path, string current, string oursLabel, string theirsLabel)
+    {
+        // Writes each stage to a temporary file in the worktree: "base ours theirs<TAB>path", "." for a missing one.
+        var listed = await GitCli.RunAsync(worktree, ["checkout-index", "--stage=all", "--temp", "--", path], throwOnError: false);
+        var names = listed.ExitCode == 0 ? listed.StdOut.Split('\t')[0].Trim().Split(' ') : [];
+        var temps = names.Where(n => n != "." && n.Length > 0).Select(n => Path.Combine(worktree, n)).ToList();
+        try
+        {
+            if (names.Length != 3 || names.Contains(".")) return null;
+            string[] files = [Path.Combine(worktree, names[1]), Path.Combine(worktree, names[0]), Path.Combine(worktree, names[2])];
+            string[] labels = ["-L", oursLabel, "-L", "base", "-L", theirsLabel];
+
+            // merge-file exits with the number of conflicts, so a non-zero exit is expected.
+            var plain = await GitCli.RunAsync(worktree, ["merge-file", "-p", .. labels, .. files], throwOnError: false);
+            if (plain.ExitCode < 0 || Normalize(plain.StdOut) != Normalize(current)) return null;
+            var withBase = await GitCli.RunAsync(worktree, ["merge-file", "-p", "--diff3", .. labels, .. files], throwOnError: false);
+            if (withBase.ExitCode <= 0) return null;
+            var text = withBase.StdOut.TrimStart('﻿').Replace("\r\n", "\n");
+            return current.Contains("\r\n") ? text.Replace("\n", "\r\n") : text;
+        }
+        finally
+        {
+            foreach (var t in temps)
+                try { File.Delete(t); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+        }
+
+        static string Normalize(string s) => s.TrimStart('﻿').Replace("\r\n", "\n");
+    }
+
     public static Task MergeAbortAsync(string worktree) => GitCli.RunAsync(worktree, "merge", "--abort");
 
     /// <summary>Concludes a merge whose conflicts are resolved and staged.</summary>
@@ -189,6 +224,20 @@ public static class GitActions
     /// <summary>Rebases the current branch onto <paramref name="onto"/>.</summary>
     public static Task<OperationOutcome> RebaseAsync(string worktree, string onto) =>
         RunStoppableAsync(worktree, ["rebase", onto]);
+
+    /// <summary>
+    /// Replays the commits of <paramref name="branch"/> after <paramref name="upstream"/> (all of them when null) onto
+    /// <paramref name="onto"/>, then points <paramref name="branch"/> at the result. Checks the branch out.
+    /// </summary>
+    public static Task<OperationOutcome> RebaseOntoAsync(string worktree, string onto, string? upstream, string branch) =>
+        RunStoppableAsync(worktree, ["rebase", "--onto", onto, upstream ?? "--root", branch]);
+
+    /// <summary>"abc1234 subject" for each commit in a revision range (e.g. <c>main..feature</c>), newest first.</summary>
+    public static async Task<IReadOnlyList<string>> CommitSummariesAsync(string worktree, string range)
+    {
+        var result = await GitCli.RunAsync(worktree, ["log", "--format=%h %s", range], throwOnError: false);
+        return result.ExitCode != 0 ? [] : result.StdOut.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    }
 
     public static Task<OperationOutcome> RebaseContinueAsync(string worktree) =>
         RunStoppableAsync(worktree, ["rebase", "--continue"]);
@@ -307,7 +356,24 @@ public static class GitActions
 
     public static Task FetchAsync(string worktree) => GitCli.RunAsync(worktree, "fetch", "--all", "--prune");
 
+    /// <summary>
+    /// Fetches specific refs from <paramref name="remote"/>, e.g. <c>+refs/pull/12/head:refs/totalgit/pr/12</c> for a
+    /// pull request's head, which no branch refspec covers.
+    /// </summary>
+    public static Task FetchRefsAsync(string worktree, string remote, params string[] refspecs) =>
+        GitCli.RunAsync(worktree, ["fetch", "--no-tags", remote, .. refspecs]);
+
     public static Task PullAsync(string worktree) => GitCli.RunAsync(worktree, "pull");
+
+    /// <summary>Pulls only if the branch can simply move forward (no merge or rebase).</summary>
+    public static Task PullFastForwardAsync(string worktree) => GitCli.RunAsync(worktree, "pull", "--ff-only");
+
+    /// <summary>
+    /// Moves a local branch that isn't checked out forward to its remote branch, fetching first. git refuses when the
+    /// branch has commits of its own (it can't just move forward) or is checked out in a worktree.
+    /// </summary>
+    public static Task FastForwardBranchAsync(string worktree, string remote, string remoteBranch, string localBranch) =>
+        GitCli.RunAsync(worktree, "fetch", "--no-tags", remote, $"refs/heads/{remoteBranch}:refs/heads/{localBranch}");
 
     /// <summary>
     /// Pushes the current branch, setting the upstream to <paramref name="remote"/> when it has none.

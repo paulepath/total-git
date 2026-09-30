@@ -29,7 +29,7 @@ public sealed partial class DiffView
 
     public DiffView()
     {
-        Cursor = new Cursor(StandardCursorType.Ibeam);
+        Cursor = _textCursor;
     }
 
     public bool HasSelection => _anchor is { } a && _caret is { } c && a != c;
@@ -106,12 +106,19 @@ public sealed partial class DiffView
 
     private int SideAt(double x) => Mode == DiffViewMode.Split && x > Half ? 1 : 0;
 
-    private int RowAt(double y) => Math.Clamp((int)((y + _offset) / LineHeight), 0, Math.Max(0, RowCount - 1));
+    private (int Row, bool InGap) RowAt(double y)
+    {
+        var (row, inGap) = _layout.RowAt(y + _offset);
+        // The truncation notice isn't text.
+        return row < RowCount ? (row, inGap) : (Math.Max(0, RowCount - 1), false);
+    }
 
     private TextPos HitTest(Point p, int side)
     {
-        var row = RowAt(p.Y);
+        var (row, inGap) = RowAt(p.Y);
         var text = RowText(row, side) ?? "";
+        // Over a comment thread: the end of the line above it.
+        if (inGap) return new TextPos(row, text.Length);
         var column = (int)Math.Round((p.X - GutterRight(side) + _hOffset) / _charWidth);
         return new TextPos(row, RawIndex(text, Math.Max(0, column)));
     }
@@ -183,7 +190,11 @@ public sealed partial class DiffView
     protected override void OnPointerMoved(PointerEventArgs e)
     {
         base.OnPointerMoved(e);
-        if (!_selecting) return;
+        if (!_selecting)
+        {
+            UpdateHover(e);
+            return;
+        }
         var p = e.GetPosition(this);
         // Dragging past the top or bottom scrolls.
         if (p.Y < 0) SetOffset(_offset - LineHeight);

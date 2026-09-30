@@ -201,13 +201,16 @@ public partial class RepositoryViewModel
 
     public bool HasMergeTool => MergeTool is not null;
 
-    private void OpenMergeTool(string path)
+    private int _mergeToolRequest;
+
+    private async void OpenMergeTool(string path)
     {
         if (_state is null) return;
         var wt = _state.WorkingDirectory;
+        var request = ++_mergeToolRequest;
         try
         {
-            MergeTool = new MergeToolViewModel(wt, path,
+            var tool = await MergeToolViewModel.LoadAsync(wt, path, Settings,
                 markResolved: async p =>
                 {
                     var ok = await RunGitAsync("Marking resolved…", () => GitActions.StageAsync(wt, [p]), $"Resolved {p}.", Refresh.Status);
@@ -219,12 +222,17 @@ public partial class RepositoryViewModel
                     if (await RunGitAsync("Resolving…", () => GitActions.TakeSideAsync(wt, p, ours), $"Resolved {p}.", Refresh.Status))
                         SelectNextConflict();
                 },
-                confirm: (title, message) => Dialogs?.ConfirmAsync(title, message, null, "Save anyway") ?? Task.FromResult(false),
+                confirm: (title, message, confirmText) => Dialogs?.ConfirmAsync(title, message, null, confirmText) ?? Task.FromResult(false),
                 close: () =>
                 {
                     if (Staging is not null) Staging.SelectedFile = null;
                     MergeTool = null;
                 });
+            // Another file was picked (or the tool closed) while this one loaded.
+            if (request != _mergeToolRequest
+                || Staging is not { SelectedFile: { Change.Kind: ChangeKind.Conflicted } selected } || selected.Path != path)
+                return;
+            MergeTool = tool;
         }
         catch (IOException ex)
         {

@@ -39,6 +39,9 @@ public static class MenuIcons
     public const string Stash = "StashIcon";
     public const string Plus = "PlusIcon";
     public const string Ignore = "IgnoreIcon";
+    public const string Browser = "BrowserIcon";
+    public const string PullRequest = "PullRequestIcon";
+    public const string Refresh = "RefreshIcon";
 }
 
 /// <summary>A branch, tag or worktree that actions can target.</summary>
@@ -67,15 +70,24 @@ public sealed record Banner(string Message, bool IsError, IReadOnlyList<MenuActi
     public bool HasActions => Actions.Count > 0;
 }
 
+/// <summary>One answer in a choice dialog.</summary>
+/// <param name="IsPrimary">The highlighted, default answer.</param>
+/// <param name="IsDanger">Destroys something (shown in red).</param>
+public sealed record DialogChoice(string Text, bool IsPrimary = false, bool IsDanger = false, string? ToolTip = null);
+
 public interface IDialogService
 {
     Task<string?> PickFolderAsync();
     Task<bool> ConfirmAsync(string title, string message, IReadOnlyList<string>? details = null, string confirmText = "OK");
+
+    /// <summary>Asks a question with several answers; the index of the chosen one, or null when cancelled.</summary>
+    Task<int?> ChooseAsync(string title, string message, IReadOnlyList<string>? details, IReadOnlyList<DialogChoice> choices);
     Task<bool> ShowCreateWorktreeAsync(CreateWorktreeViewModel viewModel);
     Task<bool> ShowFormAsync(FormSpec spec);
     Task<bool> ShowInteractiveRebaseAsync(InteractiveRebaseViewModel viewModel);
     Task<bool> ShowAddIgnoreAsync(AddIgnoreViewModel viewModel);
     Task<bool> ShowBranchCleanupAsync(BranchCleanupViewModel viewModel);
+    Task<bool> ShowRebaseCommitsAsync(RebaseCommitsViewModel viewModel);
     Task CopyToClipboardAsync(string text);
     Task RevealFolderAsync(string path);
 }

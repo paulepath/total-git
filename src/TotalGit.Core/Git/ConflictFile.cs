@@ -1,14 +1,5 @@
 namespace TotalGit.Core.Git;
 
-public enum ConflictChoice
-{
-    Unresolved,
-    Ours,
-    Theirs,
-    OursThenTheirs,
-    TheirsThenOurs,
-}
-
 /// <summary>A run of lines in a conflicted file: either shared text or one conflict.</summary>
 public abstract record ConflictSegment;
 
@@ -128,42 +119,31 @@ public sealed class ConflictFile
         return false;
     }
 
-    /// <summary>The file with each conflict replaced by its choice; unresolved conflicts keep their markers.</summary>
-    public string Render(IReadOnlyList<ConflictChoice> choices)
+    /// <summary>The file as parsed, every conflict still with its markers.</summary>
+    public string Render()
     {
         var lines = new List<string>();
-        var n = 0;
         foreach (var segment in Segments)
         {
-            if (segment is CommonSegment c)
-            {
-                lines.AddRange(c.Lines);
-                continue;
-            }
-            var hunk = (ConflictHunk)segment;
-            var choice = n < choices.Count ? choices[n] : ConflictChoice.Unresolved;
-            n++;
-            switch (choice)
-            {
-                case ConflictChoice.Ours: lines.AddRange(hunk.Ours); break;
-                case ConflictChoice.Theirs: lines.AddRange(hunk.Theirs); break;
-                case ConflictChoice.OursThenTheirs: lines.AddRange(hunk.Ours); lines.AddRange(hunk.Theirs); break;
-                case ConflictChoice.TheirsThenOurs: lines.AddRange(hunk.Theirs); lines.AddRange(hunk.Ours); break;
-                default:
-                    lines.Add(hunk.OursLabel.Length > 0 ? $"{OursMarker} {hunk.OursLabel}" : OursMarker);
-                    lines.AddRange(hunk.Ours);
-                    if (hunk.Base is not null)
-                    {
-                        lines.Add(hunk.BaseLabel is { Length: > 0 } bl ? $"{BaseMarker} {bl}" : BaseMarker);
-                        lines.AddRange(hunk.Base);
-                    }
-                    lines.Add(SplitMarker);
-                    lines.AddRange(hunk.Theirs);
-                    lines.Add(hunk.TheirsLabel.Length > 0 ? $"{TheirsMarker} {hunk.TheirsLabel}" : TheirsMarker);
-                    break;
-            }
+            if (segment is CommonSegment c) lines.AddRange(c.Lines);
+            else AppendMarkers(lines, (ConflictHunk)segment);
         }
         return Join(lines);
+    }
+
+    /// <summary>Writes a conflict back out with its markers (and base section, if it had one).</summary>
+    public static void AppendMarkers(List<string> lines, ConflictHunk hunk)
+    {
+        lines.Add(hunk.OursLabel.Length > 0 ? $"{OursMarker} {hunk.OursLabel}" : OursMarker);
+        lines.AddRange(hunk.Ours);
+        if (hunk.Base is not null)
+        {
+            lines.Add(hunk.BaseLabel is { Length: > 0 } bl ? $"{BaseMarker} {bl}" : BaseMarker);
+            lines.AddRange(hunk.Base);
+        }
+        lines.Add(SplitMarker);
+        lines.AddRange(hunk.Theirs);
+        lines.Add(hunk.TheirsLabel.Length > 0 ? $"{TheirsMarker} {hunk.TheirsLabel}" : TheirsMarker);
     }
 
     /// <summary>One side's version of the whole file, with where each conflict is in it.</summary>

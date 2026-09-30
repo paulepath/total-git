@@ -46,6 +46,18 @@ public partial class MainWindow : Window, IDialogService
             }
         };
 
+        // The mouse's back button leaves the diff (or merge tool), like Escape and a browser's Back. Tunnel, so the
+        // diff view and lists under the pointer don't take the press first.
+        AddHandler(PointerPressedEvent, (_, e) =>
+        {
+            if (e.GetCurrentPoint(this).Properties.PointerUpdateKind == PointerUpdateKind.XButton1Pressed
+                && _shell?.SelectedTab is { } tab && (tab.HasDiff || tab.MergeTool is not null))
+            {
+                tab.CloseDiffCommand.Execute(null);
+                e.Handled = true;
+            }
+        }, RoutingStrategies.Tunnel);
+
         // Zoom: Ctrl + wheel and Ctrl +/-/0. Tunnel handlers run before the graph, diff and text boxes see the input.
         AddHandler(KeyDownEvent, (_, e) =>
         {
@@ -81,7 +93,13 @@ public partial class MainWindow : Window, IDialogService
         };
 
         // Other worktrees aren't watched: check them when coming back to the app (e.g. after editing in VS Code).
-        Activated += (_, _) => _ = _shell?.SelectedTab?.RefreshOtherWorktreesAsync();
+        // Pull requests change on the host: refresh the list too, at most once a minute.
+        Activated += (_, _) =>
+        {
+            if (_shell?.SelectedTab is not { } tab) return;
+            _ = tab.RefreshOtherWorktreesAsync();
+            _ = tab.RefreshPullRequestsAsync(TimeSpan.FromMinutes(1));
+        };
 
         // Middle-click closes a tab, as in browsers.
         TabStrip.AddHandler(PointerReleasedEvent, (_, e) =>
@@ -200,6 +218,9 @@ public partial class MainWindow : Window, IDialogService
     public Task<bool> ConfirmAsync(string title, string message, IReadOnlyList<string>? details = null, string confirmText = "OK") =>
         Zoomed(new ConfirmDialog(title, message, details, confirmText)).ShowDialog<bool>(this);
 
+    public Task<int?> ChooseAsync(string title, string message, IReadOnlyList<string>? details, IReadOnlyList<DialogChoice> choices) =>
+        Zoomed(new ChoiceDialog(title, message, details, choices)).ShowDialog<int?>(this);
+
     public Task<bool> ShowCreateWorktreeAsync(CreateWorktreeViewModel viewModel) =>
         Zoomed(new CreateWorktreeDialog { DataContext = viewModel }).ShowDialog<bool>(this);
 
@@ -213,6 +234,9 @@ public partial class MainWindow : Window, IDialogService
 
     public Task<bool> ShowBranchCleanupAsync(BranchCleanupViewModel viewModel) =>
         Zoomed(new BranchCleanupDialog { DataContext = viewModel }).ShowDialog<bool>(this);
+
+    public Task<bool> ShowRebaseCommitsAsync(RebaseCommitsViewModel viewModel) =>
+        Zoomed(new RebaseCommitsDialog { DataContext = viewModel }).ShowDialog<bool>(this);
 
     public async Task CopyToClipboardAsync(string text)
     {
