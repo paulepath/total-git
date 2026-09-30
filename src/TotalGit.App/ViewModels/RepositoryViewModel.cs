@@ -502,7 +502,7 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
         {
             var details = await Task.Run(() => session.GetCommitDetails(sha));
             if (request != _detailsRequest) return;
-            var vm = new CommitDetailsViewModel(details, SelectAndReveal);
+            var vm = new CommitDetailsViewModel(details, SelectAndReveal, Settings.ChangedFilesTree, SaveChangedFilesTree);
             vm.PropertyChanged += OnChildPropertyChanged;
             Details = vm;
             vm.Avatar = await Avatars.GetAsync(details.Commit.AuthorEmail, Graph?.GitHubRepo, sha);
@@ -511,6 +511,12 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
         {
             if (request == _detailsRequest) Details = null;
         }
+    }
+
+    private void SaveChangedFilesTree(bool tree)
+    {
+        Settings.ChangedFilesTree = tree;
+        Settings.Save();
     }
 
     private StagingViewModel CreateStaging() => new()

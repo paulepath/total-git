@@ -1,6 +1,5 @@
 using Avalonia.Controls;
 using Avalonia.Threading;
-using Avalonia.VisualTree;
 using TotalGit.App.ViewModels;
 
 namespace TotalGit.App.Views;
@@ -26,14 +25,7 @@ public partial class CommitDetailsView : UserControl
             _copiedTimer.Stop();
             ShowCopied(false);
         };
-        FileList.ContextRequested += (_, e) =>
-        {
-            if ((e.Source as Control)?.FindAncestorOfType<ListBoxItem>(includeSelf: true) is { DataContext: FileChangeItem file } item)
-            {
-                FileContextRequested?.Invoke(file, item);
-                e.Handled = true;
-            }
-        };
+        Files.FileContextRequested += (file, row) => FileContextRequested?.Invoke(file, row);
     }
 
     private void ShowCopied(bool copied)

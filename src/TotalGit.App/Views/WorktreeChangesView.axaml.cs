@@ -1,5 +1,4 @@
 using Avalonia.Controls;
-using Avalonia.VisualTree;
 using TotalGit.App.ViewModels;
 using TotalGit.Core.Worktrees;
 
@@ -18,14 +17,9 @@ public partial class WorktreeChangesView : UserControl
         {
             if (DataContext is WorktreeChangesViewModel vm) OpenInCodeRequested?.Invoke(vm.Path);
         };
-        FileList.ContextRequested += (_, e) =>
+        Files.FileContextRequested += (file, row) =>
         {
-            if (DataContext is WorktreeChangesViewModel vm
-                && (e.Source as Control)?.FindAncestorOfType<ListBoxItem>(includeSelf: true) is { DataContext: FileChangeItem file } item)
-            {
-                FileContextRequested?.Invoke(file, vm.Path, item);
-                e.Handled = true;
-            }
+            if (DataContext is WorktreeChangesViewModel vm) FileContextRequested?.Invoke(file, vm.Path, row);
         };
     }
 

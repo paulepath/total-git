@@ -50,13 +50,17 @@ public sealed class FileChangeItem(FileChange change, bool staged)
 
 public sealed partial class CommitDetailsViewModel : ObservableObject
 {
-    public CommitDetailsViewModel(CommitDetails details, Action<string> selectCommit)
+    public CommitDetailsViewModel(CommitDetails details, Action<string> selectCommit, bool showAsTree = true, Action<bool>? showAsTreeChanged = null)
     {
         Details = details;
         var lines = details.FullMessage.TrimEnd().Split('\n', 2);
         Summary = lines[0].Trim();
         Body = lines.Length > 1 ? lines[1].Trim() : null;
-        Files = details.Files.Select(f => new FileChangeItem(f, false)).ToArray();
+        FileTree = new FileTreeViewModel(details.Files.Select(f => new FileChangeItem(f, false)).ToArray(), showAsTree, showAsTreeChanged);
+        FileTree.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(FileTreeViewModel.SelectedFile)) OnPropertyChanged(nameof(SelectedFile));
+        };
         Parents = details.Commit.ParentShas.Select(p => new ParentLink(p, new RelayCommand(() => selectCommit(p)))).ToArray();
     }
 
@@ -72,15 +76,17 @@ public sealed partial class CommitDetailsViewModel : ObservableObject
     public bool CommitterDiffers => Details.CommitterEmail != Details.Commit.AuthorEmail || Details.CommitterName != Details.Commit.AuthorName;
     public string CommitterText => $"committed by {Details.CommitterName} · {Details.CommitterDate.LocalDateTime:g}";
     public string Initials => Core.Avatars.AvatarIdentity.Initials(AuthorName);
-    public IReadOnlyList<FileChangeItem> Files { get; }
-    public string FileCountText => Files.Count == 1 ? "1 file changed" : $"{Files.Count} files changed";
+    public FileTreeViewModel FileTree { get; }
     public IReadOnlyList<ParentLink> Parents { get; }
 
     [ObservableProperty]
     public partial Bitmap? Avatar { get; set; }
 
-    [ObservableProperty]
-    public partial FileChangeItem? SelectedFile { get; set; }
+    public FileChangeItem? SelectedFile
+    {
+        get => FileTree.SelectedFile;
+        set => FileTree.SelectedFile = value;
+    }
 
     public sealed record ParentLink(string Sha, IRelayCommand Command)
     {

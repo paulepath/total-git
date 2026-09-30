@@ -122,7 +122,7 @@ public sealed partial class RepositoryViewModel
                 session.Dispose();
                 return;
             }
-            WorktreeChanges = new WorktreeChangesViewModel(worktree, session, status);
+            WorktreeChanges = new WorktreeChangesViewModel(worktree, session, status, Settings.ChangedFilesTree, SaveChangedFilesTree);
         }
         catch (Exception ex) when (ex is RepositoryOpenException or LibGit2Sharp.LibGit2SharpException or IOException)
         {

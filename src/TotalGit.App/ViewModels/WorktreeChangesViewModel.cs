@@ -8,23 +8,36 @@ namespace TotalGit.App.ViewModels;
 /// The uncommitted changes of a worktree other than the one the tab shows (its WIP row in the graph):
 /// read-only, with diffs read through its own session.
 /// </summary>
-public sealed partial class WorktreeChangesViewModel(WorktreeInfo worktree, RepositorySession session, WorkingTreeStatus status)
-    : ObservableObject, IDisposable
+public sealed partial class WorktreeChangesViewModel : ObservableObject, IDisposable
 {
-    public WorktreeInfo Worktree { get; } = worktree;
-    public RepositorySession Session { get; } = session;
+    public WorktreeChangesViewModel(WorktreeInfo worktree, RepositorySession session, WorkingTreeStatus status,
+        bool showAsTree = true, Action<bool>? showAsTreeChanged = null)
+    {
+        Worktree = worktree;
+        Session = session;
+        // Unstaged files first, then staged ones (a file can be in both).
+        FileTree = new FileTreeViewModel(
+            [.. status.Unstaged.Select(f => new FileChangeItem(f, false)), .. status.Staged.Select(f => new FileChangeItem(f, true))],
+            showAsTree, showAsTreeChanged);
+        FileTree.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(FileTreeViewModel.SelectedFile)) OnPropertyChanged(nameof(SelectedFile));
+        };
+    }
+
+    public WorktreeInfo Worktree { get; }
+    public RepositorySession Session { get; }
     public string Name => Worktree.Name;
     public string BranchText => Worktree.Branch is { } b ? $"on {b}" : "detached HEAD";
     public string Path => Worktree.Path;
 
-    /// <summary>Unstaged files first, then staged ones (a file can be in both).</summary>
-    public IReadOnlyList<FileChangeItem> Files { get; } =
-        [.. status.Unstaged.Select(f => new FileChangeItem(f, false)), .. status.Staged.Select(f => new FileChangeItem(f, true))];
+    public FileTreeViewModel FileTree { get; }
 
-    public string FileCountText => status.TotalCount == 1 ? "1 file changed" : $"{status.TotalCount} files changed";
-
-    [ObservableProperty]
-    public partial FileChangeItem? SelectedFile { get; set; }
+    public FileChangeItem? SelectedFile
+    {
+        get => FileTree.SelectedFile;
+        set => FileTree.SelectedFile = value;
+    }
 
     public void Dispose() => Session.Dispose();
 }

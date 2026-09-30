@@ -56,6 +56,9 @@ public sealed class AppSettings
     /// <summary>Staging lists grouped by folder (otherwise a flat list).</summary>
     public bool StagingTree { get; set; } = true;
 
+    /// <summary>A commit's (or another worktree's) changed files grouped by folder (otherwise a flat list).</summary>
+    public bool ChangedFilesTree { get; set; } = true;
+
     public Dictionary<string, RepoSettings> Repositories { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
     public RepoSettings ForRepository(string mainRoot)

@@ -1,0 +1,62 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:TotalGit.App.ViewModels"
+             x:Class="TotalGit.App.Views.FileTreeView"
+             x:DataType="vm:FileTreeViewModel">
+  <UserControl.Styles>
+    <Style Selector="TreeViewItem" x:DataType="vm:StagingNode">
+      <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+      <Setter Property="MinHeight" Value="24" />
+      <Setter Property="Padding" Value="0" />
+    </Style>
+    <Style Selector="TreeViewItem /template/ Border#PART_LayoutRoot">
+      <Setter Property="MinHeight" Value="24" />
+    </Style>
+    <Style Selector="Button.treeTool">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Padding" Value="5,3" />
+      <Setter Property="MinHeight" Value="0" />
+    </Style>
+  </UserControl.Styles>
+
+  <UserControl.DataTemplates>
+    <TreeDataTemplate DataType="vm:StagingNode" ItemsSource="{Binding Children}">
+      <Grid ColumnDefinitions="18,Auto,*,Auto" Height="24" Background="Transparent" ToolTip.Tip="{Binding ToolTip}">
+        <TextBlock Text="{Binding StatusLetter}" Foreground="{Binding StatusBrush}" FontWeight="Bold" FontSize="12"
+                   VerticalAlignment="Center" IsVisible="{Binding IsFile}" />
+        <PathIcon Data="{StaticResource FolderIcon}" Width="12" Height="12" Foreground="#8A9099" HorizontalAlignment="Left"
+                  VerticalAlignment="Center" IsVisible="{Binding IsFolder}" />
+        <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="12" Foreground="#E6E8EB" VerticalAlignment="Center"
+                   TextTrimming="CharacterEllipsis" />
+        <TextBlock Grid.Column="2" Text="{Binding Subtitle}" FontSize="11" Foreground="#6B727C" IsVisible="{Binding HasSubtitle}"
+                   TextTrimming="LeadingCharacterEllipsis" VerticalAlignment="Center" Margin="6,0,0,0" />
+        <TextBlock Grid.Column="2" Text="{Binding FileCount}" FontSize="11" Foreground="#6B727C" IsVisible="{Binding IsFolder}"
+                   VerticalAlignment="Center" Margin="6,0,0,0" />
+        <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="8" Margin="8,0,10,0" VerticalAlignment="Center">
+          <TextBlock Text="staged" FontSize="11" Foreground="#4CC38A" IsVisible="{Binding File.IsStaged, FallbackValue=False}" />
+          <TextBlock Text="{Binding File.Stats}" FontSize="11" Foreground="#8A9099" IsVisible="{Binding File.HasStats, FallbackValue=False}" />
+        </StackPanel>
+      </Grid>
+    </TreeDataTemplate>
+  </UserControl.DataTemplates>
+
+  <Grid RowDefinitions="Auto,*">
+    <Grid ColumnDefinitions="*,Auto,Auto,Auto" Margin="14,6,10,4">
+      <TextBlock Text="{Binding FileCountText}" FontSize="11" FontWeight="SemiBold" Foreground="#8A9099" VerticalAlignment="Center" />
+      <Button Grid.Column="1" Classes="treeTool" Command="{Binding ExpandAllCommand}" IsVisible="{Binding ShowAsTree}"
+              ToolTip.Tip="Expand all folders">
+        <PathIcon Data="{StaticResource ExpandAllIcon}" Width="12" Height="12" Foreground="#A9AFB8" />
+      </Button>
+      <Button Grid.Column="2" Classes="treeTool" Command="{Binding CollapseAllCommand}" IsVisible="{Binding ShowAsTree}"
+              ToolTip.Tip="Collapse all folders">
+        <PathIcon Data="{StaticResource CollapseAllIcon}" Width="12" Height="12" Foreground="#A9AFB8" />
+      </Button>
+      <ToggleButton Grid.Column="3" IsChecked="{Binding ShowAsTree}" Margin="4,0,0,0" Padding="7,0" MinHeight="24"
+                    ToolTip.Tip="Group files by folder">
+        <PathIcon Data="{StaticResource FolderIcon}" Width="12" Height="12" />
+      </ToggleButton>
+    </Grid>
+    <TreeView Grid.Row="1" x:Name="Tree" ItemsSource="{Binding Nodes}" Background="Transparent"
+              ScrollViewer.HorizontalScrollBarVisibility="Disabled" />
+  </Grid>
+</UserControl>
