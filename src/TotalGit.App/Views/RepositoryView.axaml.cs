@@ -183,6 +183,8 @@ public partial class RepositoryView : UserControl
 
     private void SetUpSidebarFolding()
     {
+        Sidebar.RulesRequested += () => _vm?.EditBranchRulesCommand.Execute(null);
+        Sidebar.TicketClicked += key => _vm?.OpenTicketCommand.Execute(key);
         Sidebar.PinToggled += pinned =>
         {
             if (pinned == _sidebarPinned || _vm is null) return;

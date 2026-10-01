@@ -12,42 +12,29 @@ public enum BranchKind
 }
 
 /// <summary>
-/// Recognises the feature(s)/, bug(s)/ and hot-fix/ naming convention, so the UI can show an icon
-/// in place of the prefix ("feature/e4-1-x" → ✦ "e4-1-x"). main/master get an icon too, keeping their name.
+/// The kind of a branch under the active <see cref="BranchRuleSet"/>, for the built-in icons ("feature/e4-1-x" →
+/// ✦ "e4-1-x"; main/master keep their name). Branches matched by a rule with another icon are <see cref="BranchKind.Other"/>.
 /// </summary>
 public static class BranchCategory
 {
-    private static readonly (string Prefix, BranchKind Kind)[] Prefixes =
-    [
-        ("feature/", BranchKind.Feature),
-        ("features/", BranchKind.Features),
-        ("bug/", BranchKind.Bug),
-        ("bugs/", BranchKind.Bugs),
-        ("bugfix/", BranchKind.Bug),
-        ("hot-fix/", BranchKind.HotFix),
-        ("hotfix/", BranchKind.HotFix),
-    ];
-
-    /// <summary>The branch's kind and its name without the prefix (unchanged for Other).</summary>
+    /// <summary>The branch's kind and the name to show (without the prefix when its rule hides it).</summary>
     public static (BranchKind Kind, string ShortName) Classify(string? name)
     {
-        if (string.IsNullOrEmpty(name)) return (BranchKind.Other, name ?? "");
-        if (name is "main" or "master") return (BranchKind.Main, name);
-        foreach (var (prefix, kind) in Prefixes)
-        {
-            if (name.Length > prefix.Length && name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-                return (kind, name[prefix.Length..]);
-            // A branch named just "bugs" or "features" gets the icon too, keeping its name (like main).
-            if (name.Length == prefix.Length - 1 && prefix.StartsWith(name, StringComparison.OrdinalIgnoreCase))
-                return (kind, name);
-        }
-        return (BranchKind.Other, name);
+        var match = BranchRuleSet.Current.Match(name);
+        return (KindOf(match.Rule), match.ShortName);
     }
 
     /// <summary>The kind of a folder name in the sidebar tree ("feature", "bugs", "hot-fix").</summary>
-    public static BranchKind ForFolder(string folder)
+    public static BranchKind ForFolder(string folder) => KindOf(BranchRuleSet.Current.ForFolder(folder));
+
+    private static BranchKind KindOf(BranchRule? rule) => rule?.Icon switch
     {
-        var kind = Classify(folder + "/x").Kind;
-        return kind == BranchKind.Main ? BranchKind.Other : kind;
-    }
+        "builtin:feature" => BranchKind.Feature,
+        "builtin:features" => BranchKind.Features,
+        "builtin:bug" => BranchKind.Bug,
+        "builtin:bugs" => BranchKind.Bugs,
+        "builtin:hot-fix" => BranchKind.HotFix,
+        "builtin:main" => BranchKind.Main,
+        _ => BranchKind.Other,
+    };
 }

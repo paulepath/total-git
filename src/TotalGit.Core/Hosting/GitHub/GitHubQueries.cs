@@ -21,7 +21,13 @@ internal static class GitHubQueries
             pullRequests(states: OPEN, first: 30, orderBy: {field: UPDATED_AT, direction: DESC}) {
               nodes {
                 {{SummaryFields}}
-                commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
+                createdAt additions deletions changedFiles mergeStateStatus mergeable
+                commits(last: 1) { nodes { commit { statusCheckRollup { state contexts(first: 100) { nodes {
+                  __typename
+                  ... on CheckRun { name status conclusion detailsUrl title }
+                  ... on StatusContext { context state targetUrl description }
+                } } } } } }
+                latestReviews(first: 20) { nodes { state author { login avatarUrl } } }
               }
             }
           }

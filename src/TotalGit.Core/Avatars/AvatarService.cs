@@ -55,6 +55,44 @@ public sealed class AvatarService : IDisposable
         return _inflight.GetOrAdd(key, _ => ResolveAsync(key, email, gitHubRepo, sampleCommitSha));
     }
 
+    /// <summary>
+    /// An avatar from a known address (a pull request's author or reviewer), cached on disk by the address. GitHub
+    /// avatars are asked for at the small size the app draws them.
+    /// </summary>
+    public Task<byte[]?> GetAvatarByUrlAsync(string url)
+    {
+        var key = "url-" + Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(url)))[..24];
+        return _inflight.GetOrAdd(key, _ => DownloadByUrlAsync(key, url));
+    }
+
+    private async Task<byte[]?> DownloadByUrlAsync(string key, string url)
+    {
+        var file = Path.Combine(_cacheDir, $"{key}.img");
+        if (File.Exists(file)) return await File.ReadAllBytesAsync(file);
+        if (Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Host.EndsWith("githubusercontent.com", StringComparison.OrdinalIgnoreCase)
+            && !uri.Query.Contains("s=", StringComparison.Ordinal))
+            url += (uri.Query.Length > 0 ? "&" : "?") + "s=64";
+
+        await _throttle.WaitAsync();
+        try
+        {
+            var bytes = await TryDownloadAsync(url);
+            if (bytes is not null) await File.WriteAllBytesAsync(file, bytes);
+            else _inflight.TryRemove(key, out _);
+            return bytes;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or IOException or InvalidOperationException)
+        {
+            // Offline: retried next time it's asked for.
+            _inflight.TryRemove(key, out _);
+            return null;
+        }
+        finally
+        {
+            _throttle.Release();
+        }
+    }
+
     private async Task<byte[]?> ResolveAsync(string key, string email, (string Owner, string Repo)? gitHubRepo, string? sha)
     {
         var gitHubFile = Path.Combine(_cacheDir, $"gh-{key}.img");

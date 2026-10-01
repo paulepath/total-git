@@ -1,0 +1,172 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:TotalGit.App.ViewModels"
+        x:Class="TotalGit.App.Views.BranchRulesDialog"
+        x:DataType="vm:BranchRulesViewModel"
+        Title="Branch rules"
+        Width="940" Height="680" MinWidth="720" MinHeight="520"
+        WindowStartupLocation="CenterOwner"
+        Background="#23272D">
+  <Window.Styles>
+    <Style Selector="TextBlock.field">
+      <Setter Property="Foreground" Value="#E6E8EB" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Margin" Value="0,10,0,4" />
+    </Style>
+    <Style Selector="TextBlock.hint">
+      <Setter Property="Foreground" Value="#8A9099" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="Margin" Value="0,3,0,0" />
+    </Style>
+    <Style Selector="Button.small">
+      <Setter Property="Padding" Value="10,3" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="MinHeight" Value="0" />
+    </Style>
+    <Style Selector="ListBox.icons ListBoxItem">
+      <Setter Property="Padding" Value="5" />
+      <Setter Property="Margin" Value="1" />
+      <Setter Property="CornerRadius" Value="4" />
+    </Style>
+    <Style Selector="Button.swatch">
+      <Setter Property="Width" Value="22" />
+      <Setter Property="Height" Value="22" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="CornerRadius" Value="11" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+  </Window.Styles>
+
+  <DockPanel Margin="20">
+    <StackPanel DockPanel.Dock="Top" Spacing="6" Margin="0,0,0,12">
+      <TextBlock Text="Branch rules" FontSize="18" FontWeight="SemiBold" Foreground="#E6E8EB" />
+      <TextBlock Foreground="#A9AFB8" TextWrapping="Wrap"
+                 Text="Rules give branches an icon in place of their prefix, and can nest them under another name in the sidebar (bug/* under bugs). The first rule that matches a branch is used." />
+    </StackPanel>
+
+    <Grid DockPanel.Dock="Bottom" ColumnDefinitions="Auto,*,Auto" Margin="0,14,0,0">
+      <Button Classes="small" Content="Reset to defaults…" Command="{Binding ResetCommand}" />
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
+        <Button Content="Cancel" IsCancel="True" Click="OnCancel" />
+        <Button Content="Save" IsDefault="True" Classes="accent" Click="OnSave" />
+      </StackPanel>
+    </Grid>
+
+    <Grid ColumnDefinitions="300,16,*">
+      <!-- The rules, in order -->
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Spacing="6" Margin="0,8,0,0">
+          <Button Classes="small" Content="Add" Command="{Binding AddCommand}" ToolTip.Tip="Add a rule below the selected one" />
+          <Button Classes="small" Content="Duplicate" Command="{Binding DuplicateCommand}" />
+          <Button Classes="small" Content="Delete" Command="{Binding DeleteCommand}" />
+          <Button Classes="small" Content="↑" Command="{Binding MoveUpCommand}" ToolTip.Tip="Move up (checked earlier)" />
+          <Button Classes="small" Content="↓" Command="{Binding MoveDownCommand}" ToolTip.Tip="Move down" />
+        </StackPanel>
+        <Border Background="#1C1F24" CornerRadius="4">
+          <ListBox ItemsSource="{Binding Rules}" SelectedItem="{Binding Selected}" Background="Transparent">
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:BranchRuleItem">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <Panel Width="16" Height="16">
+                    <Image Source="{Binding IconBitmap}" IsVisible="{Binding HasIcon}" Width="16" Height="16" />
+                  </Panel>
+                  <TextBlock Text="{Binding Summary}" FontFamily="Cascadia Mono, Consolas, monospace" FontSize="12" VerticalAlignment="Center" />
+                </StackPanel>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </Border>
+      </DockPanel>
+
+      <!-- The selected rule -->
+      <ScrollViewer Grid.Column="2" IsVisible="{Binding HasSelection}">
+        <StackPanel DataContext="{Binding Selected}" x:DataType="vm:BranchRuleItem" Margin="0,0,8,0">
+          <TextBlock Classes="field" Text="Branches matching" Margin="0,0,0,4" />
+          <TextBox Text="{Binding Pattern}" FontFamily="Cascadia Mono, Consolas, monospace" PlaceholderText="bug/*" />
+          <TextBlock Classes="hint" Text="* matches anything and ? one character. A pattern like bugs/* also covers a branch called just bugs." />
+          <TextBlock Classes="hint" Foreground="#5AA9F2" Text="{Binding $parent[Window].((vm:BranchRulesViewModel)DataContext).MatchText}" />
+
+          <TextBlock Classes="field" Text="Nest under" />
+          <TextBox Text="{Binding GroupUnder}" FontFamily="Cascadia Mono, Consolas, monospace" PlaceholderText="(by the slashes in the name)" />
+          <TextBlock Classes="hint" Text="In the sidebar, put these branches under this name, e.g. bugs. If a branch has that name, its row holds them." />
+          <CheckBox IsChecked="{Binding HidePrefix}" Margin="0,8,0,0" FontSize="12"
+                    Content="Show names without the pattern's prefix (fix-login rather than bug/fix-login)" />
+
+          <TextBlock Classes="field" Text="Icon" />
+          <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,6">
+            <TextBox Text="{Binding $parent[Window].((vm:BranchRulesViewModel)DataContext).IconFilter}" PlaceholderText="Search icons" />
+            <Button Grid.Column="1" Classes="small" Content="Upload…" Margin="6,0,0,0" Click="OnUpload"
+                    ToolTip.Tip="Use your own picture (PNG, JPG, BMP or ICO, up to 1 MB)" />
+            <Button Grid.Column="2" Classes="small" Content="No icon" Margin="6,0,0,0"
+                    Command="{Binding $parent[Window].((vm:BranchRulesViewModel)DataContext).ClearIconCommand}" />
+          </Grid>
+          <TextBlock Classes="hint" Foreground="#E5484D" Margin="0,0,0,4"
+                     Text="{Binding $parent[Window].((vm:BranchRulesViewModel)DataContext).UploadError}"
+                     IsVisible="{Binding $parent[Window].((vm:BranchRulesViewModel)DataContext).UploadError, Converter={x:Static ObjectConverters.IsNotNull}}" />
+          <Border Background="#1C1F24" CornerRadius="4" Height="190">
+            <ListBox Classes="icons" Background="Transparent"
+                     ItemsSource="{Binding $parent[Window].((vm:BranchRulesViewModel)DataContext).Icons}"
+                     SelectedItem="{Binding $parent[Window].((vm:BranchRulesViewModel)DataContext).SelectedIcon}"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+              <ListBox.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <WrapPanel />
+                </ItemsPanelTemplate>
+              </ListBox.ItemsPanel>
+              <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:IconChoice">
+                  <Image Source="{Binding Preview}" Width="22" Height="22" ToolTip.Tip="{Binding ToolTip}" />
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+          </Border>
+
+          <TextBlock Classes="field" Text="Colour" />
+          <StackPanel Orientation="Horizontal" Spacing="6" IsHitTestVisible="{Binding CanRecolour}"
+                      Opacity="{Binding CanRecolour, Converter={x:Static vm:Converters.DimWhenFalse}}">
+            <ItemsControl ItemsSource="{Binding $parent[Window].((vm:BranchRulesViewModel)DataContext).Colours}">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <StackPanel Orientation="Horizontal" Spacing="6" />
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:ColourChoice">
+                  <Button Classes="swatch" ToolTip.Tip="{Binding ToolTip}"
+                          Command="{Binding $parent[Window].((vm:BranchRulesViewModel)DataContext).PickColourCommand}" CommandParameter="{Binding}">
+                    <Ellipse Width="18" Height="18" Fill="{Binding Brush}" />
+                  </Button>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBox Text="{Binding ColourText}" Width="90" PlaceholderText="#RRGGBB" FontFamily="Cascadia Mono, Consolas, monospace" />
+          </StackPanel>
+          <TextBlock Classes="hint" Text="Pictures (the built-in branch icons and uploads) keep their own colours." IsVisible="{Binding !CanRecolour}" />
+
+          <TextBlock Classes="field" Text="Preview" />
+          <StackPanel Orientation="Horizontal" Spacing="16">
+            <Border Background="#1E2227" CornerRadius="4" Padding="10,5">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <Image Source="{Binding IconBitmap}" Width="14" Height="14" IsVisible="{Binding HasIcon}" />
+                <TextBlock Text="fix-login" FontSize="12" Foreground="#D5D9DE" VerticalAlignment="Center" />
+              </StackPanel>
+            </Border>
+            <Border Background="#1F6FB5" CornerRadius="9" Padding="4,2,10,2" VerticalAlignment="Center">
+              <StackPanel Orientation="Horizontal" Spacing="5">
+                <Border Background="#16191D" CornerRadius="7" Width="14" Height="14">
+                  <Image Source="{Binding IconBitmap}" Width="12" Height="12" IsVisible="{Binding HasIcon}" />
+                </Border>
+                <TextBlock Text="fix-login" FontSize="11" Foreground="White" VerticalAlignment="Center" />
+              </StackPanel>
+            </Border>
+          </StackPanel>
+        </StackPanel>
+      </ScrollViewer>
+    </Grid>
+  </DockPanel>
+</Window>

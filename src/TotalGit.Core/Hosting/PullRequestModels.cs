@@ -42,7 +42,27 @@ public sealed record PullRequestSummary(
     ReviewDecision ReviewDecision,
     /// <summary>The signed-in user is asked to review it.</summary>
     bool ViewerReviewRequested,
-    string Url);
+    string Url)
+{
+    /// <summary>Who is asked to review it, then who else has reviewed it, with their latest review's state.</summary>
+    public IReadOnlyList<Reviewer> Reviewers { get; init; } = [];
+
+    /// <summary>The signed-in user opened it.</summary>
+    public bool IsViewerAuthor { get; init; }
+
+    public DateTimeOffset? CreatedAt { get; init; }
+
+    /// <summary>Size of the change, when the host reported it.</summary>
+    public int? Additions { get; init; }
+    public int? Deletions { get; init; }
+    public int? ChangedFiles { get; init; }
+
+    /// <summary>Whether it can be merged now (behind its target, conflicting…), when the host has worked it out.</summary>
+    public MergeState MergeState { get; init; }
+
+    /// <summary>The latest commit's checks, when listed (for counts and the names of failing ones).</summary>
+    public IReadOnlyList<CheckItem> CheckRuns { get; init; } = [];
+}
 
 /// <summary>A requested or actual reviewer: a person or a team.</summary>
 public sealed record Reviewer(string Name, string? AvatarUrl, ReviewState State, bool IsRequested);

@@ -88,6 +88,7 @@ public interface IDialogService
     Task<bool> ShowAddIgnoreAsync(AddIgnoreViewModel viewModel);
     Task<bool> ShowBranchCleanupAsync(BranchCleanupViewModel viewModel);
     Task<bool> ShowRebaseCommitsAsync(RebaseCommitsViewModel viewModel);
+    Task<bool> ShowBranchRulesAsync(BranchRulesViewModel viewModel);
     Task CopyToClipboardAsync(string text);
     Task RevealFolderAsync(string path);
 }

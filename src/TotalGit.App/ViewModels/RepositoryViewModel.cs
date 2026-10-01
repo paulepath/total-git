@@ -51,6 +51,8 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
     {
         _settings = settings;
         Avatars = avatars;
+        Sidebar.Avatars = avatars;
+        IconLibrary.Changed += OnBranchRulesChanged;
         PendingPath = path;
         if (path is not null) RepositoryName = Path.GetFileName(Path.TrimEndingDirectorySeparator(path));
         DiffMode = Enum.TryParse<DiffViewMode>(settings.DiffMode, out var mode) ? mode : DiffViewMode.Inline;
@@ -91,6 +93,8 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
         _watcher = null;
         _session?.Dispose();
         _session = null;
+        Sidebar.Avatars = null; // the cache is shared by every tab
+        IconLibrary.Changed -= OnBranchRulesChanged;
     }
 
     public AvatarCache Avatars { get; }
@@ -1271,7 +1275,55 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
         CheckoutCommand.Execute(target);
     }
 
+    // ------------------------------------------------------------------ branch rules
+
+    private void OnBranchRulesChanged()
+    {
+        Sidebar.RefreshRules();
+        OnPropertyChanged(nameof(CurrentBranchDisplay));
+        OnPropertyChanged(nameof(CurrentBranchIcon));
+        OnPropertyChanged(nameof(HasCurrentBranchIcon));
+    }
+
+    /// <summary>Opens the branch rules editor; with a pattern, starts a new rule for it (from a branch's or folder's menu).</summary>
+    [RelayCommand]
+    private async Task EditBranchRulesAsync(string? newPattern)
+    {
+        if (Dialogs is null) return;
+        var names = _state?.Refs
+            .Where(r => r.Kind is RefKind.LocalBranch or RefKind.RemoteBranch)
+            .Select(r => r.Kind == RefKind.RemoteBranch ? r.ShortName : r.Name)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToList() ?? [];
+        var vm = new BranchRulesViewModel(BranchRuleSet.Current.Rules, names,
+            (title, message) => Dialogs.ConfirmAsync(title, message, null, "Reset"), newPattern);
+        if (!await Dialogs.ShowBranchRulesAsync(vm)) return;
+        Settings.BranchRules = vm.Result();
+        Settings.ApplyBranchRules();
+        Settings.Save();
+        IconLibrary.NotifyChanged();
+    }
+
+    /// <summary>The pattern a new rule for this branch starts with: its prefix ("bug/x" → "bug/*"), or its name.</summary>
+    private static string RulePatternFor(string name) => name.LastIndexOf('/') is var i and > 0 ? name[..(i + 1)] + "*" : name;
+
     public IReadOnlyList<MenuAction> ActionsForSidebar(SidebarNode node)
+    {
+        var actions = ActionsForSidebarNode(node);
+        // Any branch or folder can be given its own icon or group.
+        string? pattern = node.IsFolder && node.BranchPrefix is { } prefix ? prefix + "*"
+            : node.Target is { Kind: RefKind.LocalBranch } local && !node.IsWorktree ? RulePatternFor(local.Name)
+            : node.Kind == SidebarNodeKind.RemoteBranch && node.Target is { } remote ? RulePatternFor(ShortRemote(remote.Name))
+            : null;
+        if (pattern is null) return actions;
+        return [.. actions, .. actions.Count > 0 ? new[] { MenuAction.Separator } : [], new MenuAction("Branch icon and grouping…", EditBranchRulesCommand, pattern)];
+    }
+
+    private string ShortRemote(string name) =>
+        _state?.Refs.FirstOrDefault(r => r.Kind == RefKind.RemoteBranch && r.Name == name)?.ShortName ?? name;
+
+    private IReadOnlyList<MenuAction> ActionsForSidebarNode(SidebarNode node)
     {
         if (node.IsWorktreesSection)
         {

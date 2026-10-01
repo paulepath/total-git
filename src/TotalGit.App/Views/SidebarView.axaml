@@ -12,12 +12,45 @@
     <StreamGeometry x:Key="CheckIcon">M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z</StreamGeometry>
   </UserControl.Resources>
 
+  <UserControl.DataTemplates>
+    <DataTemplate DataType="vm:PrCardViewModel">
+      <views:PrHoverCard />
+    </DataTemplate>
+  </UserControl.DataTemplates>
+
   <UserControl.Styles>
+    <Style Selector="ToolTip">
+      <Setter Property="MaxWidth" Value="420" />
+    </Style>
+    <Style Selector="TextBlock.label.group">
+      <Setter Property="Foreground" Value="#8A9099" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="Button.ticket">
+      <Setter Property="Padding" Value="4,0" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="Height" Value="16" />
+      <Setter Property="MinWidth" Value="52" />
+      <Setter Property="Margin" Value="0,0,6,0" />
+      <Setter Property="CornerRadius" Value="3" />
+      <Setter Property="Background" Value="#2C3440" />
+      <Setter Property="Foreground" Value="#9DB8D6" />
+      <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, monospace" />
+      <Setter Property="FontSize" Value="10" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="Button.ticket:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#34506E" />
+      <Setter Property="Foreground" Value="#D6E7F8" />
+    </Style>
     <Style Selector="TreeViewItem" x:DataType="vm:SidebarNode">
       <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
       <Setter Property="MinHeight" Value="24" />
       <Setter Property="Padding" Value="0" />
-      <Setter Property="ToolTip.Tip" Value="{Binding ToolTip}" />
+      <Setter Property="ToolTip.Tip" Value="{Binding Tip}" />
       <!-- The ✓ can be squeezed out by a long name, so the current row is tinted as well. -->
       <Setter Property="Background" Value="{Binding IsCurrent, Converter={x:Static vm:Converters.CurrentRowBrush}}" />
     </Style>
@@ -47,7 +80,7 @@
 
   <DockPanel Background="#23272D">
     <Border DockPanel.Dock="Top" Padding="8,8,8,6">
-      <Grid ColumnDefinitions="*,Auto">
+      <Grid ColumnDefinitions="*,Auto,Auto">
         <TextBox x:Name="FilterBox" Text="{Binding Filter}" PlaceholderText="Filter (Ctrl+Alt+F)" FontSize="12"
                  MinHeight="28" Padding="6,4">
           <TextBox.InnerRightContent>
@@ -55,7 +88,11 @@
           </TextBox.InnerRightContent>
         </TextBox>
         <!-- Pinned: the sidebar stays open. Unpinned: it folds to a thin rail and opens while the pointer is over it. -->
-        <ToggleButton Grid.Column="1" x:Name="PinButton" Margin="6,0,0,0" Padding="6,0" MinHeight="28" Background="Transparent"
+        <Button Grid.Column="1" Margin="6,0,0,0" Padding="6,0" MinHeight="28" Background="Transparent" Click="OnRulesClick"
+                ToolTip.Tip="Branch icons and grouping">
+          <PathIcon Data="{StaticResource CogIcon}" Width="13" Height="13" Foreground="#A9AFB8" />
+        </Button>
+        <ToggleButton Grid.Column="2" x:Name="PinButton" Margin="6,0,0,0" Padding="6,0" MinHeight="28" Background="Transparent"
                       ToolTip.Tip="Keep the sidebar open (unpin to fold it away until you point at it)">
           <Panel>
             <PathIcon Data="{StaticResource PinIcon}" Width="13" Height="13"
@@ -79,15 +116,27 @@
               <PathIcon Classes="node" Data="{StaticResource TagIcon}" IsVisible="{Binding IsTag}" />
               <PathIcon Classes="node" Data="{StaticResource StashIcon}" IsVisible="{Binding IsStash}" />
               <PathIcon Classes="node" Data="{StaticResource WorktreeIcon}" IsVisible="{Binding ShowWorktreeGlyph}" />
-              <PathIcon Classes="node" Data="{StaticResource PullRequestIcon}" IsVisible="{Binding IsPullRequest}"
-                        Foreground="{Binding IsReviewRequested, Converter={x:Static vm:Converters.ReviewRequestedBrush}}" />
+              <StackPanel IsVisible="{Binding IsPullRequest}" Orientation="Horizontal" VerticalAlignment="Center" Margin="-14,0,0,0">
+                <Border Width="3" Height="16" CornerRadius="1.5" Background="{Binding RailBrush}" Margin="-4,0,6,0" />
+                <Border Width="16" Height="16" CornerRadius="8" ClipToBounds="True" Background="{Binding Author.InitialsBrush}" Margin="0,0,6,0">
+                  <Panel>
+                    <TextBlock Text="{Binding Author.Initials}" FontSize="7.5" FontWeight="Bold" Foreground="White"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding !Author.HasAvatar}" />
+                    <Image Source="{Binding Author.Avatar}" Stretch="UniformToFill" IsVisible="{Binding Author.HasAvatar}" />
+                  </Panel>
+                </Border>
+                <TextBlock Text="{Binding NumberText}" Width="26" Margin="0,0,5,0" TextAlignment="Right" VerticalAlignment="Center"
+                           FontFamily="Cascadia Mono, Consolas, monospace" FontSize="10" Foreground="#8A9099" />
+                <Button Classes="ticket" Content="{Binding Ticket}" IsVisible="{Binding HasTicket}" Click="OnTicketClick"
+                        ToolTip.Tip="{Binding Ticket, StringFormat='Open {0} in Jira (right-click to change the Jira address)'}" />
+              </StackPanel>
               <Image Source="{Binding KindIcon}" IsVisible="{Binding HasKindIcon}" Width="14" Height="14" Margin="-1,0,5,0" />
             </Panel>
 
             <!-- The label always wins; the markers and grey subtitle only appear when they fit whole
                  (they are in the tooltip too). -->
             <views:PriorityRowPanel Grid.Column="1" VerticalAlignment="Center" ClipToBounds="True">
-              <TextBlock Classes="label" Classes.section="{Binding IsSection}" Classes.dimmed="{Binding IsDimmed}"
+              <TextBlock Classes="label" Classes.section="{Binding IsSection}" Classes.dimmed="{Binding IsDimmed}" Classes.group="{Binding IsPrGroup}"
                          Classes.current="{Binding IsCurrent}" Text="{Binding Label}" FontSize="12" TextTrimming="CharacterEllipsis" />
               <PathIcon Data="{StaticResource CheckIcon}" Width="11" Height="11" Foreground="#4CC38A" IsVisible="{Binding IsCurrent}" />
               <PathIcon Data="{StaticResource WorktreeIcon}" Width="11" Height="11" Foreground="#8A9099" IsVisible="{Binding HasWorktree}" />
@@ -103,11 +152,33 @@
               <PathIcon Classes="gone" Data="{StaticResource CloseIcon}" Width="9" Height="9" Foreground="#E5484D" VerticalAlignment="Center"
                         IsVisible="{Binding IsUpstreamGone}" Background="Transparent"
                         ToolTip.Tip="Deleted on the remote. Double-click to clean up branches deleted on the remote." />
-              <PathIcon Data="{StaticResource CheckIcon}" Width="11" Height="11" Foreground="#4CC38A" VerticalAlignment="Center"
-                        IsVisible="{Binding IsApproved}" ToolTip.Tip="Approved" />
-              <PathIcon Data="{StaticResource CloseIcon}" Width="9" Height="9" Foreground="#E5484D" VerticalAlignment="Center"
-                        IsVisible="{Binding IsChangesRequested}" ToolTip.Tip="Changes requested" />
-              <Ellipse Width="7" Height="7" Fill="{Binding ChecksBrush}" VerticalAlignment="Center" IsVisible="{Binding HasChecks}" />
+              <StackPanel Orientation="Horizontal" Spacing="-4" IsVisible="{Binding HasReviewers}" VerticalAlignment="Center" Margin="2,0,0,0">
+                <ItemsControl ItemsSource="{Binding Reviewers}">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <StackPanel Orientation="Horizontal" Spacing="-4" />
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:PrPerson">
+                      <Panel Width="16" Height="16" ToolTip.Tip="{Binding ToolTip}" Background="Transparent">
+                        <Border Width="16" Height="16" CornerRadius="8" ClipToBounds="True" BorderBrush="#1E2227" BorderThickness="1.5"
+                                Background="{Binding InitialsBrush}">
+                          <Panel>
+                            <TextBlock Text="{Binding Initials}" FontSize="7" FontWeight="Bold" Foreground="White"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding !HasAvatar}" />
+                            <Image Source="{Binding Avatar}" Stretch="UniformToFill" IsVisible="{Binding HasAvatar}" />
+                          </Panel>
+                        </Border>
+                        <Ellipse Width="6" Height="6" Fill="{Binding StateBrush}" Stroke="#1E2227" StrokeThickness="1"
+                                 HorizontalAlignment="Right" VerticalAlignment="Bottom" IsVisible="{Binding HasState}" />
+                      </Panel>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <TextBlock Text="{Binding MoreReviewers}" FontSize="10" Foreground="#8A9099" VerticalAlignment="Center" Margin="6,0,0,0"
+                           IsVisible="{Binding HasMoreReviewers}" />
+              </StackPanel>
               <TextBlock Text="{Binding Count}" FontSize="11" Foreground="#5AA9F2" IsVisible="{Binding ShowCount}" />
               <Button IsVisible="{Binding IsPullRequestsSection}" Padding="4,0" MinHeight="0" Height="18" Background="Transparent"
                       ToolTip.Tip="Refresh pull requests" Click="OnRefreshPullRequestsClick">

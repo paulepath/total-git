@@ -47,7 +47,9 @@ public class GitHubProviderTests
            "reviewDecision":"CHANGES_REQUESTED","author":{"login":"alice","avatarUrl":"https://a/alice"},
            "reviewRequests":{"nodes":[{"requestedReviewer":null},{"requestedReviewer":{"__typename":"Team","name":"core","avatarUrl":null}},
                                       {"requestedReviewer":{"__typename":"User","login":"me","avatarUrl":"https://a/me"}}]},
-           "commits":{"nodes":[{"commit":{"statusCheckRollup":{"state":"FAILURE"}}}]}},
+           "commits":{"nodes":[{"commit":{"statusCheckRollup":{"state":"FAILURE","contexts":{"nodes":[
+             {"__typename":"CheckRun","name":"build","status":"COMPLETED","conclusion":"SUCCESS","detailsUrl":null,"title":null},
+             {"__typename":"CheckRun","name":"api-tests","status":"COMPLETED","conclusion":"FAILURE","detailsUrl":null,"title":null}]}}}}]}},
           {"number":5,"title":"From a fork","isDraft":false,"state":"OPEN","baseRefName":"main","headRefName":"patch-1",
            "headRefOid":"bbb222","isCrossRepository":true,"updatedAt":"2026-09-29T09:00:00Z","url":"https://github.com/octo/widgets/pull/5",
            "reviewDecision":null,"author":null,
@@ -56,9 +58,28 @@ public class GitHubProviderTests
           {"number":3,"title":"Approved","isDraft":false,"state":"OPEN","baseRefName":"main","headRefName":"b","headRefOid":"ccc",
            "isCrossRepository":false,"updatedAt":"2026-09-28T09:00:00Z","url":"u","reviewDecision":"APPROVED",
            "author":{"login":"bob","avatarUrl":null},"reviewRequests":{"nodes":[]},
+           "createdAt":"2026-09-20T09:00:00Z","additions":10,"deletions":2,"changedFiles":3,"mergeable":"CONFLICTING","mergeStateStatus":"DIRTY",
+           "latestReviews":{"nodes":[{"state":"APPROVED","author":{"login":"carol","avatarUrl":"https://a/carol"}}]},
            "commits":{"nodes":[{"commit":{"statusCheckRollup":{"state":"EXPECTED"}}}]}}
         ]}}}}
         """;
+
+    [Fact]
+    public void Every_graphql_document_has_balanced_brackets()
+    {
+        // A missing brace only shows up as a parse error from GitHub, so check the documents here.
+        var queries = typeof(GitHubPullRequestProvider).Assembly.GetType("TotalGit.Core.Hosting.GitHub.GitHubQueries")!
+            .GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)
+            .Where(f => f.IsLiteral && f.FieldType == typeof(string))
+            .ToList();
+        Assert.NotEmpty(queries);
+        foreach (var field in queries)
+        {
+            var text = (string)field.GetRawConstantValue()!;
+            Assert.True(text.Count(c => c == '{') == text.Count(c => c == '}'), $"{field.Name}: unbalanced braces");
+            Assert.True(text.Count(c => c == '(') == text.Count(c => c == ')'), $"{field.Name}: unbalanced parentheses");
+        }
+    }
 
     [Fact]
     public async Task Lists_open_pull_requests()
@@ -87,6 +108,20 @@ public class GitHubProviderTests
 
         Assert.Equal(ReviewDecision.Approved, list[2].ReviewDecision);
         Assert.Equal(ChecksState.Pending, list[2].Checks);
+
+        // Who it's for: requested users and teams, then people who reviewed without being asked.
+        Assert.Equal(["core", "me"], draft.Reviewers.Select(r => r.Name));
+        Assert.All(draft.Reviewers, r => Assert.True(r.IsRequested));
+        Assert.Equal([new Reviewer("carol", "https://a/carol", ReviewState.Approved, IsRequested: false)], list[2].Reviewers);
+
+        // Extra detail for the hover card.
+        Assert.Equal(["build", "api-tests"], draft.CheckRuns.Select(c => c.Name));
+        Assert.Equal(CheckStatus.Failure, draft.CheckRuns[1].Status);
+        Assert.Equal((10, 2, 3), (list[2].Additions, list[2].Deletions, list[2].ChangedFiles));
+        Assert.Equal(MergeState.Conflicting, list[2].MergeState);
+        Assert.Equal(new DateTimeOffset(2026, 9, 20, 9, 0, 0, TimeSpan.Zero), list[2].CreatedAt);
+        Assert.Null(draft.Additions);
+        Assert.All(list, p => Assert.False(p.IsViewerAuthor));
 
         var request = http.Requests.Single();
         Assert.Equal(HttpMethod.Post, request.Method);

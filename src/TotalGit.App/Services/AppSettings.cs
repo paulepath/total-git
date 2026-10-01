@@ -8,6 +8,9 @@ public sealed class RepoSettings
     public List<string>? LocalFilePatterns { get; set; }
     public bool LinkNodeModules { get; set; } = true;
     public bool CopyLocalFiles { get; set; } = true;
+
+    /// <summary>The Jira site ticket keys in pull request titles link to, e.g. https://example.atlassian.net.</summary>
+    public string? JiraUrl { get; set; }
 }
 
 public sealed class AppSettings
@@ -61,6 +64,13 @@ public sealed class AppSettings
 
     /// <summary>A commit's (or another worktree's) changed files grouped by folder (otherwise a flat list).</summary>
     public bool ChangedFilesTree { get; set; } = true;
+
+    /// <summary>How branches are grouped and which icons they get, in order; null for the built-in rules.</summary>
+    public List<TotalGit.Core.Git.BranchRule>? BranchRules { get; set; }
+
+    /// <summary>Makes <see cref="BranchRules"/> the rules the whole app uses.</summary>
+    public void ApplyBranchRules() =>
+        TotalGit.Core.Git.BranchRuleSet.Current = new TotalGit.Core.Git.BranchRuleSet(BranchRules ?? TotalGit.Core.Git.BranchRuleSet.Defaults());
 
     /// <summary>The merge tool shows the common ancestor next to the two sides (when git has one).</summary>
     public bool MergeShowBase { get; set; } = true;

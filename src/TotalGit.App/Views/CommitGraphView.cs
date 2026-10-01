@@ -280,6 +280,25 @@ public sealed class CommitGraphView : Control
         }
     }
 
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        IconLibrary.Changed += OnBranchRulesChanged;
+    }
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnDetachedFromVisualTree(e);
+        IconLibrary.Changed -= OnBranchRulesChanged;
+    }
+
+    /// <summary>The branch pills' icons and names follow the branch rules.</summary>
+    private void OnBranchRulesChanged()
+    {
+        RebuildIndexes();
+        InvalidateVisual();
+    }
+
     private void RebuildIndexes()
     {
         var data = Data;
@@ -1085,8 +1104,8 @@ public sealed class CommitGraphView : Control
 
         private static RefBadge Branch(RefInfo r, string fullName, bool isCurrent, bool hasLocal, bool hasRemote, bool hasWorktree = false)
         {
-            var (kind, shortName) = BranchCategory.Classify(fullName);
-            return new RefBadge(shortName, isCurrent, hasLocal, hasRemote, false, hasWorktree) { KindIcon = BranchIcons.For(kind), Ref = r };
+            var shortName = BranchCategory.Classify(fullName).ShortName;
+            return new RefBadge(shortName, isCurrent, hasLocal, hasRemote, false, hasWorktree) { KindIcon = BranchIcons.ForBranch(fullName), Ref = r };
         }
 
         public static Dictionary<string, List<RefBadge>> Build(GraphData data)

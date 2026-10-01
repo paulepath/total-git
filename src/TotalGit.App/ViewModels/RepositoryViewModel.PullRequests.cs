@@ -360,6 +360,46 @@ public partial class RepositoryViewModel
     [RelayCommand]
     private static void OpenUrl(string url) => UrlLauncher.Open(url);
 
+    // ------------------------------------------------------------------ tickets
+
+    /// <summary>Opens a ticket ("E4-2361") in Jira, asking for the Jira address the first time.</summary>
+    [RelayCommand]
+    private async Task OpenTicketAsync(string key)
+    {
+        if (_state is null) return;
+        var site = _settings.ForRepository(_state.MainWorkingDirectory).JiraUrl ?? await AskJiraUrlAsync();
+        if (site is not null) UrlLauncher.Open($"{site.TrimEnd('/')}/browse/{Uri.EscapeDataString(key)}");
+    }
+
+    [RelayCommand]
+    private async Task SetJiraUrlAsync() => await AskJiraUrlAsync();
+
+    /// <summary>Asks for the Jira site this repository's tickets live on and saves it; null when cancelled.</summary>
+    private async Task<string?> AskJiraUrlAsync()
+    {
+        if (_state is null || Dialogs is null) return null;
+        var repo = _settings.ForRepository(_state.MainWorkingDirectory);
+        var field = new FormField(FormFieldKind.Text, "Jira address") { Text = repo.JiraUrl ?? "", Placeholder = "https://yourcompany.atlassian.net" };
+        var spec = new FormSpec("Jira for this repository",
+            "Ticket keys in pull request titles (like E4-2361) open in this Jira site.", "Save", [field],
+            () => Uri.TryCreate(Normalise(field.Text), UriKind.Absolute, out var u) && u.Scheme is "https" or "http"
+                ? null
+                : "Enter the address of your Jira site, e.g. https://yourcompany.atlassian.net");
+        if (!await Dialogs.ShowFormAsync(spec)) return null;
+        repo.JiraUrl = Normalise(field.Text);
+        _settings.Save();
+        return repo.JiraUrl;
+
+        // "yourcompany.atlassian.net" or a pasted ticket link both become the site's root address.
+        static string Normalise(string text)
+        {
+            var t = text.Trim();
+            if (t.Length > 0 && !t.Contains("://", StringComparison.Ordinal)) t = "https://" + t;
+            var browse = t.IndexOf("/browse/", StringComparison.OrdinalIgnoreCase);
+            return (browse >= 0 ? t[..browse] : t).TrimEnd('/');
+        }
+    }
+
     private IReadOnlyList<MenuAction> ActionsForPullRequest(PullRequestSummary pr) =>
     [
         new MenuAction("Open", OpenPullRequestCommand, pr, Icon: MenuIcons.Open),
@@ -368,5 +408,7 @@ public partial class RepositoryViewModel
         MenuAction.Separator,
         new MenuAction("Copy link", CopyCommand, pr.Url, Icon: MenuIcons.Copy),
         new MenuAction("Copy branch name", CopyCommand, pr.HeadRef, Icon: MenuIcons.Copy),
+        MenuAction.Separator,
+        new MenuAction("Set Jira address…", SetJiraUrlCommand),
     ];
 }

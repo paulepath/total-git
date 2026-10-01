@@ -41,6 +41,20 @@ public sealed class AvatarServiceTests : IDisposable
         new(_cacheDir, new HttpClient(handler), () => token);
 
     [Fact]
+    public async Task Avatar_by_address_is_fetched_small_once_and_then_read_from_disk()
+    {
+        var handler = Handler();
+        using (var service = Service(handler))
+            Assert.Equal(GitHubImage, await service.GetAvatarByUrlAsync("https://avatars.githubusercontent.com/u/42?v=4"));
+        Assert.Contains(handler.Requests, r => r.RequestUri!.ToString() == "https://avatars.githubusercontent.com/u/42?v=4&s=64");
+
+        var offline = new FakeHttpHandler();
+        using (var service = Service(offline))
+            Assert.Equal(GitHubImage, await service.GetAvatarByUrlAsync("https://avatars.githubusercontent.com/u/42?v=4"));
+        Assert.Empty(offline.Requests);
+    }
+
+    [Fact]
     public async Task Prefers_github_commit_author_over_gravatar()
     {
         var handler = Handler();

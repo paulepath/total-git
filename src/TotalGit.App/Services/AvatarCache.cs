@@ -33,9 +33,23 @@ public sealed class AvatarCache(AvatarService service)
         return task;
     }
 
-    private async Task<Bitmap?> LoadAsync(string key, string email, (string Owner, string Repo)? gitHubRepo, string? sampleSha)
+    /// <summary>An avatar from a known address (pull request people) if loaded; otherwise starts loading it and returns null.</summary>
+    public Bitmap? TryGetUrl(string url)
     {
-        var bytes = await service.GetAvatarAsync(email, gitHubRepo, sampleSha);
+        var key = "url:" + url;
+        if (_bitmaps.TryGetValue(key, out var bitmap)) return bitmap;
+        if (!_pending.ContainsKey(key)) _pending[key] = LoadUrlAsync(key, url);
+        return null;
+    }
+
+    private async Task<Bitmap?> LoadUrlAsync(string key, string url) => await Decode(key, await service.GetAvatarByUrlAsync(url));
+
+    private async Task<Bitmap?> LoadAsync(string key, string email, (string Owner, string Repo)? gitHubRepo, string? sampleSha) =>
+        await Decode(key, await service.GetAvatarAsync(email, gitHubRepo, sampleSha));
+
+    /// <summary>Decodes downloaded image bytes and stores the bitmap (null when there are none) on the UI thread.</summary>
+    private async Task<Bitmap?> Decode(string key, byte[]? bytes)
+    {
         Bitmap? bitmap = null;
         if (bytes is not null)
         {

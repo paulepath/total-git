@@ -26,11 +26,20 @@ internal static class GitHubMapping
         },
         // Only direct requests count; a request to one of the viewer's teams isn't detected.
         RequestedReviewers(pr).Any(r => r.Login is { } login && string.Equals(login, viewer, StringComparison.OrdinalIgnoreCase)),
-        pr.Str("url") ?? "");
-
-    public static PullRequestDetails Details(JsonElement pr, string viewer)
+        pr.Str("url") ?? "")
     {
-        var mergeState = pr.Str("mergeable") == "CONFLICTING" ? MergeState.Conflicting : pr.Str("mergeStateStatus") switch
+        Reviewers = Reviewers(pr),
+        IsViewerAuthor = pr.Obj("author")?.Str("login") is { } author && string.Equals(author, viewer, StringComparison.OrdinalIgnoreCase),
+        CreatedAt = pr.Obj("createdAt") is { ValueKind: JsonValueKind.String } created ? created.GetDateTimeOffset() : null,
+        Additions = pr.Int("additions"),
+        Deletions = pr.Int("deletions"),
+        ChangedFiles = pr.Int("changedFiles"),
+        MergeState = MergeStateOf(pr),
+        CheckRuns = Checks(pr),
+    };
+
+    private static MergeState MergeStateOf(JsonElement pr) =>
+        pr.Str("mergeable") == "CONFLICTING" ? MergeState.Conflicting : pr.Str("mergeStateStatus") switch
         {
             "CLEAN" => MergeState.Clean,
             "BLOCKED" => MergeState.Blocked,
@@ -40,6 +49,10 @@ internal static class GitHubMapping
             "DRAFT" => MergeState.Draft,
             _ => MergeState.Unknown,
         };
+
+    public static PullRequestDetails Details(JsonElement pr, string viewer)
+    {
+        var mergeState = MergeStateOf(pr);
         return new(
             Summary(pr, viewer),
             pr.Str("body") ?? "",

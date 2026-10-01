@@ -1,0 +1,136 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:TotalGit.App.ViewModels"
+             x:Class="TotalGit.App.Views.PrHoverCard"
+             x:DataType="vm:PrCardViewModel"
+             Width="340">
+  <UserControl.Styles>
+    <Style Selector="TextBlock.label">
+      <Setter Property="FontSize" Value="10" />
+      <Setter Property="Foreground" Value="#6B727C" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="LetterSpacing" Value="0.8" />
+    </Style>
+    <Style Selector="TextBlock.mono">
+      <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, monospace" />
+      <Setter Property="FontSize" Value="11" />
+    </Style>
+    <Style Selector="Border.branch">
+      <Setter Property="Background" Value="#24303C" />
+      <Setter Property="CornerRadius" Value="3" />
+      <Setter Property="Padding" Value="5,1" />
+    </Style>
+    <Style Selector="Border.rule">
+      <Setter Property="Height" Value="1" />
+      <Setter Property="Background" Value="#30353C" />
+      <Setter Property="Margin" Value="0,8" />
+    </Style>
+  </UserControl.Styles>
+
+  <StackPanel Margin="2,4">
+    <!-- Title and who/when -->
+    <StackPanel Spacing="6">
+      <StackPanel Orientation="Horizontal" Spacing="6">
+        <Border Width="3" Height="14" CornerRadius="1.5" Background="{Binding RailBrush}" VerticalAlignment="Center" />
+        <TextBlock Text="{Binding StatusText}" FontSize="11" FontWeight="SemiBold" Foreground="#C9CED6" VerticalAlignment="Center" />
+        <Border Classes="branch" IsVisible="{Binding IsDraft}" Background="Transparent" BorderBrush="#5C636D" BorderThickness="1" CornerRadius="7">
+          <TextBlock Text="draft" FontSize="9.5" Foreground="#8A9099" />
+        </Border>
+      </StackPanel>
+      <TextBlock TextWrapping="Wrap" FontSize="13" FontWeight="SemiBold" Foreground="#EEF0F2">
+        <Run Text="{Binding NumberText}" Foreground="#8A9099" FontFamily="Cascadia Mono, Consolas, monospace" FontSize="12" />
+        <Run Text=" " />
+        <Run Text="{Binding Title}" />
+      </TextBlock>
+      <StackPanel Orientation="Horizontal" Spacing="6">
+        <Border Width="16" Height="16" CornerRadius="8" ClipToBounds="True" Background="{Binding Author.InitialsBrush}">
+          <Panel>
+            <TextBlock Text="{Binding Author.Initials}" FontSize="7.5" FontWeight="Bold" Foreground="White"
+                       HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding !Author.HasAvatar}" />
+            <Image Source="{Binding Author.Avatar}" Stretch="UniformToFill" IsVisible="{Binding Author.HasAvatar}" />
+          </Panel>
+        </Border>
+        <TextBlock Text="{Binding AuthorLine}" FontSize="11.5" Foreground="#8A9099" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="310" />
+      </StackPanel>
+      <WrapPanel Orientation="Horizontal">
+        <Border Classes="branch" Margin="0,0,5,2">
+          <TextBlock Classes="mono" Text="{Binding HeadRef}" Foreground="#9DC4EA" />
+        </Border>
+        <TextBlock Text="→" Foreground="#6B727C" Margin="0,0,5,2" VerticalAlignment="Center" />
+        <Border Classes="branch" Margin="0,0,8,2">
+          <TextBlock Classes="mono" Text="{Binding BaseRef}" Foreground="#9DC4EA" />
+        </Border>
+        <TextBlock Text="{Binding MergeNote}" Foreground="{Binding MergeNoteBrush}" FontSize="11" VerticalAlignment="Center"
+                   IsVisible="{Binding HasMergeNote}" Margin="0,0,0,2" />
+      </WrapPanel>
+      <TextBlock IsVisible="{Binding HasTicket}" FontSize="11" Foreground="#8A9099">
+        <Run Text="Ticket " />
+        <Run Text="{Binding Ticket}" Foreground="#9DB8D6" FontFamily="Cascadia Mono, Consolas, monospace" />
+        <Run Text="  (click the ticket on the row to open it)" />
+      </TextBlock>
+    </StackPanel>
+
+    <!-- Checks -->
+    <StackPanel IsVisible="{Binding HasChecks}">
+      <Border Classes="rule" />
+      <StackPanel Spacing="5">
+        <TextBlock Classes="label" Text="CHECKS" />
+        <Border CornerRadius="3" ClipToBounds="True" Height="5" HorizontalAlignment="Left" Background="#30353C" Width="316">
+          <StackPanel Orientation="Horizontal">
+            <Border Background="#4CC38A" Width="{Binding PassedWidth}" />
+            <Border Background="#E8B339" Width="{Binding RunningWidth}" />
+            <Border Background="#E5484D" Width="{Binding FailedWidth}" />
+          </StackPanel>
+        </Border>
+        <TextBlock Classes="mono" Text="{Binding CheckSummary}" Foreground="#C9CED6" />
+        <ItemsControl ItemsSource="{Binding FailingChecks}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="x:String">
+              <StackPanel Orientation="Horizontal" Spacing="7" Margin="0,1">
+                <Ellipse Width="7" Height="7" Fill="#E5484D" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding}" FontSize="11.5" Foreground="#D5D9DE" TextTrimming="CharacterEllipsis" MaxWidth="300" />
+              </StackPanel>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <TextBlock Text="{Binding MoreFailing}" IsVisible="{Binding HasMoreFailing}" FontSize="11" Foreground="#8A9099" />
+      </StackPanel>
+    </StackPanel>
+
+    <!-- Reviews -->
+    <StackPanel IsVisible="{Binding HasReviewers}">
+      <Border Classes="rule" />
+      <StackPanel Spacing="5">
+        <TextBlock Classes="label" Text="REVIEWS" />
+        <ItemsControl ItemsSource="{Binding Reviewers}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:PrReviewerLine">
+              <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,2">
+                <Border Width="16" Height="16" CornerRadius="8" ClipToBounds="True" Background="{Binding Person.InitialsBrush}" Margin="0,0,7,0">
+                  <Panel>
+                    <TextBlock Text="{Binding Person.Initials}" FontSize="7.5" FontWeight="Bold" Foreground="White"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding !Person.HasAvatar}" />
+                    <Image Source="{Binding Person.Avatar}" Stretch="UniformToFill" IsVisible="{Binding Person.HasAvatar}" />
+                  </Panel>
+                </Border>
+                <TextBlock Grid.Column="1" Text="{Binding Person.Name}" FontSize="12" Foreground="#D5D9DE" VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis" />
+                <TextBlock Grid.Column="2" Text="{Binding StateText}" FontSize="11" Foreground="{Binding StateBrush}" VerticalAlignment="Center" />
+              </Grid>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
+    </StackPanel>
+
+    <!-- Size -->
+    <StackPanel IsVisible="{Binding HasSize}">
+      <Border Classes="rule" />
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <TextBlock Classes="mono" Text="{Binding AddedText}" Foreground="#4CC38A" />
+        <TextBlock Classes="mono" Text="{Binding DeletedText}" Foreground="#E5484D" />
+        <TextBlock Text="{Binding FilesText}" FontSize="11" Foreground="#8A9099" VerticalAlignment="Center" />
+      </StackPanel>
+    </StackPanel>
+  </StackPanel>
+</UserControl>
