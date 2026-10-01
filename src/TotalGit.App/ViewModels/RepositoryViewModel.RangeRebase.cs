@@ -13,6 +13,9 @@ public sealed class CommitRangeViewModel(CommitRangeResult range, IReadOnlyList<
 
     public string Title => Commits.Count == 1 ? "1 commit selected" : $"{Commits.Count} commits selected";
 
+    /// <summary>Squashing needs at least two commits (whether they're on the checked-out branch is checked when asked).</summary>
+    public bool CanSquash => Commits.Count > 1;
+
     public string Subtitle => tipBranches.Count > 0
         ? $"Ending at the tip of {string.Join(", ", tipBranches)}."
         : $"Below the tip of {containingBranch ?? "a branch"}: rebasing puts them in a new branch.";
@@ -40,8 +43,7 @@ public partial class RepositoryViewModel
     public void SelectRange(string anchor, string other)
     {
         if (Graph is null) return;
-        var bySha = Graph.Layout.Rows.Select(r => r.Commit).GroupBy(c => c.Sha).ToDictionary(g => g.Key, g => g.First());
-        var range = CommitRange.Resolve(bySha, anchor, other);
+        var range = CommitRange.Resolve(LoadedCommitsBySha(), anchor, other);
         if (!range.IsValid)
         {
             ShowError(range.Error!);
@@ -56,7 +58,7 @@ public partial class RepositoryViewModel
     private string? ContainingBranch(string sha)
     {
         if (Graph is null || _state is null) return null;
-        var bySha = Graph.Layout.Rows.Select(r => r.Commit).GroupBy(c => c.Sha).ToDictionary(g => g.Key, g => g.First());
+        var bySha = LoadedCommitsBySha();
         foreach (var branch in _state.Refs.Where(r => r.Kind == RefKind.LocalBranch).OrderByDescending(r => r.IsCurrent))
         {
             for (var at = branch.TargetSha; bySha.TryGetValue(at, out var commit);)
@@ -88,6 +90,8 @@ public partial class RepositoryViewModel
             [
                 new MenuAction(range.Commits.Count == 1 ? "Rebase selected commit onto…" : $"Rebase {range.Commits.Count} selected commits onto…",
                     RebaseRangeCommand, IsEnabled: !IsOperationInProgress, Icon: MenuIcons.Rebase),
+                new MenuAction($"Squash {range.Commits.Count} commits into one…", SquashRangeCommand,
+                    IsEnabled: range.Commits.Count > 1 && !IsOperationInProgress && _state?.CurrentBranch is not null, Icon: MenuIcons.Squash),
                 new MenuAction("Copy SHAs", CopyRangeShasCommand, Icon: MenuIcons.Copy),
                 MenuAction.Separator,
                 new MenuAction("Clear selection", ClearRangeCommand),
@@ -109,7 +113,7 @@ public partial class RepositoryViewModel
         var locals = state.Refs.Where(r => r.Kind == RefKind.LocalBranch).ToList();
         var remotes = state.Refs.Where(r => r.Kind == RefKind.RemoteBranch && !r.Name.EndsWith("/HEAD", StringComparison.Ordinal)).ToList();
         var byName = locals.Concat(remotes).GroupBy(r => r.Name).ToDictionary(g => g.Key, g => g.First());
-        var subjects = Graph?.Layout.Rows.Select(r => r.Commit).GroupBy(c => c.Sha).ToDictionary(g => g.Key, g => g.First().MessageShort) ?? [];
+        var subjects = LoadedCommitsBySha().ToDictionary(p => p.Key, p => p.Value.MessageShort);
 
         var tips = TipBranches(picked.Range.Newest.Sha).Select(r =>
         {
@@ -121,6 +125,7 @@ public partial class RepositoryViewModel
         var targets = locals.Select(r => r.Name).OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
             .Concat(remotes.Select(r => r.Name).OrderBy(n => n, StringComparer.OrdinalIgnoreCase)).ToList();
         var defaultTarget = target is not null && byName.ContainsKey(target) ? target
+            : state.DefaultBranch is { } main && byName.ContainsKey(main) ? main
             : new[] { "main", "master", "develop" }.FirstOrDefault(byName.ContainsKey)
             ?? targets.FirstOrDefault(t => tips.All(b => b.Name != t)) ?? "";
 
@@ -158,6 +163,45 @@ public partial class RepositoryViewModel
                       $"{(dropped == 1 ? "1 was" : $"{dropped} were")} left out because {target} already has {(dropped == 1 ? "its" : "their")} changes.";
         var hadUpstream = vm.MoveExisting && vm.BranchToMove?.HasUpstream == true;
         Banner = new Banner(message, false, hadUpstream ? [new MenuAction("Force push…", ForcePushCommand)] : []);
+        if (_state?.HeadSha is { } head) SelectAndReveal(head);
+    }
+
+    /// <summary>Squashes the picked commits (on the checked-out branch) into one, with a message the user edits.</summary>
+    [RelayCommand]
+    private async Task SquashRangeAsync()
+    {
+        if (_state is null || _session is not { } session || Dialogs is null || Range is not { } picked || !EnsureCleanFor("squash")) return;
+        var wt = _state.WorkingDirectory;
+        var oldestFirst = picked.Range.Commits.Select(c => c.Sha).Reverse().ToList();
+        var count = oldestFirst.Count;
+
+        if (await GitActions.SquashProblemAsync(wt, oldestFirst) is { } problem)
+        {
+            ShowError(problem);
+            return;
+        }
+
+        // Start from every message, oldest first, as git does when squashing.
+        var messages = await Task.Run(() => oldestFirst.Select(sha => session.GetCommitDetails(sha).FullMessage.Trim()).ToList());
+        var pushed = (await GitActions.PushedCommitsAsync(wt, null)).Count(oldestFirst.Contains);
+        var message = new FormField(FormFieldKind.MultilineText, "Message") { Text = string.Join("\n\n", messages), Height = 220 };
+        var note = $"Combines the {count} selected commits on {_state.CurrentBranch} into one commit. Their changes stay as they are.";
+        if (pushed > 0)
+            note += pushed == count
+                ? " They're already pushed, so you'll need to force push afterwards."
+                : $" {pushed} of them are already pushed, so you'll need to force push afterwards.";
+        var spec = new FormSpec($"Squash {count} commits", note, "Squash", [message],
+            () => string.IsNullOrWhiteSpace(message.Text) ? "Enter a commit message." : null);
+        if (!await Dialogs.ShowFormAsync(spec)) return;
+
+        var outcome = OperationOutcome.Completed;
+        var ok = await RunGitAsync($"Squashing {count} commits…", async () => outcome = await GitActions.SquashAsync(wt, oldestFirst, message.Text.Trim()));
+        SelectedRange = null;
+        if (!ok) return;
+        OnStopped(outcome);
+        if (outcome != OperationOutcome.Completed) return;
+
+        Banner = new Banner($"Squashed {count} commits into one.", false, pushed > 0 ? [new MenuAction("Force push…", ForcePushCommand)] : []);
         if (_state?.HeadSha is { } head) SelectAndReveal(head);
     }
 }

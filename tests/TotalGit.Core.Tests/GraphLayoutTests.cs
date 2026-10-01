@@ -86,4 +86,20 @@ public class GraphLayoutTests
 
         Assert.Contains(r.Rows[0].Segments, s => s is { From: RowAnchor.Middle, To: RowAnchor.Bottom });
     }
+
+    [Fact]
+    public void Trunk_lines_are_marked_and_keep_their_lane_where_branches_join()
+    {
+        // main is m -> b -> a; f branches off a and is laid out first, so without the trunk it would take lane 0.
+        var r = GraphLayout.Compute([C("f", "a"), C("m", "b"), C("b", "a"), C("a")], new HashSet<string> { "m", "b", "a" });
+
+        var m = r.Rows[1];
+        Assert.Contains(m.Segments, s => s is { FromLane: var l, From: RowAnchor.Middle, To: RowAnchor.Bottom, Trunk: true } && l == m.Lane);
+        // f's line is not trunk.
+        Assert.All(r.Rows[0].Segments, s => Assert.False(s.Trunk));
+        // At a, main's lane takes the node and f's line curves in.
+        Assert.Equal(m.Lane, r.Rows[3].Lane);
+        Assert.Contains(r.Rows[3].Segments, s => s is { From: RowAnchor.Top, To: RowAnchor.Middle, Trunk: true });
+        Assert.Contains(r.Rows[3].Segments, s => s is { From: RowAnchor.Top, To: RowAnchor.Middle, Trunk: false });
+    }
 }

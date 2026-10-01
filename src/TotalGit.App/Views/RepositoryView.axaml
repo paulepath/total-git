@@ -190,9 +190,69 @@
       <GridSplitter Grid.Column="1" x:Name="SidebarSplitter" ResizeDirection="Columns" />
 
       <Panel Grid.Column="2">
-        <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding HasRepository}">
-          <views:CommitGraphView Grid.Column="0" x:Name="Graph" Data="{Binding Graph}" SelectedSha="{Binding SelectedSha}" SelectedRange="{Binding SelectedRange}" />
-          <ScrollBar Grid.Column="1" x:Name="GraphScrollBar" Orientation="Vertical" AllowAutoHide="False" />
+        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,*" IsVisible="{Binding HasRepository}">
+          <!-- Graph filters: one developer, the current branch's line, folding rebased runs. -->
+          <Border Grid.ColumnSpan="2" Background="#1F2328" BorderBrush="#30353C" BorderThickness="0,0,0,1" Padding="8,4">
+            <Border.Styles>
+              <Style Selector="ToggleButton.filter">
+                <Setter Property="Padding" Value="10,3" />
+                <Setter Property="MinHeight" Value="26" />
+                <Setter Property="FontSize" Value="12" />
+                <Setter Property="CornerRadius" Value="13" />
+                <Setter Property="Background" Value="Transparent" />
+                <Setter Property="BorderBrush" Value="#3A4048" />
+                <Setter Property="BorderThickness" Value="1" />
+              </Style>
+              <Style Selector="ToggleButton.filter:checked /template/ ContentPresenter#PART_ContentPresenter">
+                <Setter Property="Background" Value="#1F4E7A" />
+                <Setter Property="BorderBrush" Value="#3B82C4" />
+              </Style>
+            </Border.Styles>
+            <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="4">
+              <ComboBox ItemsSource="{Binding Authors}" SelectedItem="{Binding SelectedAuthor}" MinWidth="190" MaxDropDownHeight="420"
+                        FontSize="12" MinHeight="26" Padding="8,2" ToolTip.Tip="Show only one developer's commits">
+                <ComboBox.ItemTemplate>
+                  <DataTemplate x:DataType="vm:AuthorOption">
+                    <Grid ColumnDefinitions="Auto,*,Auto">
+                      <Border Width="18" Height="18" CornerRadius="9" ClipToBounds="True" Margin="0,0,8,0" VerticalAlignment="Center"
+                              Background="{Binding InitialsBrush}" IsVisible="{Binding !IsEveryone}">
+                        <Panel>
+                          <TextBlock Text="{Binding Initials}" FontSize="8" FontWeight="Bold" Foreground="White"
+                                     HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding !HasAvatar}" />
+                          <Image Source="{Binding Avatar}" Stretch="UniformToFill" IsVisible="{Binding HasAvatar}" />
+                        </Panel>
+                      </Border>
+                      <PathIcon Data="{StaticResource PersonIcon}" Width="14" Height="14" Margin="2,0,10,0" Foreground="#8A9099"
+                                IsVisible="{Binding IsEveryone}" />
+                      <TextBlock Grid.Column="1" Text="{Binding Label}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                      <TextBlock Grid.Column="2" Text="{Binding CountText}" Foreground="#6B727C" Margin="12,0,0,0" VerticalAlignment="Center"
+                                 FontFamily="Cascadia Mono, Consolas, monospace" FontSize="11" />
+                    </Grid>
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
+              <ToggleButton Classes="filter" IsChecked="{Binding CurrentBranchOnly}"
+                            ToolTip.Tip="Show only the current branch's line down to the main branch. Merged branches show as their merge commit.">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <PathIcon Data="{StaticResource BranchIcon}" Width="12" Height="12" />
+                  <TextBlock Text="Current branch only" VerticalAlignment="Center" />
+                </StackPanel>
+              </ToggleButton>
+              <ToggleButton Classes="filter" IsChecked="{Binding FoldRuns}"
+                            ToolTip.Tip="Fold runs of 3 or more commits in a row on one branch into one row (a merge or another branch's commit ends a run). Click a folded row's arrow to open it.">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <PathIcon Data="{StaticResource CollapseIcon}" Width="12" Height="12" />
+                  <TextBlock Text="Fold commit runs" VerticalAlignment="Center" />
+                </StackPanel>
+              </ToggleButton>
+              <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" IsVisible="{Binding HasFilters}">
+                <TextBlock Text="{Binding FilterSummary}" Foreground="#8A9099" FontSize="12" VerticalAlignment="Center" />
+                <Button Content="Clear filters" Command="{Binding ClearFiltersCommand}" FontSize="12" Padding="8,2" MinHeight="24" />
+              </StackPanel>
+            </WrapPanel>
+          </Border>
+          <views:CommitGraphView Grid.Row="1" Grid.Column="0" x:Name="Graph" Data="{Binding Graph}" SelectedSha="{Binding SelectedSha}" SelectedRange="{Binding SelectedRange}" />
+          <ScrollBar Grid.Row="1" Grid.Column="1" x:Name="GraphScrollBar" Orientation="Vertical" AllowAutoHide="False" />
         </Grid>
 
         <!-- Conflicted files open the merge tool over the graph. -->

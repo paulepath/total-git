@@ -11,6 +11,12 @@ public sealed class RepoSettings
 
     /// <summary>The Jira site ticket keys in pull request titles link to, e.g. https://example.atlassian.net.</summary>
     public string? JiraUrl { get; set; }
+
+    /// <summary>The graph shows only the current branch's line down to the main branch.</summary>
+    public bool CurrentBranchOnly { get; set; }
+
+    /// <summary>The graph folds runs of consecutive commits on one line into one row.</summary>
+    public bool FoldRuns { get; set; } = true;
 }
 
 public sealed class AppSettings

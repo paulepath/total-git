@@ -21,6 +21,13 @@
               <TextBlock Text="Rebase onto…" />
             </StackPanel>
           </Button>
+          <Button Margin="0,0,8,4" IsVisible="{Binding CanSquash}"
+                  Command="{Binding $parent[views:RepositoryView].((vm:RepositoryViewModel)DataContext).SquashRangeCommand}">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <PathIcon Data="{StaticResource SquashIcon}" Width="12" Height="12" />
+              <TextBlock Text="Squash…" />
+            </StackPanel>
+          </Button>
           <Button Content="Copy SHAs" Margin="0,0,8,4"
                   Command="{Binding $parent[views:RepositoryView].((vm:RepositoryViewModel)DataContext).CopyRangeShasCommand}" />
           <Button Content="Clear selection" Margin="0,0,8,4"

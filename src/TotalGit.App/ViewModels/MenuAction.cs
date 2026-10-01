@@ -42,6 +42,9 @@ public static class MenuIcons
     public const string Browser = "BrowserIcon";
     public const string PullRequest = "PullRequestIcon";
     public const string Refresh = "RefreshIcon";
+    public const string Expand = "ExpandIcon";
+    public const string Collapse = "CollapseIcon";
+    public const string Squash = "SquashIcon";
 }
 
 /// <summary>A branch, tag or worktree that actions can target.</summary>

@@ -19,6 +19,12 @@ public sealed record RepositoryState(
     string? OperationProgress = null)
 {
     public string WorktreeName => Path.GetFileName(WorkingDirectory.TrimEnd('\\', '/'));
+
+    /// <summary>The repository's main line: what origin/HEAD points at, else main, master or develop; null when none.</summary>
+    public string? DefaultBranch { get; init; }
+
+    /// <summary>The configured user.email (whose commits are "mine"), or null.</summary>
+    public string? UserEmail { get; init; }
 }
 
 /// <summary>A multi-step operation the repository is in the middle of (usually stopped on conflicts).</summary>

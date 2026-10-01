@@ -30,6 +30,9 @@ public sealed class FormField(FormFieldKind kind, string label)
     /// <summary>False puts the caret after the initial text instead of selecting it (for a prefix such as "feature/").</summary>
     public bool SelectText { get; init; } = true;
 
+    /// <summary>The height of a multiline field (taller for a commit message).</summary>
+    public double Height { get; init; } = 96;
+
     public static FormField TextBox(string label, string text = "", string? placeholder = null, bool selectText = true) =>
         new(FormFieldKind.Text, label) { Text = text, Placeholder = placeholder, SelectText = selectText };
 

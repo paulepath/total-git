@@ -26,7 +26,14 @@ public sealed record GraphData(
     string RepositoryPath,
     string CurrentWorktreePath,
     IReadOnlyDictionary<string, WorktreeInfo> WorktreesByBranch,
-    IReadOnlyDictionary<string, WipInfo> Wip);
+    IReadOnlyDictionary<string, WipInfo> Wip)
+{
+    /// <summary>Rows that stand for a folded run of commits, by the row's SHA.</summary>
+    public IReadOnlyDictionary<string, CommitFold> Folds { get; init; } = new Dictionary<string, CommitFold>();
+
+    /// <summary>Commits folded away, mapped to the folded row that stands for them (where their labels go).</summary>
+    public IReadOnlyDictionary<string, string> ShownAs { get; init; } = new Dictionary<string, string>();
+}
 
 /// <summary>A WIP row's file count, and the worktree name for rows of other worktrees.</summary>
 public sealed record WipInfo(int Count, string? WorktreeName);
@@ -255,6 +262,7 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
 
             if (!sameRepo)
             {
+                ResetGraphFilters();
                 SelectedSha = null;
                 Details = null;
                 Staging = null;
@@ -433,7 +441,9 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
     private void RebuildGraph()
     {
         var state = _state!;
-        var builder = new GraphLayoutBuilder();
+        UpdateAuthors(state);
+        var projected = ProjectHistory(state);
+        var builder = new GraphLayoutBuilder(TrunkCommits(_commits, state));
         var wip = new Dictionary<string, WipInfo>();
         if (_status.IsDirty && state.HeadSha is not null)
         {
@@ -441,7 +451,7 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
                 "// WIP", IsWorkingTree: true)]);
             wip[CommitInfo.WorkingTreeSha] = new WipInfo(_status.TotalCount, null);
         }
-        builder.Append(WithOtherWorktreeRows(_commits, wip));
+        builder.Append(WithOtherWorktreeRows(projected.Commits, wip));
 
         var byBranch = _worktrees
             .Where(w => w.Branch is not null)
@@ -456,7 +466,8 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
             state.MainWorkingDirectory,
             state.WorkingDirectory,
             byBranch,
-            wip);
+            wip) { Folds = projected.Folds, ShownAs = projected.ShownAs };
+        UpdateFilterSummary(projected.Commits.Count);
         UpdateCommitCount();
     }
 
@@ -625,12 +636,21 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
         Diff = null;
     }
 
-    /// <summary>Selects a commit and scrolls to it, loading more history if it isn't loaded yet.</summary>
+    /// <summary>
+    /// Selects a commit and scrolls to it, loading more history if it isn't loaded yet. A commit inside a folded run
+    /// unfolds it; one the filters hide selects the row that stands for it.
+    /// </summary>
     [RelayCommand]
     private async Task SelectShaAsync(string sha)
     {
-        for (var i = 0; i < 25 && Graph is not null && !Graph.Layout.Rows.Any(r => r.Commit.Sha == sha) && _session?.HasMoreHistory == true; i++)
+        for (var i = 0; i < 25 && Graph is not null && !_commits.Any(c => c.Sha == sha) && _session?.HasMoreHistory == true; i++)
             await LoadMoreAsync();
+
+        if (Graph is { } graph && !graph.Layout.Rows.Any(r => r.Commit.Sha == sha) && _shownAs.TryGetValue(sha, out var row))
+        {
+            if (graph.Folds.TryGetValue(row, out var fold) && fold.Shas.Contains(sha)) ExpandFold(row);
+            else sha = row;
+        }
 
         if (Graph?.Layout.Rows.Any(r => r.Commit.Sha == sha) != true)
         {
@@ -1235,7 +1255,9 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
             ];
 
         var actions = new List<MenuAction>();
-        var refs = Graph?.Refs.Where(r => r.TargetSha == commit.Sha && r.Kind != RefKind.DetachedHead).ToList() ?? [];
+        // Including labels of commits folded into this row.
+        var refs = Graph?.Refs.Where(r => Graph.ShownAs.GetValueOrDefault(r.TargetSha, r.TargetSha) == commit.Sha
+                                          && r.Kind != RefKind.DetachedHead).ToList() ?? [];
         foreach (var r in refs)
         {
             Graph!.WorktreesByBranch.TryGetValue(r.Kind == RefKind.LocalBranch ? r.Name : "", out var wt);
@@ -1251,6 +1273,11 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
         actions.Add(new MenuAction("Create worktree from this commit…", CreateWorktreeCommand, here, Icon: MenuIcons.Worktree));
         actions.Add(new MenuAction("Copy commit SHA", CopyCommand, commit.Sha, Icon: MenuIcons.Copy));
         actions.Add(new MenuAction("Copy commit message", CopyCommand, commit.MessageShort, Icon: MenuIcons.Copy));
+        if (FoldActions(commit).ToList() is { Count: > 0 } fold)
+        {
+            actions.Add(MenuAction.Separator);
+            actions.AddRange(fold);
+        }
 
         var rewrite = MergeRebaseActions(here, isCurrentTip: _state?.HeadSha == commit.Sha).ToList();
         if (_state?.CurrentBranch is not null && !IsOperationInProgress)

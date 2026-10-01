@@ -287,6 +287,48 @@ public static class GitActions
         return await RunStoppableAsync(worktree, ["rebase", "-i", baseSha ?? "--root"], env);
     }
 
+    /// <summary>
+    /// Why <paramref name="oldestFirst"/> can't be squashed on the checked-out branch, or null when it can: the commits
+    /// must be one unbroken first-parent line in HEAD's history, with no merge commits after them (a rebase would
+    /// flatten those).
+    /// </summary>
+    public static async Task<string?> SquashProblemAsync(string worktree, IReadOnlyList<string> oldestFirst)
+    {
+        if (oldestFirst.Count < 2) return "Select at least two commits to squash.";
+        if (!await IsAncestorAsync(worktree, oldestFirst[^1], "HEAD"))
+            return "These commits aren't on the checked-out branch. Check out their branch to squash them.";
+        var commits = await CommitsSinceAsync(worktree, await ParentOfAsync(worktree, oldestFirst[0]));
+        if (commits.Count < oldestFirst.Count || !commits.Take(oldestFirst.Count).Select(c => c.Sha).SequenceEqual(oldestFirst))
+            return "These commits aren't one unbroken line on the checked-out branch.";
+        if (commits.Skip(oldestFirst.Count).Any(c => c.IsMerge))
+            return "There are merge commits after these on the branch, and squashing would flatten them.";
+        return null;
+    }
+
+    /// <summary>
+    /// Squashes <paramref name="oldestFirst"/> (an unbroken line on the checked-out branch, see
+    /// <see cref="SquashProblemAsync"/>) into one commit with <paramref name="message"/>, replaying the commits after
+    /// them on top.
+    /// </summary>
+    public static async Task<OperationOutcome> SquashAsync(string worktree, IReadOnlyList<string> oldestFirst, string message)
+    {
+        if (await SquashProblemAsync(worktree, oldestFirst) is { } problem) throw new InvalidOperationException(problem);
+        var baseSha = await ParentOfAsync(worktree, oldestFirst[0]);
+        var after = (await CommitsSinceAsync(worktree, baseSha)).Skip(oldestFirst.Count);
+        // The oldest takes the new message; the others fold into it keeping that message; the rest replay as they were.
+        List<RebaseStep> steps = [new(RebaseAction.Reword, oldestFirst[0], message)];
+        steps.AddRange(oldestFirst.Skip(1).Select(sha => new RebaseStep(RebaseAction.Fixup, sha)));
+        steps.AddRange(after.Select(c => new RebaseStep(RebaseAction.Pick, c.Sha)));
+        return await InteractiveRebaseAsync(worktree, baseSha, steps);
+    }
+
+    /// <summary>A commit's first parent, or null for a root commit.</summary>
+    private static async Task<string?> ParentOfAsync(string worktree, string sha)
+    {
+        var result = await GitCli.RunAsync(worktree, ["rev-parse", "--verify", "--quiet", sha + "^"], throwOnError: false);
+        return result.ExitCode == 0 ? result.StdOut.Trim() : null;
+    }
+
     private static string ShPath(string path) => path.Replace('\\', '/');
 
     /// <summary>Runs a merge/rebase step: a non-zero exit that leaves the operation in progress means "stopped".</summary>

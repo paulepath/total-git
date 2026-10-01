@@ -92,7 +92,7 @@ public sealed class FormDialog : Window
             PlaceholderText = field.Placeholder,
             AcceptsReturn = multiline,
             TextWrapping = multiline ? TextWrapping.Wrap : TextWrapping.NoWrap,
-            Height = multiline ? 96 : double.NaN,
+            Height = multiline ? field.Height : double.NaN,
             VerticalContentAlignment = multiline ? VerticalAlignment.Top : VerticalAlignment.Center,
         };
         text.TextChanged += (_, _) =>

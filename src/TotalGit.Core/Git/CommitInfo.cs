@@ -19,6 +19,9 @@ public sealed record CommitInfo(
     /// <summary>The WIP row of a worktree other than the one the tab shows.</summary>
     public bool IsOtherWorktree => IsWorkingTree && WorktreePath is not null;
 
+    /// <summary>When the commit was written (a rebase rewrites this but keeps the author date); null when unknown.</summary>
+    public DateTimeOffset? CommitDate { get; init; }
+
     public string ShortSha => Sha.Length > 7 ? Sha[..7] : Sha;
     public bool IsMerge => ParentShas.Count > 1;
 }

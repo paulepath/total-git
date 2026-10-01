@@ -11,7 +11,8 @@ public enum RowAnchor
 }
 
 /// <summary>A line drawn within a single row, from one lane/anchor to another.</summary>
-public readonly record struct GraphSegment(int FromLane, RowAnchor From, int ToLane, RowAnchor To, int ColorIndex);
+/// <param name="Trunk">Part of a main-line branch's line (main, features, bugs), drawn heavier.</param>
+public readonly record struct GraphSegment(int FromLane, RowAnchor From, int ToLane, RowAnchor To, int ColorIndex, bool Trunk = false);
 
 public sealed class GraphRow(CommitInfo commit, int lane, int colorIndex, IReadOnlyList<GraphSegment> segments)
 {

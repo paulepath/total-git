@@ -67,6 +67,8 @@ public sealed class CommitGraphView : Control
     private static readonly IBrush PillHoverBrush = new SolidColorBrush(Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF));
     private static readonly IPen SeparatorPen = new Pen(new SolidColorBrush(Color.Parse("#30353C")), 1);
 
+    private static readonly Geometry ChevronRightIcon = Geometry.Parse("M8.59,16.58L13.17,12L8.59,7.41L10,6L16,12L10,18L8.59,16.58Z");
+    private static readonly IBrush FoldChipBrush = new SolidColorBrush(Color.FromArgb(0x30, 0xFF, 0xFF, 0xFF));
     private static readonly Geometry CheckIcon = Geometry.Parse("M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z");
     private static readonly Geometry LaptopIcon = Geometry.Parse(
         "M4,6H20V16H4M20,18A2,2 0 0,0 22,16V6C22,4.89 21.1,4 20,4H4C2.89,4 2,4.89 2,6V16A2,2 0 0,0 4,18H0V20H24V18H20Z");
@@ -86,6 +88,7 @@ public sealed class CommitGraphView : Control
     private readonly Typeface _typeface = new("Inter");
     private readonly Typeface _boldTypeface = new("Inter", FontStyle.Normal, FontWeight.SemiBold);
     private readonly Pen[] _lanePens = LanePalette.Select(c => new Pen(new SolidColorBrush(c), 2, lineCap: PenLineCap.Round)).ToArray();
+    private readonly Pen[] _trunkPens = LanePalette.Select(c => new Pen(new SolidColorBrush(c), 4, lineCap: PenLineCap.Round)).ToArray();
     private readonly Pen[] _connectorPens = LanePalette.Select(c => new Pen(new SolidColorBrush(c, 0.6), 1)).ToArray();
     private readonly IBrush[] _laneBrushes = LanePalette.Select(c => (IBrush)new SolidColorBrush(c)).ToArray();
     private readonly IBrush[] _bandBrushes = LanePalette.Select(c => (IBrush)new SolidColorBrush(c, 0.13)).ToArray();
@@ -199,6 +202,9 @@ public sealed class CommitGraphView : Control
 
     /// <summary>Raised when the viewport nears the last loaded row, so more history can be loaded.</summary>
     public event Action? NearEnd;
+
+    /// <summary>A folded row's chevron was clicked, or the row double-clicked: show its commits again.</summary>
+    public event Action<string>? ExpandFoldRequested;
 
     /// <summary>Raised on right-click with the commit under the pointer.</summary>
     public event Action<CommitInfo, Point>? CommitContextRequested;
@@ -519,6 +525,13 @@ public sealed class CommitGraphView : Control
         }
 
         var row = RowAt(point.Position.Y);
+        if (row >= 0 && point.Properties.IsLeftButtonPressed && Data?.Folds.ContainsKey(Rows[row].Commit.Sha) == true
+            && (e.ClickCount == 2 || (point.Position.X >= MessageLeft - 4 && point.Position.X <= MessageLeft + FoldChevronWidth)))
+        {
+            ExpandFoldRequested?.Invoke(Rows[row].Commit.Sha);
+            e.Handled = true;
+            return;
+        }
         if (row >= 0)
         {
             var sha = Rows[row].Commit.Sha;
@@ -816,7 +829,7 @@ public sealed class CommitGraphView : Control
         var height = RowSpan(i);
         foreach (var s in Rows[i].Segments)
         {
-            var pen = _lanePens[s.ColorIndex];
+            var pen = s.Trunk ? _trunkPens[s.ColorIndex] : _lanePens[s.ColorIndex];
             var x1 = LaneX(s.FromLane);
             var x2 = LaneX(s.ToLane);
             var y1 = AnchorY(top, height, s.From);
@@ -875,6 +888,12 @@ public sealed class CommitGraphView : Control
             return;
         }
 
+        if (Data?.Folds.ContainsKey(row.Commit.Sha) == true)
+        {
+            for (var k = 2; k >= 1; k--)
+                ctx.DrawEllipse(BackgroundBrush, _lanePens[row.ColorIndex], center + new Vector(k * 4, k * 3), NodeRadius - 1, NodeRadius - 1);
+        }
+
         if (row.Commit.IsMerge)
         {
             ctx.DrawEllipse(brush, null, center, MergeDotRadius, MergeDotRadius);
@@ -919,14 +938,45 @@ public sealed class CommitGraphView : Control
             return;
         }
 
-        var msg = Text(c.MessageShort, 13, PrimaryTextBrush, _typeface, messageWidth);
-        ctx.DrawText(msg, new Point(MessageLeft, top + (RowHeight - msg.Height) / 2));
+        var fold = Data?.Folds.GetValueOrDefault(c.Sha);
+        if (fold is not null)
+        {
+            DrawFoldText(ctx, fold, c, top, messageWidth);
+        }
+        else
+        {
+            var msg = Text(c.MessageShort, 13, PrimaryTextBrush, _typeface, messageWidth);
+            ctx.DrawText(msg, new Point(MessageLeft, top + (RowHeight - msg.Height) / 2));
+        }
 
         if (!ShowMetaColumns) return;
-        var author = Text(c.AuthorName, 12, MutedTextBrush, _typeface, AuthorColumnWidth - 12);
+        var who = fold is null || fold.Authors.Count <= 1 ? c.AuthorName : $"{fold.Authors[0]} +{fold.Authors.Count - 1}";
+        var author = Text(who, 12, MutedTextBrush, _typeface, AuthorColumnWidth - 12);
         ctx.DrawText(author, new Point(AuthorLeft, top + (RowHeight - author.Height) / 2));
-        var date = Text(DateText.Relative(c.AuthorDate), 12, MutedTextBrush, _typeface, DateColumnWidth - 12);
+        var date = Text(DateText.Relative(fold?.To ?? c.AuthorDate), 12, MutedTextBrush, _typeface, DateColumnWidth - 12);
         ctx.DrawText(date, new Point(DateLeft, top + (RowHeight - date.Height) / 2));
+    }
+
+    private const double FoldChevronWidth = 18;
+
+    /// <summary>
+    /// A folded row: a chevron to expand it, how many commits it holds (and whether they were rebased), then the
+    /// newest one's message, muted.
+    /// </summary>
+    private void DrawFoldText(DrawingContext ctx, CommitFold fold, CommitInfo newest, double top, double width)
+    {
+        var cy = top + RowHeight / 2;
+        DrawIcon(ctx, ChevronRightIcon, MessageLeft, cy - 7, 14, MutedTextBrush);
+        var x = MessageLeft + FoldChevronWidth;
+        var count = Text(fold.IsRebased ? $"{fold.Count} commits · rebased" : $"{fold.Count} commits", 12.5, PrimaryTextBrush, _boldTypeface);
+        var chip = new Rect(x, cy - 9, count.Width + 14, 18);
+        ctx.DrawRectangle(FoldChipBrush, null, new RoundedRect(chip, 9));
+        ctx.DrawText(count, new Point(x + 7, cy - count.Height / 2));
+        x = chip.Right + 8;
+        var rest = MessageLeft + width - x;
+        if (rest <= 20) return;
+        var msg = Text(newest.MessageShort, 13, MutedTextBrush, _typeface, rest);
+        ctx.DrawText(msg, new Point(x, cy - msg.Height / 2));
     }
 
     private const double PillHeight = 20;
@@ -1056,7 +1106,7 @@ public sealed class CommitGraphView : Control
         {
             var refs = data.Refs;
             var result = new Dictionary<string, List<RefBadge>>();
-            foreach (var group in refs.GroupBy(r => r.TargetSha))
+            foreach (var group in refs.GroupBy(r => data.ShownAs.GetValueOrDefault(r.TargetSha, r.TargetSha)))
             {
                 var badges = new List<RefBadge>();
                 var remotes = group.Where(r => r.Kind == RefKind.RemoteBranch).ToList();

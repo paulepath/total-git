@@ -93,7 +93,10 @@ public sealed class RepositorySession : IDisposable
                 ReadRefs(),
                 ReadStashes(),
                 ReadOperation(info.CurrentOperation),
-                ReadRebaseProgress());
+                ReadRebaseProgress()) {
+                DefaultBranch = ReadDefaultBranch(),
+                UserEmail = _repo.Config.Get<string>("user.email")?.Value,
+            };
         }
     }
 
@@ -384,7 +387,7 @@ public sealed class RepositorySession : IDisposable
         c.Author.Name,
         c.Author.Email,
         c.Author.When,
-        c.MessageShort);
+        c.MessageShort) { CommitDate = c.Committer.When };
 
     private static RepoOperation ReadOperation(CurrentOperation op) => op switch
     {
@@ -440,6 +443,15 @@ public sealed class RepositorySession : IDisposable
 
         var divergence = _repo.ObjectDatabase.CalculateHistoryDivergence(branch.Tip, upstreamTip);
         return (upstreamName, divergence.AheadBy ?? 0, divergence.BehindBy ?? 0, false);
+    }
+
+    /// <summary>The branch origin/HEAD points at (as a local name), else the first of main, master, develop that exists.</summary>
+    private string? ReadDefaultBranch()
+    {
+        if (_repo.Refs["refs/remotes/origin/HEAD"] is SymbolicReference { Target.CanonicalName: var target }
+            && target.StartsWith("refs/remotes/origin/", StringComparison.Ordinal))
+            return target["refs/remotes/origin/".Length..];
+        return new[] { "main", "master", "develop" }.FirstOrDefault(n => _repo.Branches[n] is not null || _repo.Branches["origin/" + n] is not null);
     }
 
     private List<RefInfo> ReadRefs()
