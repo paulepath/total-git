@@ -64,10 +64,7 @@ public sealed class CommitGraphView : Control
     private static readonly IBrush RangeBrush = new SolidColorBrush(Color.FromArgb(0x48, 0x3B, 0x82, 0xF6));
     private static readonly IBrush RangeAccentBrush = new SolidColorBrush(Color.Parse("#5AA9F2"));
     private static readonly IPen RangeNodePen = new Pen(new SolidColorBrush(Color.Parse("#E6E8EB")), 2);
-    private static readonly IBrush FanBackgroundBrush = new SolidColorBrush(Color.Parse("#23272D"));
-    private static readonly IBrush FanShadowBrush = new SolidColorBrush(Color.FromArgb(0x70, 0, 0, 0));
-    private static readonly IBrush FanHoverBrush = new SolidColorBrush(Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF));
-    private static readonly IPen FanBorderPen = new Pen(new SolidColorBrush(Color.Parse("#4A505A")), 1);
+    private static readonly IBrush PillHoverBrush = new SolidColorBrush(Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF));
     private static readonly IPen SeparatorPen = new Pen(new SolidColorBrush(Color.Parse("#30353C")), 1);
 
     private static readonly Geometry CheckIcon = Geometry.Parse("M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z");
@@ -94,7 +91,6 @@ public sealed class CommitGraphView : Control
     private readonly IBrush[] _bandBrushes = LanePalette.Select(c => (IBrush)new SolidColorBrush(c, 0.13)).ToArray();
     private readonly IBrush[] _strongBandBrushes = LanePalette.Select(c => (IBrush)new SolidColorBrush(c, 0.55)).ToArray();
     private readonly IBrush[] _pillBrushes = LanePalette.Select(c => (IBrush)new SolidColorBrush(c, 0.35)).ToArray();
-    private readonly IBrush[] _stackBrushes = LanePalette.Select(c => (IBrush)new SolidColorBrush(c, 0.2)).ToArray();
 
     private static readonly IPen WipPen = new Pen(new SolidColorBrush(Color.Parse("#A0A7B0")), 1.5, new DashStyle([2, 2], 0));
 
@@ -106,9 +102,12 @@ public sealed class CommitGraphView : Control
     private int _hoverRow = -1;
     private bool _tipSuppressed;
 
-    // The row whose refs are fanned out (hovering a pill that stands for several refs), and the hovered ref in it.
-    private int _fanRow = -1;
-    private int _fanHover = -1;
+    // Where each row starts, in content pixels (one more entry than rows: the last is the total height). A commit with
+    // several refs is taller: one line per ref, so every branch name is visible.
+    private double[] _rowTops = [0];
+
+    // The hovered ref on a commit that has several (each is its own click target there), or (-1, -1).
+    private (int Row, int Index) _pillHover = (-1, -1);
     private ScrollBar? _scrollBar;
     private bool _syncingScrollBar;
 
@@ -229,7 +228,7 @@ public sealed class CommitGraphView : Control
 
     private IReadOnlyList<GraphRow> Rows => Data?.Layout.Rows ?? [];
     private double BodyHeight => Math.Max(0, Bounds.Height - HeaderHeight);
-    private double MaxOffset => Math.Max(0, Rows.Count * RowHeight - BodyHeight);
+    private double MaxOffset => Math.Max(0, ContentTop(Rows.Count) - BodyHeight);
     private double GraphColumnWidth => _graphWidth ?? Math.Clamp((Data?.Layout.LaneCount ?? 1) * LaneWidth + GraphPadding * 2, 80, 420);
     private double RefColumnWidth => _refWidth;
     private double AuthorColumnWidth => _authorWidth;
@@ -268,7 +267,7 @@ public sealed class CommitGraphView : Control
 
             RebuildIndexes();
             _hoverRow = -1;
-            _fanRow = _fanHover = -1;
+            _pillHover = (-1, -1);
             // Refreshes of the same worktree keep the scroll position; switching repos goes to the top.
             var sameView = old is not null && data is not null && old.CurrentWorktreePath == data.CurrentWorktreePath;
             if (!sameView && SelectedSha is not null && !_rowBySha.ContainsKey(SelectedSha)) SelectedSha = null;
@@ -305,11 +304,40 @@ public sealed class CommitGraphView : Control
         _rowBySha = [];
         _badgesBySha = [];
         _headSha = null;
+        _rowTops = [0];
         if (data is null) return;
 
-        for (var i = 0; i < data.Layout.Rows.Count; i++) _rowBySha[data.Layout.Rows[i].Commit.Sha] = i;
+        var rows = data.Layout.Rows;
+        for (var i = 0; i < rows.Count; i++) _rowBySha[rows[i].Commit.Sha] = i;
         _badgesBySha = RefBadge.Build(data);
         _headSha = data.Refs.FirstOrDefault(r => r.IsCurrent)?.TargetSha;
+
+        _rowTops = new double[rows.Count + 1];
+        for (var i = 0; i < rows.Count; i++)
+        {
+            var lines = _badgesBySha.TryGetValue(rows[i].Commit.Sha, out var badges) ? Math.Max(1, badges.Count) : 1;
+            _rowTops[i + 1] = _rowTops[i] + lines * RowHeight;
+        }
+    }
+
+    /// <summary>Where a row starts in the scrolled content (row == Rows.Count gives the total height).</summary>
+    private double ContentTop(int row) =>
+        _rowTops.Length == Rows.Count + 1 ? _rowTops[Math.Clamp(row, 0, Rows.Count)] : Math.Clamp(row, 0, Rows.Count) * RowHeight;
+
+    /// <summary>A row's height: one line, or one line per ref on a commit with several.</summary>
+    private double RowSpan(int row) => ContentTop(row + 1) - ContentTop(row);
+
+    /// <summary>The row at a content position, clamped to the rows there are (-1 when there are none).</summary>
+    private int RowAtContent(double y)
+    {
+        if (Rows.Count == 0) return -1;
+        int lo = 0, hi = Rows.Count - 1;
+        while (lo < hi)
+        {
+            var mid = (lo + hi + 1) / 2;
+            if (ContentTop(mid) <= y) lo = mid; else hi = mid - 1;
+        }
+        return lo;
     }
 
     private void SetOffset(double offset)
@@ -318,17 +346,17 @@ public sealed class CommitGraphView : Control
         SyncScrollBar();
         InvalidateVisual();
 
-        var lastVisible = (_offset + BodyHeight) / RowHeight;
-        if (Rows.Count > 0 && lastVisible > Rows.Count - 200) NearEnd?.Invoke();
+        if (Rows.Count > 0 && RowAtContent(_offset + BodyHeight) > Rows.Count - 200) NearEnd?.Invoke();
     }
 
     /// <summary>Scrolls so the given commit is visible (centred when it was off-screen).</summary>
     public void ScrollToSha(string sha)
     {
         if (!_rowBySha.TryGetValue(sha, out var row)) return;
-        var top = row * RowHeight;
-        if (top < _offset || top + RowHeight > _offset + BodyHeight)
-            SetOffset(top - BodyHeight / 2 + RowHeight / 2);
+        var top = ContentTop(row);
+        var height = RowSpan(row);
+        if (top < _offset || top + height > _offset + BodyHeight)
+            SetOffset(top - BodyHeight / 2 + height / 2);
     }
 
     private void SyncScrollBar()
@@ -444,7 +472,7 @@ public sealed class CommitGraphView : Control
     {
         base.OnPointerExited(e);
         _hoverRow = -1;
-        _fanRow = _fanHover = -1;
+        _pillHover = (-1, -1);
         ToolTip.SetIsOpen(this, false);
         InvalidateVisual();
     }
@@ -478,16 +506,14 @@ public sealed class CommitGraphView : Control
         ToolTip.SetIsOpen(this, false);
         _tipSuppressed = true;
 
-        // In an open fan, a click belongs to the ref under the pointer, not to the row underneath.
-        if (Fan() is { } fan && fan.Panel.Contains(point.Position))
+        // On a commit with several refs, a click on one of its labels belongs to that ref.
+        if (PillAt(point.Position) is ( >= 0 and var pillRow, var k))
         {
-            SelectedSha = Rows[_fanRow].Commit.Sha;
-            if (FanIndexAt(fan, point.Position) is var k and >= 0)
-            {
-                var r = fan.Items[k].Badge.Ref;
-                if (point.Properties.IsRightButtonPressed) RefContextRequested?.Invoke(r);
-                else if (e.ClickCount == 2) RefActivated?.Invoke(r);
-            }
+            SelectedRange = null;
+            SelectedSha = Rows[pillRow].Commit.Sha;
+            var r = _badgesBySha[Rows[pillRow].Commit.Sha][k].Ref;
+            if (point.Properties.IsRightButtonPressed) RefContextRequested?.Invoke(r);
+            else if (e.ClickCount == 2) RefActivated?.Invoke(r);
             e.Handled = true;
             return;
         }
@@ -577,37 +603,37 @@ public sealed class CommitGraphView : Control
 
     private void ScrollRowIntoView(int row)
     {
-        var top = row * RowHeight;
+        var top = ContentTop(row);
+        var height = RowSpan(row);
         if (top < _offset) SetOffset(top);
-        else if (top + RowHeight > _offset + BodyHeight) SetOffset(top + RowHeight - BodyHeight);
+        else if (top + height > _offset + BodyHeight) SetOffset(top + height - BodyHeight);
     }
 
     private int RowAt(double y)
     {
         if (y < HeaderHeight) return -1;
-        var row = (int)((y - HeaderHeight + _offset) / RowHeight);
-        return row >= 0 && row < Rows.Count ? row : -1;
+        var content = y - HeaderHeight + _offset;
+        return content >= 0 && content < ContentTop(Rows.Count) ? RowAtContent(content) : -1;
+    }
+
+    /// <summary>The ref label under <paramref name="p"/> on a commit with several refs, or (-1, -1).</summary>
+    private (int Row, int Index) PillAt(Point p)
+    {
+        var row = RowAt(p.Y);
+        if (row < 0 || p.X < PillLeft || p.X > RefColumnWidth
+            || !_badgesBySha.TryGetValue(Rows[row].Commit.Sha, out var badges) || badges.Count < 2)
+            return (-1, -1);
+        var k = (int)((p.Y - RowTop(row)) / RowHeight);
+        if (k < 0 || k >= badges.Count) return (-1, -1);
+        return p.X <= PillLeft + LayoutPill(badges[k], PillMaxWidth).Width ? (row, k) : (-1, -1);
     }
 
     private void UpdateHover(Point p)
     {
-        // An open fan stays open while the pointer is inside it; it covers the rows (and nodes) beneath.
-        if (Fan() is { } fan && fan.Panel.Contains(p))
+        var pill = PillAt(p);
+        if (pill != _pillHover)
         {
-            var k = FanIndexAt(fan, p);
-            if (k != _fanHover)
-            {
-                _fanHover = k;
-                InvalidateVisual();
-            }
-            ToolTip.SetIsOpen(this, false);
-            return;
-        }
-        var fanRow = FanTriggerRow(p);
-        if (fanRow != _fanRow)
-        {
-            _fanRow = fanRow;
-            _fanHover = fanRow >= 0 ? 0 : -1;
+            _pillHover = pill;
             InvalidateVisual();
         }
 
@@ -642,7 +668,7 @@ public sealed class CommitGraphView : Control
     // ---------------------------------------------------------------- rendering
 
     private double LaneX(int lane) => GraphLeft + GraphPadding + lane * LaneWidth + LaneWidth / 2;
-    private double RowTop(int row) => HeaderHeight + row * RowHeight - _offset;
+    private double RowTop(int row) => HeaderHeight + ContentTop(row) - _offset;
 
     public override void Render(DrawingContext ctx)
     {
@@ -652,8 +678,8 @@ public sealed class CommitGraphView : Control
         var rows = Rows;
         if (rows.Count > 0)
         {
-            var first = Math.Max(0, (int)(_offset / RowHeight));
-            var last = Math.Min(rows.Count - 1, (int)((_offset + BodyHeight) / RowHeight));
+            var first = RowAtContent(_offset);
+            var last = RowAtContent(_offset + BodyHeight);
 
             using (ctx.PushClip(new Rect(0, HeaderHeight, width, BodyHeight)))
             {
@@ -674,8 +700,6 @@ public sealed class CommitGraphView : Control
                 {
                     for (var i = first; i <= last; i++) DrawBadges(ctx, i);
                 }
-                // Over everything else, and free to extend past the ref column.
-                DrawFan(ctx);
                 DrawRangeDrag(ctx, width);
             }
         }
@@ -722,18 +746,20 @@ public sealed class CommitGraphView : Control
         var top = RowTop(i);
         var color = row.ColorIndex;
         var sha = row.Commit.Sha;
+        var height = RowSpan(i);
 
-        if (i == _hoverRow) ctx.FillRectangle(HoverBrush, new Rect(0, top, width, RowHeight));
+        if (i == _hoverRow) ctx.FillRectangle(HoverBrush, new Rect(0, top, width, height));
         var inRange = InRange(sha);
         if (inRange)
         {
-            ctx.FillRectangle(RangeBrush, new Rect(0, top, width, RowHeight));
-            ctx.FillRectangle(RangeAccentBrush, new Rect(0, top, 4, RowHeight));
-            ctx.FillRectangle(RangeAccentBrush, new Rect(MessageLeft - 8, top + 3, 3, RowHeight - 6));
+            ctx.FillRectangle(RangeBrush, new Rect(0, top, width, height));
+            ctx.FillRectangle(RangeAccentBrush, new Rect(0, top, 4, height));
+            ctx.FillRectangle(RangeAccentBrush, new Rect(MessageLeft - 8, top + 3, 3, height - 6));
         }
 
         var strong = sha == SelectedSha || sha == _headSha || inRange;
-        // The band starts with a rounded end centred on the node, so it wraps around the circle.
+        // The band starts with a rounded end centred on the node, so it wraps around the circle. It covers the
+        // commit's line only; the extra lines of a commit with several refs hold just their labels.
         var bandTop = top + 1;
         var bandHeight = RowHeight - 2;
         var nodeX = LaneX(row.Lane);
@@ -750,7 +776,7 @@ public sealed class CommitGraphView : Control
         ctx.DrawGeometry(strong ? _strongBandBrushes[color] : _bandBrushes[color], null, band);
 
         // Right-edge accent stripe, as in GitKraken.
-        ctx.FillRectangle(_laneBrushes[color], new Rect(width - 3, top + 1, 3, RowHeight - 2));
+        ctx.FillRectangle(_laneBrushes[color], new Rect(width - 3, top + 1, 3, height - 2));
     }
 
     private void DrawRangeDrag(DrawingContext ctx, double width)
@@ -759,7 +785,7 @@ public sealed class CommitGraphView : Control
         var target = DropBranch(_dropRow);
         if (_dropRow >= 0 && _dropRow < Rows.Count && !InRange(Rows[_dropRow].Commit.Sha))
         {
-            var rect = new Rect(1, RowTop(_dropRow) + 1, width - 2, RowHeight - 2);
+            var rect = new Rect(1, RowTop(_dropRow) + 1, width - 2, RowSpan(_dropRow) - 2);
             if (target is not null) ctx.FillRectangle(DropBrush, rect);
             ctx.DrawRectangle(null, target is null ? NoDropPen : DropPen, rect, 4, 4);
         }
@@ -778,8 +804,8 @@ public sealed class CommitGraphView : Control
         var row = Rows[i];
         if (!_badgesBySha.TryGetValue(row.Commit.Sha, out var badges)) return;
         var y = RowTop(i) + RowHeight / 2;
-        // Start after the pill so the line doesn't show through its translucent fill.
-        var start = Math.Min(BadgeRight(badges), RefColumnWidth);
+        // Start after the (first) pill so the line doesn't show through its translucent fill.
+        var start = Math.Min(PillLeft + LayoutPill(badges[0], PillMaxWidth).Width + 4, RefColumnWidth);
         var end = LaneX(row.Lane);
         if (end > start) ctx.DrawLine(_connectorPens[row.ColorIndex], new Point(start, y), new Point(end, y));
     }
@@ -787,13 +813,14 @@ public sealed class CommitGraphView : Control
     private void DrawSegments(DrawingContext ctx, int i)
     {
         var top = RowTop(i);
+        var height = RowSpan(i);
         foreach (var s in Rows[i].Segments)
         {
             var pen = _lanePens[s.ColorIndex];
             var x1 = LaneX(s.FromLane);
             var x2 = LaneX(s.ToLane);
-            var y1 = AnchorY(top, s.From);
-            var y2 = AnchorY(top, s.To);
+            var y1 = AnchorY(top, height, s.From);
+            var y2 = AnchorY(top, height, s.To);
 
             if (s.FromLane == s.ToLane)
             {
@@ -827,11 +854,12 @@ public sealed class CommitGraphView : Control
         }
     }
 
-    private static double AnchorY(double top, RowAnchor anchor) => anchor switch
+    /// <summary>The node sits on a row's first line; lines leaving the row go on down through any extra lines.</summary>
+    private static double AnchorY(double top, double height, RowAnchor anchor) => anchor switch
     {
         RowAnchor.Top => top,
         RowAnchor.Middle => top + RowHeight / 2,
-        _ => top + RowHeight,
+        _ => top + height,
     };
 
     private void DrawNode(DrawingContext ctx, int i)
@@ -907,8 +935,6 @@ public sealed class CommitGraphView : Control
     private const double KindIconSize = 14;
     private const double BadgeCircle = 22; // icon circle at the left end of a ref label
     private const double PillLeft = 4;
-    private const double StackOffset = 3; // shift of each card drawn behind a pill that stands for several refs
-    private const double ChipHeight = 16;
 
     /// <summary>One pill's icons, (possibly trimmed) name and total width.</summary>
     private sealed record PillLayout(List<Geometry> Icons, FormattedText Name, double Width);
@@ -928,54 +954,33 @@ public sealed class CommitGraphView : Control
         return new PillLayout(icons, name, Math.Max(0, Math.Min(maxWidth, leading + name.Width + trailing)));
     }
 
-    private static int StackCards(List<RefBadge> badges) => Math.Min(2, badges.Count - 1);
+    /// <summary>The widest a pill may be: the ref column less a little room before the connector.</summary>
+    private double PillMaxWidth => RefColumnWidth - 12;
 
-    private static double ChipWidth(FormattedText count) => count.Width + 10;
-
-    /// <summary>Room taken after the pill by the stacked cards and the "+N" chip.</summary>
-    private static double StackExtra(List<RefBadge> badges, FormattedText? count) =>
-        count is null ? 0 : StackCards(badges) * StackOffset + 5 + ChipWidth(count);
-
-    /// <summary>A row's first pill, trimmed so it, its stack and its "+N" chip fit the column.</summary>
-    private (PillLayout Pill, FormattedText? Count) LayoutRowBadges(List<RefBadge> badges)
-    {
-        var count = badges.Count > 1 ? Text($"+{badges.Count - 1}", 11, Brushes.White, _boldTypeface) : null;
-        return (LayoutPill(badges[0], RefColumnWidth - 12 - StackExtra(badges, count)), count);
-    }
-
-    /// <summary>Where a row's pill (with its stack and "+N") ends, so the connector can start there.</summary>
-    private double BadgeRight(List<RefBadge> badges)
-    {
-        var (pill, count) = LayoutRowBadges(badges);
-        return PillLeft + pill.Width + StackExtra(badges, count) + 4;
-    }
-
+    /// <summary>
+    /// A row's pills, one per line: a commit with several refs is as many lines tall, with a line in the lane colour
+    /// joining their circles so they read as one commit's.
+    /// </summary>
     private void DrawBadges(DrawingContext ctx, int i)
     {
         var row = Rows[i];
         if (!_badgesBySha.TryGetValue(row.Commit.Sha, out var badges)) return;
-        var (pill, count) = LayoutRowBadges(badges);
         var cy = RowTop(i) + RowHeight / 2;
         var ci = row.ColorIndex;
 
-        if (count is not null)
+        if (badges.Count > 1)
         {
-            // Cards peeking out behind the pill: this commit has more refs than the one shown.
-            for (var k = StackCards(badges); k >= 1; k--)
-            {
-                var card = new Rect(PillLeft + BadgeCircle / 2 + k * StackOffset, cy - PillHeight / 2 - k * StackOffset,
-                    Math.Max(0, pill.Width - BadgeCircle / 2), PillHeight);
-                ctx.DrawRectangle(_stackBrushes[ci], _connectorPens[ci], new RoundedRect(card, PillHeight / 2));
-            }
+            var x = PillLeft + BadgeCircle / 2;
+            ctx.DrawLine(_lanePens[ci], new Point(x, cy), new Point(x, cy + (badges.Count - 1) * RowHeight));
         }
-
-        DrawPill(ctx, badges[0], pill, PillLeft, cy, ci);
-
-        if (count is not null)
+        for (var k = 0; k < badges.Count; k++)
         {
-            var chip = new Rect(PillLeft + pill.Width + StackCards(badges) * StackOffset + 5, cy - ChipHeight / 2, ChipWidth(count), ChipHeight);
-            ctx.DrawRectangle(_laneBrushes[ci], null, new RoundedRect(chip, ChipHeight / 2));
-            ctx.DrawText(count, new Point(chip.X + 5, cy - count.Height / 2));
+            var layout = LayoutPill(badges[k], PillMaxWidth);
+            var y = cy + k * RowHeight;
+            if (_pillHover == (i, k))
+                ctx.DrawRectangle(PillHoverBrush, null,
+                    new RoundedRect(new Rect(PillLeft - 2, y - PillHeight / 2 - 2, layout.Width + 4, PillHeight + 4), PillHeight / 2 + 2));
+            DrawPill(ctx, badges[k], layout, PillLeft, y, ci);
         }
     }
 
@@ -1010,67 +1015,6 @@ public sealed class CommitGraphView : Control
         {
             DrawIcon(ctx, icon, x, cy - iconSize / 2, iconSize);
             x += iconSize + PillGap;
-        }
-    }
-
-    // ---------------------------------------------------------------- ref fan-out
-
-    /// <summary>The open fan: its panel and each ref's pill, one per line.</summary>
-    private sealed record FanLayout(Rect Panel, List<(RefBadge Badge, PillLayout Pill, double CenterY)> Items);
-
-    /// <summary>
-    /// Layout of the fan for <see cref="_fanRow"/>: every ref on the commit, untrimmed, one row apart, starting at
-    /// the row itself and going down (or up, when there's no room below). Drawn over the rows it covers.
-    /// </summary>
-    private FanLayout? Fan()
-    {
-        if (_fanRow < 0 || _fanRow >= Rows.Count
-            || !_badgesBySha.TryGetValue(Rows[_fanRow].Commit.Sha, out var badges) || badges.Count < 2)
-            return null;
-
-        var maxWidth = Math.Max(120, Bounds.Width - PillLeft - 24);
-        var cy = RowTop(_fanRow) + RowHeight / 2;
-        var down = cy + (badges.Count - 1) * RowHeight + RowHeight / 2 <= HeaderHeight + BodyHeight;
-        var items = badges
-            .Select((b, k) => (b, LayoutPill(b, maxWidth), down ? cy + k * RowHeight : cy - k * RowHeight))
-            .ToList();
-
-        var top = items.Min(it => it.Item3) - RowHeight / 2;
-        var bottom = items.Max(it => it.Item3) + RowHeight / 2;
-        // At least as wide as the row's pill with its stack and "+N", so none of it peeks out from under the panel.
-        var width = Math.Max(PillLeft + items.Max(it => it.Item2.Width) + 8, Math.Min(BadgeRight(badges), RefColumnWidth) + 2);
-        return new FanLayout(new Rect(0, top, width, bottom - top), items);
-    }
-
-    /// <summary>The fan item under <paramref name="p"/>, or -1.</summary>
-    private static int FanIndexAt(FanLayout fan, Point p)
-    {
-        if (!fan.Panel.Contains(p)) return -1;
-        return fan.Items.FindIndex(it => Math.Abs(p.Y - it.CenterY) <= RowHeight / 2);
-    }
-
-    /// <summary>The row whose pill (or its stack and "+N") is under <paramref name="p"/>, when it has several refs.</summary>
-    private int FanTriggerRow(Point p)
-    {
-        var row = RowAt(p.Y);
-        if (row < 0 || !_badgesBySha.TryGetValue(Rows[row].Commit.Sha, out var badges) || badges.Count < 2) return -1;
-        return p.X >= 0 && p.X <= Math.Min(BadgeRight(badges), RefColumnWidth) ? row : -1;
-    }
-
-    private void DrawFan(DrawingContext ctx)
-    {
-        if (Fan() is not { } fan) return;
-        var ci = Rows[_fanRow].ColorIndex;
-
-        var panel = new RoundedRect(fan.Panel, 8);
-        ctx.DrawRectangle(FanShadowBrush, null, new RoundedRect(fan.Panel.Translate(new Vector(2, 3)), 8));
-        ctx.DrawRectangle(FanBackgroundBrush, FanBorderPen, panel);
-        for (var k = 0; k < fan.Items.Count; k++)
-        {
-            var (badge, pill, cy) = fan.Items[k];
-            if (k == _fanHover)
-                ctx.DrawRectangle(FanHoverBrush, null, new RoundedRect(new Rect(2, cy - RowHeight / 2 + 2, fan.Panel.Width - 4, RowHeight - 4), 6));
-            DrawPill(ctx, badge, pill, PillLeft, cy, ci);
         }
     }
 
