@@ -26,8 +26,8 @@ public partial class App : Application
             var settings = AppSettings.Load();
             settings.ApplyBranchRules();
             var updates = new UpdateService();
-            var pullRequests = new GitHubPullRequestProviderFactory(ChainedCredentialSource.Default());
-            var shell = new ShellViewModel(avatars, settings, updates, pullRequests);
+            var pullRequests = new GitHubProviderFactory(ChainedCredentialSource.Default());
+            var shell = new ShellViewModel(avatars, settings, updates, pullRequests, workflows: pullRequests);
             desktop.MainWindow = new MainWindow { DataContext = shell };
             desktop.Exit += (_, _) =>
             {

@@ -16,6 +16,9 @@
     <DataTemplate DataType="vm:PrCardViewModel">
       <views:PrHoverCard />
     </DataTemplate>
+    <DataTemplate DataType="vm:RunCardViewModel">
+      <views:RunHoverCard />
+    </DataTemplate>
   </UserControl.DataTemplates>
 
   <UserControl.Styles>
@@ -51,6 +54,11 @@
       <Setter Property="MinHeight" Value="24" />
       <Setter Property="Padding" Value="0" />
       <Setter Property="ToolTip.Tip" Value="{Binding Tip}" />
+      <!-- Beside the sidebar, level with the row: never under the pointer (a card under the pointer would close and
+           reopen as the pointer moves), and it slides up rather than flipping over the row near the bottom. -->
+      <Setter Property="ToolTip.Placement" Value="RightEdgeAlignedTop" />
+      <Setter Property="ToolTip.HorizontalOffset" Value="8" />
+      <Setter Property="ToolTip.ShowDelay" Value="450" />
       <!-- The ✓ can be squeezed out by a long name, so the current row is tinted as well. -->
       <Setter Property="Background" Value="{Binding IsCurrent, Converter={x:Static vm:Converters.CurrentRowBrush}}" />
     </Style>
@@ -116,16 +124,16 @@
               <PathIcon Classes="node" Data="{StaticResource TagIcon}" IsVisible="{Binding IsTag}" />
               <PathIcon Classes="node" Data="{StaticResource StashIcon}" IsVisible="{Binding IsStash}" />
               <PathIcon Classes="node" Data="{StaticResource WorktreeIcon}" IsVisible="{Binding ShowWorktreeGlyph}" />
-              <StackPanel IsVisible="{Binding IsPullRequest}" Orientation="Horizontal" VerticalAlignment="Center" Margin="-14,0,0,0">
+              <StackPanel IsVisible="{Binding HasRail}" Orientation="Horizontal" VerticalAlignment="Center" Margin="-14,0,0,0">
                 <Border Width="3" Height="16" CornerRadius="1.5" Background="{Binding RailBrush}" Margin="-4,0,6,0" />
-                <Border Width="16" Height="16" CornerRadius="8" ClipToBounds="True" Background="{Binding Author.InitialsBrush}" Margin="0,0,6,0">
+                <Border Width="16" Height="16" CornerRadius="8" ClipToBounds="True" Background="{Binding Author.Background}" Margin="0,0,6,0">
                   <Panel>
                     <TextBlock Text="{Binding Author.Initials}" FontSize="7.5" FontWeight="Bold" Foreground="White"
                                HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding !Author.HasAvatar}" />
                     <Image Source="{Binding Author.Avatar}" Stretch="UniformToFill" IsVisible="{Binding Author.HasAvatar}" />
                   </Panel>
                 </Border>
-                <TextBlock Text="{Binding NumberText}" Width="26" Margin="0,0,5,0" TextAlignment="Right" VerticalAlignment="Center"
+                <TextBlock Text="{Binding NumberText}" IsVisible="{Binding IsPullRequest}" Width="26" Margin="0,0,5,0" TextAlignment="Right" VerticalAlignment="Center"
                            FontFamily="Cascadia Mono, Consolas, monospace" FontSize="10" Foreground="#8A9099" />
                 <Button Classes="ticket" Content="{Binding Ticket}" IsVisible="{Binding HasTicket}" Click="OnTicketClick"
                         ToolTip.Tip="{Binding Ticket, StringFormat='Open {0} in Jira (right-click to change the Jira address)'}" />
@@ -146,6 +154,10 @@
             <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" Margin="4,0,8,0" VerticalAlignment="Center">
               <Ellipse Width="7" Height="7" Fill="#4CC38A" VerticalAlignment="Center" IsVisible="{Binding ShowCurrentDot}"
                        ToolTip.Tip="Contains the current branch" />
+              <PathIcon Data="{StaticResource RefreshIcon}" Width="10" Height="10" Foreground="#E8B339" VerticalAlignment="Center"
+                        IsVisible="{Binding HasActiveRun}" ToolTip.Tip="{Binding ActiveRunsTip}" Background="Transparent" />
+              <TextBlock Text="{Binding ElapsedText}" FontSize="10.5" Foreground="#8A9099" IsVisible="{Binding HasElapsed}"
+                         FontFamily="Cascadia Mono, Consolas, monospace" />
               <TextBlock Text="{Binding Ahead}" FontSize="11" Foreground="#4CC38A" IsVisible="{Binding HasAhead}" />
               <TextBlock Classes="behind" Text="{Binding Behind}" FontSize="11" Foreground="#E8B339" IsVisible="{Binding HasBehind}"
                          Background="Transparent" ToolTip.Tip="New commits on the remote branch. Double-click to bring them into this branch." />
@@ -163,7 +175,7 @@
                     <DataTemplate x:DataType="vm:PrPerson">
                       <Panel Width="16" Height="16" ToolTip.Tip="{Binding ToolTip}" Background="Transparent">
                         <Border Width="16" Height="16" CornerRadius="8" ClipToBounds="True" BorderBrush="#1E2227" BorderThickness="1.5"
-                                Background="{Binding InitialsBrush}">
+                                Background="{Binding Background}">
                           <Panel>
                             <TextBlock Text="{Binding Initials}" FontSize="7" FontWeight="Bold" Foreground="White"
                                        HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding !HasAvatar}" />
@@ -182,6 +194,10 @@
               <TextBlock Text="{Binding Count}" FontSize="11" Foreground="#5AA9F2" IsVisible="{Binding ShowCount}" />
               <Button IsVisible="{Binding IsPullRequestsSection}" Padding="4,0" MinHeight="0" Height="18" Background="Transparent"
                       ToolTip.Tip="Refresh pull requests" Click="OnRefreshPullRequestsClick">
+                <PathIcon Data="{StaticResource RefreshIcon}" Width="11" Height="11" Foreground="#A9AFB8" />
+              </Button>
+              <Button IsVisible="{Binding IsWorkflowsSection}" Padding="4,0" MinHeight="0" Height="18" Background="Transparent"
+                      ToolTip.Tip="Refresh workflow runs" Click="OnRefreshWorkflowsClick">
                 <PathIcon Data="{StaticResource RefreshIcon}" Width="11" Height="11" Foreground="#A9AFB8" />
               </Button>
               <Button Content="+" IsVisible="{Binding IsWorktreesSection}" Padding="6,0" MinHeight="0" Height="18" FontSize="12"

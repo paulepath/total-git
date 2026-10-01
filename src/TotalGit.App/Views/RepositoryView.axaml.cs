@@ -50,6 +50,7 @@ public partial class RepositoryView : UserControl
         {
             if (_vm is null) return;
             if (node.IsWorktree && node.Worktree is { } wt) _vm.OpenWorktreeCommand.Execute(wt);
+            else if (node.Run is { } run) _vm.OpenUrlCommand.Execute(run.Url);
             else if (node.Target is { Kind: RefKind.LocalBranch or RefKind.RemoteBranch } t) _vm.CheckoutCommand.Execute(t);
         };
         // Anchored to the sidebar, not the row: right-clicking also selects the row, which can refresh the sidebar
@@ -62,6 +63,7 @@ public partial class RepositoryView : UserControl
         };
         Sidebar.AddWorktreeRequested += () => _vm?.CreateWorktreeCommand.Execute(null);
         Sidebar.RefreshPullRequestsRequested += () => _vm?.RefreshPullRequestListCommand.Execute(null);
+        Sidebar.RefreshWorkflowsRequested += () => _vm?.RefreshWorkflowListCommand.Execute(null);
         PullRequestPane.FileContextRequested += (file, control) =>
         {
             if (_vm is not null) ShowMenu(control, _vm.ActionsForFile(file));

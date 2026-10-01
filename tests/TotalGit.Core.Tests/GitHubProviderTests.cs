@@ -20,7 +20,7 @@ public class GitHubProviderTests
     private static (IPullRequestProvider Provider, FakeHttpHandler Http) Create(string? token = "t0ken")
     {
         var http = new FakeHttpHandler();
-        var factory = new GitHubPullRequestProviderFactory(new Token(token), new HttpClient(http));
+        var factory = new GitHubProviderFactory(new Token(token), new HttpClient(http));
         return (factory.TryCreate(Repo)!, http);
     }
 
@@ -29,7 +29,7 @@ public class GitHubProviderTests
     [Fact]
     public void Factory_only_serves_github_com()
     {
-        using var factory = new GitHubPullRequestProviderFactory(new Token("t"), new HttpClient(new FakeHttpHandler()));
+        using var factory = new GitHubProviderFactory(new Token("t"), new HttpClient(new FakeHttpHandler()));
         Assert.IsType<GitHubPullRequestProvider>(factory.TryCreate(Repo));
         Assert.Null(factory.TryCreate(Repo with { Host = "github.example.com" }));
         Assert.Null(factory.TryCreate(new RemoteHostInfo(HostKind.AzureDevOps, "dev.azure.com", "org/proj", "r", "origin")));

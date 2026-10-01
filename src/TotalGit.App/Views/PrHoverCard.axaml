@@ -43,7 +43,7 @@
         <Run Text="{Binding Title}" />
       </TextBlock>
       <StackPanel Orientation="Horizontal" Spacing="6">
-        <Border Width="16" Height="16" CornerRadius="8" ClipToBounds="True" Background="{Binding Author.InitialsBrush}">
+        <Border Width="16" Height="16" CornerRadius="8" ClipToBounds="True" Background="{Binding Author.Background}">
           <Panel>
             <TextBlock Text="{Binding Author.Initials}" FontSize="7.5" FontWeight="Bold" Foreground="White"
                        HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding !Author.HasAvatar}" />
@@ -106,7 +106,7 @@
           <ItemsControl.ItemTemplate>
             <DataTemplate x:DataType="vm:PrReviewerLine">
               <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,2">
-                <Border Width="16" Height="16" CornerRadius="8" ClipToBounds="True" Background="{Binding Person.InitialsBrush}" Margin="0,0,7,0">
+                <Border Width="16" Height="16" CornerRadius="8" ClipToBounds="True" Background="{Binding Person.Background}" Margin="0,0,7,0">
                   <Panel>
                     <TextBlock Text="{Binding Person.Initials}" FontSize="7.5" FontWeight="Bold" Foreground="White"
                                HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding !Person.HasAvatar}" />

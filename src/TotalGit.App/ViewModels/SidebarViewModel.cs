@@ -19,6 +19,7 @@ public enum SidebarNodeKind
     Worktree,
     Stash,
     PullRequest,
+    WorkflowRun,
     /// <summary>A note in place of rows, e.g. "Loading…" or why pull requests can't be shown.</summary>
     Message,
 }
@@ -99,8 +100,24 @@ public partial class SidebarNode : ObservableObject
     /// <summary>A pull request's hover card.</summary>
     public PrCardViewModel? Card { get; init; }
 
-    /// <summary>What the row shows on hover: a pull request's card, otherwise the plain tooltip text.</summary>
-    public object? Tip => (object?)Card ?? ToolTip;
+    /// <summary>What the row shows on hover: a pull request's or run's card, otherwise the plain tooltip text.</summary>
+    public object? Tip => (object?)Card ?? (object?)RunCard ?? ToolTip;
+
+    public bool IsWorkflowsSection { get; init; }
+    public bool IsRun => Kind == SidebarNodeKind.WorkflowRun;
+    public WorkflowRun? Run { get; init; }
+    public RunCardViewModel? RunCard { get; init; }
+
+    /// <summary>A run's age: "3m 12s" while running, "5 min ago" once finished (ticks while runs are going).</summary>
+    [ObservableProperty]
+    public partial string? ElapsedText { get; set; }
+    public bool HasElapsed => ElapsedText is not null;
+
+    partial void OnElapsedTextChanged(string? value) => OnPropertyChanged(nameof(HasElapsed));
+
+    /// <summary>A branch (or pull request) with CI running on it; <see cref="ActiveRunsTip"/> names the workflows.</summary>
+    public bool HasActiveRun => ActiveRunsTip is not null;
+    public string? ActiveRunsTip { get; set; }
 
     /// <summary>The colour at the left of a pull request's row: where it stands (see <see cref="PrRail"/>).</summary>
     public IBrush? RailBrush { get; init; }
@@ -159,10 +176,13 @@ public sealed partial class PrPerson : ObservableObject
     public IBrush InitialsBrush { get; }
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasAvatar))]
+    [NotifyPropertyChangedFor(nameof(HasAvatar), nameof(Background))]
     public partial Bitmap? Avatar { get; set; }
 
     public bool HasAvatar => Avatar is not null;
+
+    /// <summary>The circle behind the initials; none behind a picture, so a transparent one isn't ringed in colour.</summary>
+    public IBrush? Background => HasAvatar ? null : InitialsBrush;
 
     /// <summary>The dot on a reviewer's avatar: green approved, red changes requested, grey still to review.</summary>
     public IBrush? StateBrush => State switch
@@ -205,6 +225,64 @@ public partial class SidebarViewModel : ObservableObject
 
     public ObservableCollection<SidebarNode> Nodes { get; } = [];
 
+    // CI runs come from the hosting service too.
+    private bool _showWorkflows;
+    private IReadOnlyList<WorkflowRun> _runs = [];
+    private string? _runsMessage;
+    private Func<long, Task<IReadOnlyList<WorkflowJob>>>? _loadJobs;
+    private Avalonia.Threading.DispatcherTimer? _clock;
+
+    /// <summary>
+    /// Shows the WORKFLOWS section (hidden when <paramref name="visible"/> is false). <paramref name="message"/> sits
+    /// above the rows: "Loading…" or why runs can't be shown.
+    /// </summary>
+    public void SetWorkflows(bool visible, IReadOnlyList<WorkflowRun> runs, string? message, Func<long, Task<IReadOnlyList<WorkflowJob>>>? loadJobs)
+    {
+        _showWorkflows = visible;
+        _runs = runs;
+        _runsMessage = message;
+        _loadJobs = loadJobs;
+        Rebuild();
+        // Running times tick every second while anything is going.
+        _clock ??= new Avalonia.Threading.DispatcherTimer(TimeSpan.FromSeconds(1), Avalonia.Threading.DispatcherPriority.Background, (_, _) => Tick());
+        if (runs.Any(r => r.IsActive)) _clock.Start();
+        else _clock.Stop();
+    }
+
+    private void Tick()
+    {
+        foreach (var node in Flatten(Nodes.Where(n => n.IsWorkflowsSection)).Where(n => n.Run is not null))
+        {
+            node.ElapsedText = Elapsed(node.Run!);
+            if (node.RunCard is { } card) card.DurationText = Duration(node.Run!);
+        }
+    }
+
+    private static string Elapsed(WorkflowRun run) => run.Status switch
+    {
+        RunStatus.InProgress => Span(DateTimeOffset.Now - (run.StartedAt ?? run.CreatedAt)),
+        RunStatus.Completed => DateText.Relative(run.UpdatedAt),
+        _ => "queued " + Span(DateTimeOffset.Now - (run.StartedAt ?? run.CreatedAt)), // a re-run: from this attempt
+    };
+
+    private static string Duration(WorkflowRun run) => run.IsActive
+        ? Span(DateTimeOffset.Now - (run.StartedAt ?? run.CreatedAt)) + " so far"
+        : "took " + Span(run.UpdatedAt - (run.StartedAt ?? run.CreatedAt));
+
+    /// <summary>"42s", "3m 12s", "1h 05m".</summary>
+    private static string Span(TimeSpan t)
+    {
+        if (t < TimeSpan.Zero) t = TimeSpan.Zero;
+        return t.TotalHours >= 1 ? $"{(int)t.TotalHours}h {t.Minutes:00}m"
+            : t.TotalMinutes >= 1 ? $"{(int)t.TotalMinutes}m {t.Seconds:00}s"
+            : $"{t.Seconds}s";
+    }
+
+    /// <summary>"Build, Tests" for the branches with runs going, to mark their rows.</summary>
+    private Dictionary<string, string> ActiveRunsByBranch() => _runs.Where(r => r.IsActive && r.Branch.Length > 0)
+        .GroupBy(r => r.Branch, StringComparer.Ordinal)
+        .ToDictionary(g => g.Key, g => "CI running: " + string.Join(", ", g.Select(r => r.WorkflowName).Distinct()), StringComparer.Ordinal);
+
     /// <summary>Avatars for pull request authors and reviewers; set by the repository view model.</summary>
     public AvatarCache? Avatars
     {
@@ -222,7 +300,7 @@ public partial class SidebarViewModel : ObservableObject
     /// <summary>Fills in avatars that have loaded since the rows were built (without rebuilding the tree).</summary>
     private void RefreshAvatars()
     {
-        foreach (var node in Flatten(Nodes.Where(n => n.IsPullRequestsSection)).Where(n => n.IsPullRequest))
+        foreach (var node in Flatten(Nodes.Where(n => n.IsPullRequestsSection || n.IsWorkflowsSection)).Where(n => n.IsPullRequest || n.IsRun))
             foreach (var person in (node.Card?.Reviewers.Select(r => r.Person) ?? node.Reviewers).Prepend(node.Author))
                 if (person is { Avatar: null, AvatarUrl: { } url }) person.Avatar = _avatars?.TryGetUrl(url);
     }
@@ -266,6 +344,10 @@ public partial class SidebarViewModel : ObservableObject
 
     public void Clear()
     {
+        _showWorkflows = false;
+        _runs = [];
+        _runsMessage = null;
+        _clock?.Stop();
         _showPullRequests = false;
         _pullRequests = [];
         _pullRequestsMessage = null;
@@ -290,6 +372,7 @@ public partial class SidebarViewModel : ObservableObject
         bool Match(string s) => filter.Length == 0 || s.Contains(filter, StringComparison.OrdinalIgnoreCase);
         var worktreeByBranch = _worktrees.Where(w => w.Branch is not null).GroupBy(w => w.Branch!).ToDictionary(g => g.Key, g => g.First());
 
+        var running = ActiveRunsByBranch();
         var locals = _refs.Where(r => r.Kind == RefKind.LocalBranch && Match(r.Name)).OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase).ToList();
         var local = Section("LOCAL", locals.Count);
         var localTree = new BranchTree(this, local, remote: null);
@@ -306,6 +389,7 @@ public partial class SidebarViewModel : ObservableObject
                 Behind = r.Behind > 0 ? $"{r.Behind}↓" : null,
                 IsUpstreamGone = r.UpstreamGone,
                 HasWorktree = otherWorktree is not null,
+                ActiveRunsTip = running.GetValueOrDefault(r.Name),
                 ToolTip = r.Name
                     + (otherWorktree is not null ? $"\nChecked out in worktree {otherWorktree.Path}" : "")
                     + (r.UpstreamGone ? $"\n{r.Upstream} was deleted on the remote" : ""),
@@ -327,6 +411,7 @@ public partial class SidebarViewModel : ObservableObject
                     KindIcon = BranchIcons.ForBranch(r.ShortName),
                     Target = BranchTarget.From(r, null),
                     ToolTip = r.Name,
+                    ActiveRunsTip = running.GetValueOrDefault(r.ShortName),
                 });
             }
             remoteTree.Build();
@@ -389,7 +474,11 @@ public partial class SidebarViewModel : ObservableObject
         }
         Nodes.Add(wtSection);
 
-        if (!_showPullRequests) return;
+        if (!_showPullRequests)
+        {
+            AddWorkflowsSection(Match, filter);
+            return;
+        }
         var prs = _pullRequests.Where(p => Match($"#{p.Number} {p.Title}") || Match(p.Author.Login) || Match(p.HeadRef)).ToList();
         // Within each group, the most recently updated first (the order GitHub lists them in).
         var prSection = new SidebarNode(SidebarNodeKind.Section, "PULL REQUESTS")
@@ -437,12 +526,64 @@ public partial class SidebarViewModel : ObservableObject
                     Ticket = ticket,
                     RailBrush = PrRailColors.For(PullRequestTriage.Rail(p)),
                     Card = new PrCardViewModel(p, author, reviewers, ticket),
+                    ActiveRunsTip = p.IsCrossRepository ? null : running.GetValueOrDefault(p.HeadRef),
                     ToolTip = $"#{p.Number} {p.Title}",
                 });
             }
             prSection.Children.Add(heading);
         }
         Nodes.Add(prSection);
+        AddWorkflowsSection(Match, filter);
+    }
+
+    /// <summary>Running and queued runs, then the latest finished ones under "Recent".</summary>
+    private void AddWorkflowsSection(Func<string, bool> match, string filter)
+    {
+        if (!_showWorkflows) return;
+        var runs = _runs.Where(r => match(r.WorkflowName) || match(r.Branch) || match(r.Title) || match(r.Actor.Login)).ToList();
+        var section = new SidebarNode(SidebarNodeKind.Section, "WORKFLOWS")
+        {
+            Count = runs.Count(r => r.IsActive),
+            IsWorkflowsSection = true,
+            IsExpanded = !_collapsed.Contains("WORKFLOWS") || filter.Length > 0,
+        };
+        if (_runsMessage is { } message)
+            section.Children.Add(new SidebarNode(SidebarNodeKind.Message, message) { IsDimmed = true, ToolTip = message });
+
+        SidebarNode RunNode(WorkflowRun run)
+        {
+            var actor = Person(run.Actor.Login, run.Actor.AvatarUrl, $"Started by {run.Actor.Login}");
+            var card = new RunCardViewModel(run, actor, _loadJobs) { DurationText = Duration(run) };
+            return new SidebarNode(SidebarNodeKind.WorkflowRun, run.WorkflowName)
+            {
+                Run = run,
+                RunCard = card,
+                Author = actor,
+                RailBrush = RunRailColors.For(WorkflowTriage.Rail(run)),
+                Subtitle = run.Branch,
+                KindIcon = null,
+                IsDimmed = !run.IsActive,
+                ElapsedText = Elapsed(run),
+                ToolTip = $"{run.WorkflowName} #{run.Number}",
+            };
+        }
+
+        foreach (var run in runs.Where(r => r.IsActive)) section.Children.Add(RunNode(run));
+        var finished = runs.Where(r => !r.IsActive).ToList();
+        if (finished.Count > 0)
+        {
+            const string key = "WORKFLOWS/Recent";
+            var recent = new SidebarNode(SidebarNodeKind.Folder, "Recent")
+            {
+                IsPrGroup = true,
+                Count = finished.Count,
+                FolderKey = key,
+                IsExpanded = !_collapsed.Contains(key) || filter.Length > 0,
+            };
+            foreach (var run in finished) recent.Children.Add(RunNode(run));
+            section.Children.Add(recent);
+        }
+        Nodes.Add(section);
     }
 
     private SidebarNode Section(string name, int count) => new(SidebarNodeKind.Section, name)

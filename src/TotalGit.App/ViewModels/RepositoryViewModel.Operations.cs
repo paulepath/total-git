@@ -492,7 +492,11 @@ public partial class RepositoryViewModel
     {
         if (_state is null || Dialogs is null) return;
         var existing = _state.Refs.Where(r => r.Kind == RefKind.LocalBranch).Select(r => r.Name).ToHashSet();
-        var name = FormField.TextBox("Branch name", prefix, placeholder: "feature/my-change", selectText: prefix.Length == 0);
+        // A branch made from bugs (or bug/x) starts "bug/", so it lands in the same group.
+        if (prefix.Length == 0 && target.Kind is RefKind.LocalBranch or RefKind.RemoteBranch)
+            prefix = BranchRuleSet.Current.PrefixForNewBranch(target.Kind == RefKind.RemoteBranch ? ShortRemote(target.Name) : target.Name);
+        var name = FormField.TextBox("Branch name", prefix, placeholder: prefix.Length > 0 ? prefix + "my-change" : "feature/my-change",
+            selectText: prefix.Length == 0);
         var checkout = FormField.CheckBox("Check it out", isChecked: true);
 
         var where = target.Kind == RefKind.DetachedHead ? $"commit {target.Name}" : $"{target.Name} ({target.Sha[..Math.Min(7, target.Sha.Length)]})";

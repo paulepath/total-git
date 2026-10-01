@@ -17,16 +17,19 @@ public partial class ShellViewModel : ObservableObject
     private readonly AvatarCache _avatars;
     private readonly UpdateService? _updates;
     private readonly IPullRequestProviderFactory? _pullRequests;
+    private readonly IWorkflowProviderFactory? _workflows;
     private DispatcherTimer? _updateTimer;
     private bool _restoring;
 
     public ShellViewModel(AvatarService avatars, AppSettings settings, UpdateService? updates = null,
-        IPullRequestProviderFactory? pullRequests = null)
+        IPullRequestProviderFactory? pullRequests = null,
+        IWorkflowProviderFactory? workflows = null)
     {
         _settings = settings;
         _avatars = new AvatarCache(avatars);
         _updates = updates;
         _pullRequests = pullRequests;
+        _workflows = workflows;
         AppVersion = updates?.CurrentVersion ?? "dev";
         StartUpdateChecks();
     }
@@ -112,7 +115,7 @@ public partial class ShellViewModel : ObservableObject
     }
 
     private RepositoryViewModel NewTabViewModel(string? path = null) =>
-        new(_avatars, _settings, path) { PullRequestProviders = _pullRequests };
+        new(_avatars, _settings, path) { PullRequestProviders = _pullRequests, WorkflowProviders = _workflows };
 
     [RelayCommand]
     private void NewTab() => SelectedTab = AddTab(NewTabViewModel());

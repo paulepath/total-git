@@ -1,0 +1,68 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:TotalGit.App.ViewModels"
+             x:Class="TotalGit.App.Views.RunHoverCard"
+             x:DataType="vm:RunCardViewModel"
+             Width="340">
+  <UserControl.Styles>
+    <Style Selector="TextBlock.label">
+      <Setter Property="FontSize" Value="10" />
+      <Setter Property="Foreground" Value="#6B727C" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="LetterSpacing" Value="0.8" />
+    </Style>
+    <Style Selector="Border.chip">
+      <Setter Property="Background" Value="#24303C" />
+      <Setter Property="CornerRadius" Value="3" />
+      <Setter Property="Padding" Value="5,1" />
+    </Style>
+  </UserControl.Styles>
+
+  <StackPanel Margin="2,4" Spacing="6">
+    <StackPanel Orientation="Horizontal" Spacing="6">
+      <Border Width="3" Height="14" CornerRadius="1.5" Background="{Binding RailBrush}" VerticalAlignment="Center" />
+      <TextBlock Text="{Binding StatusText}" FontSize="11" FontWeight="SemiBold" Foreground="#C9CED6" VerticalAlignment="Center" />
+      <TextBlock Text="{Binding DurationText}" FontSize="11" Foreground="#8A9099" VerticalAlignment="Center"
+                 FontFamily="Cascadia Mono, Consolas, monospace" />
+    </StackPanel>
+    <TextBlock Text="{Binding Heading}" FontSize="13" FontWeight="SemiBold" Foreground="#EEF0F2" TextWrapping="Wrap" />
+    <TextBlock Text="{Binding Title}" IsVisible="{Binding HasTitle}" FontSize="12" Foreground="#C9CED6" TextWrapping="Wrap" />
+    <StackPanel Orientation="Horizontal" Spacing="6">
+      <Border Width="16" Height="16" CornerRadius="8" ClipToBounds="True" Background="{Binding Actor.Background}">
+        <Panel>
+          <TextBlock Text="{Binding Actor.Initials}" FontSize="7.5" FontWeight="Bold" Foreground="White"
+                     HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding !Actor.HasAvatar}" />
+          <Image Source="{Binding Actor.Avatar}" Stretch="UniformToFill" IsVisible="{Binding Actor.HasAvatar}" />
+        </Panel>
+      </Border>
+      <TextBlock Text="{Binding StartedLine}" FontSize="11.5" Foreground="#8A9099" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="310" />
+    </StackPanel>
+    <WrapPanel>
+      <Border Classes="chip" Margin="0,0,6,0">
+        <TextBlock Text="{Binding Branch}" FontFamily="Cascadia Mono, Consolas, monospace" FontSize="11" Foreground="#9DC4EA" />
+      </Border>
+      <Border Classes="chip">
+        <TextBlock Text="{Binding ShortSha}" FontFamily="Cascadia Mono, Consolas, monospace" FontSize="11" Foreground="#A9AFB8" />
+      </Border>
+    </WrapPanel>
+
+    <Border Height="1" Background="#30353C" Margin="0,2" />
+    <TextBlock Classes="label" Text="JOBS" />
+    <TextBlock Text="{Binding JobsMessage}" IsVisible="{Binding JobsMessage, Converter={x:Static ObjectConverters.IsNotNull}}"
+               FontSize="11" Foreground="#8A9099" TextWrapping="Wrap" />
+    <ItemsControl ItemsSource="{Binding Jobs}">
+      <ItemsControl.ItemTemplate>
+        <DataTemplate x:DataType="vm:RunJobLine">
+          <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,2">
+            <Ellipse Width="7" Height="7" Fill="{Binding Brush}" VerticalAlignment="Center" Margin="0,0,8,0" />
+            <StackPanel Grid.Column="1">
+              <TextBlock Text="{Binding Name}" FontSize="12" Foreground="#D5D9DE" TextTrimming="CharacterEllipsis" />
+              <TextBlock Text="{Binding Step}" IsVisible="{Binding HasStep}" FontSize="11" Foreground="#8A9099" TextTrimming="CharacterEllipsis" />
+            </StackPanel>
+            <TextBlock Grid.Column="2" Text="{Binding StateText}" FontSize="11" Foreground="{Binding Brush}" VerticalAlignment="Top" Margin="8,1,0,0" />
+          </Grid>
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+  </StackPanel>
+</UserControl>

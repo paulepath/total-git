@@ -96,10 +96,14 @@ public partial class MainWindow : Window, IDialogService
         // Pull requests change on the host: refresh the list too, at most once a minute.
         Activated += (_, _) =>
         {
+            RepositoryViewModel.AppIsActive = true;
             if (_shell?.SelectedTab is not { } tab) return;
             _ = tab.RefreshOtherWorktreesAsync();
             _ = tab.RefreshPullRequestsAsync(TimeSpan.FromMinutes(1));
+            _ = tab.RefreshWorkflowsAsync();
         };
+        // In the background, running workflows are checked once a minute instead of every 15 seconds.
+        Deactivated += (_, _) => RepositoryViewModel.AppIsActive = false;
 
         // Middle-click closes a tab, as in browsers.
         TabStrip.AddHandler(PointerReleasedEvent, (_, e) =>

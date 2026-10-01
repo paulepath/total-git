@@ -95,6 +95,8 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
         _session = null;
         Sidebar.Avatars = null; // the cache is shared by every tab
         IconLibrary.Changed -= OnBranchRulesChanged;
+        _wfTimer?.Stop();
+        _wfProvider = null;
     }
 
     public AvatarCache Avatars { get; }
@@ -265,6 +267,7 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
             ApplyState();
             RebuildGraph();
             UpdatePullRequestHost();
+            UpdateWorkflowHost();
             if (sameRepo) await ReloadSelectionAsync();
             _ = RefreshOtherWorktreesAsync();
 
@@ -707,6 +710,7 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
         if (_state is null) return;
         if (await RunGitAsync("Fetching…", () => GitActions.FetchAsync(_state.WorkingDirectory), "Fetched all remotes."))
             OfferCleanUp("Fetched all remotes.");
+        _ = RefreshWorkflowsAsync();
     }
 
     [RelayCommand]
@@ -729,8 +733,12 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
     }
 
     [RelayCommand]
-    private Task PushAsync() => _state is null ? Task.CompletedTask
-        : RunGitAsync("Pushing…", () => GitActions.PushAsync(_state.WorkingDirectory), $"Pushed {CurrentBranch}.");
+    private async Task PushAsync()
+    {
+        if (_state is null) return;
+        // A push usually starts CI: look for the new runs.
+        if (await RunGitAsync("Pushing…", () => GitActions.PushAsync(_state.WorkingDirectory), $"Pushed {CurrentBranch}.")) CheckWorkflowsSoon();
+    }
 
     /// <summary>Replaces the remote branch with the local one (after a rebase or amend), after confirming.</summary>
     [RelayCommand]
@@ -1335,6 +1343,15 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
         }
         if (node.IsPullRequestsSection)
             return [new MenuAction("Refresh pull requests", RefreshPullRequestListCommand, Icon: MenuIcons.Refresh)];
+        if (node.IsWorkflowsSection)
+            return
+            [
+                new MenuAction("Refresh workflows", RefreshWorkflowListCommand, Icon: MenuIcons.Refresh),
+                MenuAction.Separator,
+                new MenuAction("Hide workflows", HideWorkflowsCommand),
+            ];
+        if (node.Run is { } run)
+            return ActionsForRun(run);
         if (node.PullRequest is { } pullRequest)
             return ActionsForPullRequest(pullRequest);
         if (node.IsFolder && node.BranchPrefix is { } prefix)

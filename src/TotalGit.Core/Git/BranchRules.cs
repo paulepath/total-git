@@ -122,6 +122,24 @@ public sealed class BranchRuleSet
         return (parts[..^1], parts[^1]);
     }
 
+    /// <summary>
+    /// How a new branch made from <paramref name="from"/> should start, so it lands next to it: "bug/" from the bugs
+    /// branch (bug/* is grouped under it) or from bug/x, "release-" from release-1, "team/" from team/x; empty otherwise.
+    /// </summary>
+    public string PrefixForNewBranch(string? from)
+    {
+        if (string.IsNullOrEmpty(from)) return "";
+        // A branch other branches are grouped under: new ones join that group.
+        var grouping = _rules.Select(r => r.Rule).FirstOrDefault(r =>
+            string.Equals(r.GroupUnder, from, StringComparison.OrdinalIgnoreCase) && r.FixedPrefix.Length > 0);
+        if (grouping is not null) return grouping.FixedPrefix;
+        var match = Match(from);
+        if (match.Rule is { } rule && !match.IsBareName && rule.FixedPrefix.Length > 0) return rule.FixedPrefix;
+        if (match.IsBareName && match.Rule!.BareName is { } bare) return bare + "/";
+        var slash = from.LastIndexOf('/');
+        return slash > 0 ? from[..(slash + 1)] : "";
+    }
+
     /// <summary>The rule whose icon a sidebar folder shows: the one for branches inside it ("bugs" → bugs/*).</summary>
     public BranchRule? ForFolder(string path)
     {

@@ -39,6 +39,30 @@ public sealed class BranchRulesTests
         Assert.Null(rules.Match("e4").Rule);
     }
 
+    [Theory]
+    [InlineData("bugs", "bug/")] // bug/* is grouped under the bugs branch
+    [InlineData("bug/e4-2108-hide-focus-behaviors", "bug/")]
+    [InlineData("features", "feature/")]
+    [InlineData("feature/team/x", "feature/")]
+    [InlineData("hot-fix", "hot-fix/")] // the bare name of hot-fix/*
+    [InlineData("hot-fix/sync", "hot-fix/")]
+    [InlineData("e2e/pr-basic", "e2e/")]
+    [InlineData("main", "")]
+    [InlineData("release-1", "")]
+    [InlineData(null, "")]
+    public void New_branches_start_like_the_branch_they_are_made_from(string? from, string prefix)
+    {
+        Assert.Equal(prefix, Defaults.PrefixForNewBranch(from));
+    }
+
+    [Fact]
+    public void A_custom_rule_gives_its_own_prefix()
+    {
+        var rules = new BranchRuleSet([new BranchRule { Pattern = "release-*", Icon = "lucide:rocket" }]);
+
+        Assert.Equal("release-", rules.PrefixForNewBranch("release-1"));
+    }
+
     [Fact]
     public void A_group_with_the_prefix_kept_nests_the_whole_name()
     {

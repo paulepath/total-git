@@ -53,6 +53,13 @@ public partial class SidebarView : UserControl
     /// <summary>Double-click on a branch's ✕ (deleted on the remote).</summary>
     public event Action<SidebarNode>? GoneDoubleTapped;
     public event Action? RefreshPullRequestsRequested;
+    public event Action? RefreshWorkflowsRequested;
+
+    private void OnRefreshWorkflowsClick(object? sender, RoutedEventArgs e)
+    {
+        RefreshWorkflowsRequested?.Invoke();
+        e.Handled = true;
+    }
 
     public void FocusFilter() => FilterBox.Focus();
 

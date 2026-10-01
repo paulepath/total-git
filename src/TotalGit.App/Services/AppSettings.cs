@@ -72,6 +72,9 @@ public sealed class AppSettings
     public void ApplyBranchRules() =>
         TotalGit.Core.Git.BranchRuleSet.Current = new TotalGit.Core.Git.BranchRuleSet(BranchRules ?? TotalGit.Core.Git.BranchRuleSet.Defaults());
 
+    /// <summary>The sidebar lists the repository's CI workflow runs (GitHub Actions).</summary>
+    public bool ShowWorkflows { get; set; } = true;
+
     /// <summary>The merge tool shows the common ancestor next to the two sides (when git has one).</summary>
     public bool MergeShowBase { get; set; } = true;
 

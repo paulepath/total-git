@@ -20,6 +20,8 @@ internal sealed class GitHubHttp(HttpClient http, ICredentialSource credentials,
 
     private readonly string _apiBase = "https://api.github.com/";
     private readonly ConcurrentDictionary<string, DateTimeOffset> _exhaustedUntil = new();
+    // Last response per path for conditional GETs: (ETag, body).
+    private readonly ConcurrentDictionary<string, (string ETag, JsonElement Body)> _etags = new();
 
     /// <summary>Runs a GraphQL query or mutation and returns its <c>data</c>.</summary>
     public async Task<JsonElement> GraphQLAsync(string query, JsonObject variables, CancellationToken ct)
@@ -35,7 +37,16 @@ internal sealed class GitHubHttp(HttpClient http, ICredentialSource credentials,
     public Task<JsonElement> RestAsync(HttpMethod method, string path, JsonNode? body, CancellationToken ct) =>
         SendAsync(method, path, body, "core", ct);
 
-    private async Task<JsonElement> SendAsync(HttpMethod method, string path, JsonNode? body, string resource, CancellationToken ct)
+    /// <summary>
+    /// A REST GET that sends the last response's ETag: when nothing changed GitHub answers 304, which doesn't count
+    /// against the rate limit, and the remembered response is returned. For lists polled while something is running.
+    /// </summary>
+    /// <param name="fresh">Ask without the ETag (GitHub can keep answering 304 for up to a minute after a change).</param>
+    public Task<JsonElement> RestCachedAsync(string path, CancellationToken ct, bool fresh = false) =>
+        SendAsync(HttpMethod.Get, path, null, "core", ct, cache: true, revalidate: !fresh);
+
+    private async Task<JsonElement> SendAsync(HttpMethod method, string path, JsonNode? body, string resource, CancellationToken ct,
+        bool cache = false, bool revalidate = true)
     {
         if (_exhaustedUntil.TryGetValue(resource, out var reset) && reset > DateTimeOffset.UtcNow)
             throw RateLimited(reset);
@@ -50,6 +61,7 @@ internal sealed class GitHubHttp(HttpClient http, ICredentialSource credentials,
         request.Headers.Accept.ParseAdd("application/vnd.github+json");
         request.Headers.Add("X-GitHub-Api-Version", "2022-11-28");
         if (body is not null) request.Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json");
+        if (cache && revalidate && _etags.TryGetValue(path, out var known)) request.Headers.TryAddWithoutValidation("If-None-Match", known.ETag);
 
         HttpResponseMessage response;
         string text;
@@ -70,12 +82,15 @@ internal sealed class GitHubHttp(HttpClient http, ICredentialSource credentials,
         using (response)
         {
             var (remaining, resetAt) = TrackRateLimit(response, resource);
-            if (!response.IsSuccessStatusCode) throw HttpError(response, text, remaining, resetAt);
+            if (cache && response.StatusCode == HttpStatusCode.NotModified && _etags.TryGetValue(path, out var unchanged)) return unchanged.Body;
+            if (!response.IsSuccessStatusCode) throw HttpError(response, text, remaining, resetAt, path);
             if (text.Length == 0) return default;
             try
             {
                 using var doc = JsonDocument.Parse(text);
-                return doc.RootElement.Clone();
+                var root = doc.RootElement.Clone();
+                if (cache && response.Headers.ETag?.ToString() is { Length: > 0 } etag) _etags[path] = (etag, root);
+                return root;
             }
             catch (JsonException ex)
             {
@@ -94,7 +109,7 @@ internal sealed class GitHubHttp(HttpClient http, ICredentialSource credentials,
         return (remaining, reset);
     }
 
-    private static HostException HttpError(HttpResponseMessage response, string text, int? remaining, DateTimeOffset? reset)
+    private static HostException HttpError(HttpResponseMessage response, string text, int? remaining, DateTimeOffset? reset, string path)
     {
         var message = ErrorMessage(text);
         switch (response.StatusCode)
@@ -105,6 +120,9 @@ internal sealed class GitHubHttp(HttpClient http, ICredentialSource credentials,
                 if (Header(response, "X-GitHub-SSO") is not null || IsSso(message)) return new(HostErrorKind.SsoRequired, SsoMessage);
                 if (remaining == 0 || response.StatusCode == HttpStatusCode.TooManyRequests || message?.Contains("rate limit", StringComparison.OrdinalIgnoreCase) == true)
                     return RateLimited(reset ?? RetryAfter(response));
+                // Fine-grained tokens need Actions access separately from the repository's code and pull requests.
+                if (path.Contains("/actions/", StringComparison.Ordinal))
+                    return new(HostErrorKind.Other, "Your GitHub token isn't allowed to do that with workflows. It needs Actions access: read to list runs, write to cancel or re-run them.");
                 return new(HostErrorKind.Other, message is null ? "GitHub refused the request." : $"GitHub refused the request: {message}");
             case HttpStatusCode.NotFound:
                 return new(HostErrorKind.NotFound, "GitHub couldn't find that. The repository or pull request may not exist, or the token can't see it.");
