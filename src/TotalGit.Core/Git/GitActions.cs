@@ -405,6 +405,32 @@ public static class GitActions
     public static Task FetchRefsAsync(string worktree, string remote, params string[] refspecs) =>
         GitCli.RunAsync(worktree, ["fetch", "--no-tags", remote, .. refspecs]);
 
+    /// <summary>Points a ref at a commit (creating it), e.g. to keep a reviewed pull request head from being collected.</summary>
+    public static Task UpdateRefAsync(string worktree, string refName, string sha) =>
+        GitCli.RunAsync(worktree, "update-ref", refName, sha);
+
+    /// <summary>Whether a commit is in the local object database.</summary>
+    public static async Task<bool> HasCommitAsync(string worktree, string sha) =>
+        (await GitCli.RunAsync(worktree, ["cat-file", "-e", sha + "^{commit}"], throwOnError: false)).ExitCode == 0;
+
+    /// <summary>The paths, of those given, that .gitattributes mark <c>linguist-generated</c>.</summary>
+    public static async Task<IReadOnlySet<string>> GeneratedAttrAsync(string worktree, IEnumerable<string> paths)
+    {
+        var list = paths.ToList();
+        var result = new HashSet<string>(StringComparer.Ordinal);
+        if (list.Count == 0) return result;
+        var output = await GitCli.RunAsync(worktree, ["check-attr", "linguist-generated", "--stdin"], string.Join('\n', list) + "\n", throwOnError: false);
+        if (output.ExitCode != 0) return result;
+        // Lines look like "path: linguist-generated: true".
+        foreach (var line in output.StdOut.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var value = line.LastIndexOf(": ", StringComparison.Ordinal);
+            var attr = value > 0 ? line.LastIndexOf(": ", value - 1, StringComparison.Ordinal) : -1;
+            if (attr > 0 && line[(value + 2)..].Trim() is "true" or "set") result.Add(line[..attr]);
+        }
+        return result;
+    }
+
     public static Task PullAsync(string worktree) => GitCli.RunAsync(worktree, "pull");
 
     /// <summary>Pulls only if the branch can simply move forward (no merge or rebase).</summary>

@@ -23,7 +23,14 @@ public sealed class GitHubPullRequestProvider : IPullRequestProvider
 
     public PrCapabilities Capabilities =>
         PrCapabilities.List | PrCapabilities.LineComments | PrCapabilities.Replies | PrCapabilities.ResolveThreads |
-        PrCapabilities.Reviews | PrCapabilities.RequestChanges | PrCapabilities.Checks | PrCapabilities.Drafts;
+        PrCapabilities.Reviews | PrCapabilities.RequestChanges | PrCapabilities.Checks | PrCapabilities.Drafts |
+        PrCapabilities.ViewedFiles;
+
+    /// <summary>Pull request node ids by number, for the viewed-file mutations.</summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<int, string> _nodeIds = new();
+
+    /// <summary>How many pages of files to read at most (GitHub lists up to 3,000 files).</summary>
+    private const int MaxFilePages = 30;
 
     public string HeadRefSpec(int number) => $"refs/pull/{number}/head";
 
@@ -49,7 +56,38 @@ public sealed class GitHubPullRequestProvider : IPullRequestProvider
         var data = await _http.GraphQLAsync(GitHubQueries.Details, variables, ct);
         var pr = data.Obj("repository")?.Obj("pullRequest")
             ?? throw new HostException(HostErrorKind.NotFound, $"Pull request #{number} wasn't found on GitHub.");
-        return GitHubMapping.Details(pr, Viewer(data));
+        var details = GitHubMapping.Details(pr, Viewer(data));
+        if (details.NodeId is { } id) _nodeIds[number] = id;
+
+        // Pull requests with more than 100 files: read the rest of the viewed marks.
+        var after = GitHubMapping.NextPage(pr.Obj("files"));
+        if (after is null) return details;
+        var viewed = new Dictionary<string, FileViewState>(details.ViewedFiles);
+        for (var page = 1; after is not null && page < MaxFilePages; page++)
+        {
+            var more = RepoVariables();
+            more["n"] = number;
+            more["after"] = after;
+            var files = (await _http.GraphQLAsync(GitHubQueries.Files, more, ct)).Obj("repository")?.Obj("pullRequest")?.Obj("files");
+            GitHubMapping.AddViewedFiles(viewed, files);
+            after = GitHubMapping.NextPage(files);
+        }
+        return details with { ViewedFiles = viewed };
+    }
+
+    public async Task SetFileViewedAsync(int number, string path, bool viewed, CancellationToken ct = default)
+    {
+        if (!_nodeIds.TryGetValue(number, out var id))
+        {
+            var variables = RepoVariables();
+            variables["n"] = number;
+            var data = await _http.GraphQLAsync(GitHubQueries.PullRequestId, variables, ct);
+            id = data.Obj("repository")?.Obj("pullRequest")?.Str("id")
+                 ?? throw new HostException(HostErrorKind.NotFound, $"Pull request #{number} wasn't found on GitHub.");
+            _nodeIds[number] = id;
+        }
+        await _http.GraphQLAsync(viewed ? GitHubQueries.MarkViewed : GitHubQueries.UnmarkViewed,
+            new JsonObject { ["id"] = id, ["path"] = path }, ct);
     }
 
     public Task AddCommentAsync(int number, string body, CancellationToken ct = default) =>

@@ -179,7 +179,7 @@ public partial class MainWindow : Window, IDialogService
     }
 
     /// <summary>Dialogs are separate windows: scale their content (and fixed sizes) to the current zoom.</summary>
-    private static T Zoomed<T>(T dialog) where T : Window
+    internal static T Zoomed<T>(T dialog) where T : Window
     {
         var z = Zoom.Level;
         if (Math.Abs(z - 1) < 0.001 || dialog.Content is not Control content) return dialog;

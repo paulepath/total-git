@@ -40,13 +40,28 @@ public sealed partial class DiffView : Control
     private static readonly IBrush NoticeBrush = new SolidColorBrush(Color.Parse("#8A9099"));
     private static readonly IBrush FillerBrush = new SolidColorBrush(Color.Parse("#131518"));
     private static readonly IBrush DividerBrush = new SolidColorBrush(Color.Parse("#30353C"));
+    private static readonly IBrush SinceReviewBrush = new SolidColorBrush(Color.Parse("#A371F7"));
+    private static readonly IBrush SinceReviewTint = new SolidColorBrush(Color.FromArgb(0x30, 0xA3, 0x71, 0xF7));
+
+    public static readonly StyledProperty<TotalGit.Core.Hosting.ReviewDelta?> SinceReviewProperty =
+        AvaloniaProperty.Register<DiffView, TotalGit.Core.Hosting.ReviewDelta?>(nameof(SinceReview));
+
+    /// <summary>Lines changed since the file was reviewed (new-side numbers): marked in violet over the usual colours.</summary>
+    public TotalGit.Core.Hosting.ReviewDelta? SinceReview
+    {
+        get => GetValue(SinceReviewProperty);
+        set => SetValue(SinceReviewProperty, value);
+    }
 
     private readonly Typeface _mono = new("Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, monospace");
     private double _offset;
     private double _hOffset;
     private double _charWidth = 7.5;
     private ScrollBar? _scrollBar;
+    private ScrollBar? _hScrollBar;
     private bool _syncing;
+    // The longest line in characters (tabs drawn as four spaces), for how far the text can scroll sideways.
+    private int _longestLine;
     private IReadOnlyList<SplitRow> _splitRows = [];
     private SplitRowLines[] _splitLines = [];
     // For each diff line, the side-by-side row it is on.
@@ -56,7 +71,7 @@ public sealed partial class DiffView : Control
 
     static DiffView()
     {
-        AffectsRender<DiffView>(DiffProperty, ModeProperty, CanAddCommentsProperty);
+        AffectsRender<DiffView>(DiffProperty, ModeProperty, CanAddCommentsProperty, SinceReviewProperty);
         ClipToBoundsProperty.OverrideDefaultValue<DiffView>(true);
         FocusableProperty.OverrideDefaultValue<DiffView>(true);
     }
@@ -76,6 +91,52 @@ public sealed partial class DiffView : Control
     private int RowCount => Mode == DiffViewMode.Split ? _splitRows.Count : Diff?.Lines.Count ?? 0;
     private int LineCount => RowCount + (Diff?.Truncated == true ? 1 : 0);
     private double MaxOffset => Math.Max(0, _layout.TotalHeight - Bounds.Height);
+
+    /// <summary>The sideways scroll bar: both sides of a side-by-side diff move together.</summary>
+    public void AttachHorizontalScrollBar(ScrollBar scrollBar)
+    {
+        _hScrollBar = scrollBar;
+        scrollBar.PropertyChanged += (_, e) =>
+        {
+            if (e.Property == RangeBase.ValueProperty && !_syncing) SetHOffset(scrollBar.Value);
+        };
+    }
+
+    /// <summary>
+    /// How far the text can scroll sideways: until the longest line ends a little inside the text area (in a
+    /// side-by-side diff, the narrower side's).
+    /// </summary>
+    private double MaxHOffset
+    {
+        get
+        {
+            var textArea = Mode == DiffViewMode.Split
+                ? Math.Floor(Bounds.Width / 2) - GutterWidth - 20
+                : Bounds.Width - GutterWidth * 2 - 20;
+            return Math.Max(0, _longestLine * _charWidth + 24 - textArea);
+        }
+    }
+
+    private void SetHOffset(double value)
+    {
+        _hOffset = Math.Clamp(value, 0, MaxHOffset);
+        SyncHorizontalScrollBar();
+        InvalidateVisual();
+    }
+
+    private void SyncHorizontalScrollBar()
+    {
+        if (_hScrollBar is null) return;
+        var max = MaxHOffset;
+        _syncing = true;
+        _hScrollBar.Maximum = max;
+        _hScrollBar.ViewportSize = Math.Max(1, Bounds.Width);
+        _hScrollBar.SmallChange = _charWidth * 4;
+        _hScrollBar.LargeChange = Math.Max(_charWidth, Bounds.Width / 3);
+        _hScrollBar.Value = Math.Min(_hOffset, max);
+        _hScrollBar.IsVisible = max > 0 && Diff is { IsBinary: false };
+        _syncing = false;
+    }
 
     public void AttachScrollBar(ScrollBar scrollBar)
     {
@@ -103,6 +164,7 @@ public sealed partial class DiffView : Control
             }
             ResetLayout();
             _highlights = diff is not null ? IntraLineDiff.Compute(diff.Lines) : IntraLineHighlights.None;
+            _longestLine = diff?.Lines.Select(l => l.Text.Length + l.Text.Count(c => c == '\t') * 3).DefaultIfEmpty(0).Max() ?? 0;
             var oldPath = change.GetOldValue<FileDiff?>()?.Path;
             var newPath = change.GetNewValue<FileDiff?>()?.Path;
             if (oldPath != newPath)
@@ -110,13 +172,17 @@ public sealed partial class DiffView : Control
                 _hOffset = 0;
                 ClearSelection();
             }
-            SetOffset(oldPath == newPath ? _offset : 0);
+            var switchedView = oldPath == newPath && change.GetOldValue<FileDiff?>()?.IsWholeFile != diff?.IsWholeFile;
+            if (switchedView) ScrollToFirstChange();
+            else SetOffset(oldPath == newPath ? _offset : 0);
+            SetHOffset(_hOffset);
         }
         else if (change.Property == ModeProperty)
         {
             ClearSelection();
             ResetLayout();
             SetOffset(0);
+            SetHOffset(_hOffset);
         }
         else if (change.Property == AnnotationsProperty)
         {
@@ -129,7 +195,22 @@ public sealed partial class DiffView : Control
         else if (change.Property == BoundsProperty)
         {
             SetOffset(_offset);
+            SetHOffset(_hOffset);
         }
+    }
+
+    /// <summary>Scrolls so the first added or removed line sits a few lines below the top.</summary>
+    private void ScrollToFirstChange()
+    {
+        var lines = Diff?.Lines;
+        var first = lines?.ToList().FindIndex(l => l.Kind is DiffLineKind.Added or DiffLineKind.Removed) ?? -1;
+        if (first < 0)
+        {
+            SetOffset(0);
+            return;
+        }
+        var row = Mode == DiffViewMode.Split ? _splitRowOf[first] : first;
+        SetOffset(_layout.TopOf(Math.Max(0, row - 3)));
     }
 
     private void SetOffset(double value)
@@ -158,8 +239,7 @@ public sealed partial class DiffView : Control
         if (e.KeyModifiers.HasFlag(KeyModifiers.Shift) || e.Delta.X != 0)
         {
             var delta = e.Delta.X != 0 ? e.Delta.X : e.Delta.Y;
-            _hOffset = Math.Max(0, _hOffset - delta * _charWidth * 6);
-            InvalidateVisual();
+            SetHOffset(_hOffset - delta * _charWidth * 6);
         }
         else
         {
@@ -323,7 +403,12 @@ public sealed partial class DiffView : Control
             return;
         }
 
-        _charWidth = Text("M", TextBrush).WidthIncludingTrailingWhitespace;
+        var charWidth = Text("M", TextBrush).WidthIncludingTrailingWhitespace;
+        if (charWidth != _charWidth)
+        {
+            _charWidth = charWidth;
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => SetHOffset(_hOffset));
+        }
         if (Mode == DiffViewMode.Split)
         {
             RenderSplit(ctx, diff);
@@ -356,12 +441,15 @@ public sealed partial class DiffView : Control
 
             if (line.OldLine is { } o) DrawNumber(ctx, o, 0, y);
             if (line.NewLine is { } n) DrawNumber(ctx, n, GutterWidth, y);
+            DrawSinceReview(ctx, line, GutterWidth * 2, width - GutterWidth * 2, y);
 
             using (ctx.PushClip(new Rect(GutterWidth * 2, y, width - GutterWidth * 2, LineHeight)))
             {
                 if (sign.Length > 0) ctx.DrawText(Text(sign, signBrush), new Point(GutterWidth * 2 + 6, y + 2));
                 var brush = line.Kind is DiffLineKind.Hunk or DiffLineKind.NoNewline ? HunkTextBrush : TextBrush;
-                DrawLineText(ctx, line, brush, new Point(textLeft - _hOffset, y + 2), i, 0);
+                // Text scrolled sideways disappears before the +/- column instead of running under it.
+                using (ctx.PushClip(new Rect(textLeft - TextMargin, y, Math.Max(0, width - textLeft + TextMargin), LineHeight)))
+                    DrawLineText(ctx, line, brush, new Point(textLeft - _hOffset, y + 2), i, 0);
             }
         }
         DrawAddCommentButton(ctx);
@@ -389,7 +477,7 @@ public sealed partial class DiffView : Control
             if (row.IsHunk)
             {
                 ctx.FillRectangle(HunkBrush, new Rect(0, y, width, LineHeight));
-                using (ctx.PushClip(new Rect(0, y, width, LineHeight)))
+                using (ctx.PushClip(new Rect(GutterWidth + 20 - TextMargin, y, Math.Max(0, width - GutterWidth - 20 + TextMargin), LineHeight)))
                     ctx.DrawText(Text(row.Left!.Value.Text, HunkTextBrush), new Point(GutterWidth + 20 - _hOffset, y + 2));
                 continue;
             }
@@ -404,6 +492,9 @@ public sealed partial class DiffView : Control
             DrawGap(ctx, i, GutterWidth);
         DrawAddCommentButton(ctx);
     }
+
+    /// <summary>How far left of the text column scrolled text still shows (just clear of the +/- sign).</summary>
+    private const double TextMargin = 4;
 
     private void DrawSide(DrawingContext ctx, DiffLine? line, double x, double w, double y, int row, bool left)
     {
@@ -423,13 +514,65 @@ public sealed partial class DiffView : Control
         if (gutterBg is not null) ctx.FillRectangle(gutterBg, new Rect(x, y, GutterWidth, LineHeight));
 
         if ((left ? l.OldLine : l.NewLine) is { } n) DrawNumber(ctx, n, x, y);
+        if (!left) DrawSinceReview(ctx, l, x + GutterWidth, w - GutterWidth, y);
 
         using (ctx.PushClip(new Rect(x + GutterWidth, y, w - GutterWidth, LineHeight)))
         {
             if (sign.Length > 0) ctx.DrawText(Text(sign, signBrush), new Point(x + GutterWidth + 6, y + 2));
             var brush = l.Kind == DiffLineKind.NoNewline ? HunkTextBrush : TextBrush;
-            DrawLineText(ctx, l, brush, new Point(x + GutterWidth + 20 - _hOffset, y + 2), row, left ? 0 : 1);
+            var textLeft = x + GutterWidth + 20;
+            using (ctx.PushClip(new Rect(textLeft - TextMargin, y, Math.Max(0, w - GutterWidth - 20 + TextMargin), LineHeight)))
+                DrawLineText(ctx, l, brush, new Point(textLeft - _hOffset, y + 2), row, left ? 0 : 1);
         }
+    }
+
+    /// <summary>
+    /// The violet marks for changes since the file was reviewed: a bar and tint on lines added since, and a thin
+    /// line above where lines were removed since.
+    /// </summary>
+    private void DrawSinceReview(DrawingContext ctx, DiffLine line, double x, double w, double y)
+    {
+        if (SinceReview is not { } delta || line.Kind == DiffLineKind.Removed || line.NewLine is not { } n) return;
+        if (delta.NewLines.Contains(n))
+        {
+            ctx.FillRectangle(SinceReviewTint, new Rect(x, y, w, LineHeight));
+            ctx.FillRectangle(SinceReviewBrush, new Rect(x, y, 3, LineHeight));
+        }
+        if (delta.RemovedBefore.Contains(n)) ctx.FillRectangle(SinceReviewBrush, new Rect(x, y - 1, Math.Min(w, 220), 2));
+    }
+
+    /// <summary>
+    /// Scrolls to the next (or previous) block of changes below (above) the top of the view; false when there's none.
+    /// </summary>
+    public bool ScrollToNextChange(int direction)
+    {
+        if (Diff is not { } diff) return false;
+        // The first line of each run of added/removed lines, as display rows.
+        var starts = new List<int>();
+        for (var i = 0; i < diff.Lines.Count; i++)
+        {
+            var changed = diff.Lines[i].Kind is DiffLineKind.Added or DiffLineKind.Removed;
+            var before = i > 0 && diff.Lines[i - 1].Kind is DiffLineKind.Added or DiffLineKind.Removed;
+            if (changed && !before) starts.Add(Mode == DiffViewMode.Split ? _splitRowOf[i] : i);
+        }
+        var current = _layout.RowAt(_offset + LineHeight * 3).Row;
+        int? target = direction > 0
+            ? starts.Where(r => r > current).Select(r => (int?)r).FirstOrDefault()
+            : starts.Where(r => r < current).Select(r => (int?)r).LastOrDefault();
+        if (target is not { } row) return false;
+        SetOffset(_layout.TopOf(Math.Max(0, row - 3)));
+        return true;
+    }
+
+    /// <summary>The diff line index nearest the middle of the view (for commenting from the keyboard).</summary>
+    public int? LineNearCentre()
+    {
+        if (Diff is not { } diff || diff.Lines.Count == 0) return null;
+        var row = _layout.RowAt(_offset + Bounds.Height / 2).Row;
+        if (Mode != DiffViewMode.Split) return Math.Clamp(row, 0, diff.Lines.Count - 1);
+        if (row < 0 || row >= _splitLines.Length) return null;
+        var lines = _splitLines[row];
+        return lines.Right >= 0 ? lines.Right : lines.Left >= 0 ? lines.Left : null;
     }
 
     /// <summary>Draws a line's text, over a stronger highlight on the words that changed.</summary>

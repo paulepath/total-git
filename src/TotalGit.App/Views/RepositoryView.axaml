@@ -263,11 +263,24 @@
         <!-- Diff replaces the graph while a file is open, like GitKraken. -->
         <DockPanel IsVisible="{Binding HasDiff}" Background="#1C1F24">
           <Border DockPanel.Dock="Top" Background="#23272D" Padding="12,6" BorderBrush="#30353C" BorderThickness="0,0,0,1">
-            <Grid ColumnDefinitions="*,Auto,Auto">
+            <Grid ColumnDefinitions="*,Auto,Auto,Auto">
               <TextBlock Text="{Binding DiffTitle}" VerticalAlignment="Center" FontFamily="Cascadia Mono, Consolas, monospace" FontSize="12"
                          Foreground="#E6E8EB" TextTrimming="CharacterEllipsis" />
+              <!-- Changes only | whole file -->
+              <ToggleButton Grid.Column="1" IsChecked="{Binding WholeFileDiff}" Padding="10,3" Margin="12,0,0,0" CornerRadius="4"
+                            ToolTip.Tip="Show the whole file with the changes marked, not just the changed parts">
+                <ToggleButton.Styles>
+                  <Style Selector="ToggleButton:checked /template/ ContentPresenter#PART_ContentPresenter">
+                    <Setter Property="Background" Value="#1F4E7A" />
+                  </Style>
+                </ToggleButton.Styles>
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <PathIcon Data="{StaticResource ExpandIcon}" Width="12" Height="12" />
+                  <TextBlock Text="Whole file" FontSize="12" />
+                </StackPanel>
+              </ToggleButton>
               <!-- Inline | Side by side -->
-              <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="12,0,10,0">
+              <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="10,0,10,0">
                 <Button Classes="seg" Classes.active="{Binding IsInlineDiff}" Command="{Binding SetDiffModeCommand}"
                               CommandParameter="{x:Static vm:DiffViewMode.Inline}" Padding="10,3" CornerRadius="4,0,0,4"
                               ToolTip.Tip="Inline diff">
@@ -285,7 +298,7 @@
                   </StackPanel>
                 </Button>
               </StackPanel>
-              <Button Grid.Column="2" Command="{Binding CloseDiffCommand}" Padding="10,3" ToolTip.Tip="Close (Esc)">
+              <Button Grid.Column="3" Command="{Binding CloseDiffCommand}" Padding="10,3" ToolTip.Tip="Close (Esc)">
                 <StackPanel Orientation="Horizontal" Spacing="6">
                   <PathIcon Data="{StaticResource CloseIcon}" Width="10" Height="10" />
                   <TextBlock Text="Close" FontSize="12" />
@@ -293,9 +306,11 @@
               </Button>
             </Grid>
           </Border>
-          <Grid ColumnDefinitions="*,Auto">
+          <Grid ColumnDefinitions="*,Auto" RowDefinitions="*,Auto">
             <views:DiffView x:Name="DiffView" Diff="{Binding Diff}" Mode="{Binding DiffMode}" />
             <ScrollBar Grid.Column="1" x:Name="DiffScrollBar" Orientation="Vertical" AllowAutoHide="False" />
+            <!-- One sideways scroll for both sides of a side-by-side diff, so their lines stay level. -->
+            <ScrollBar Grid.Row="1" x:Name="DiffHScrollBar" Orientation="Horizontal" AllowAutoHide="False" IsVisible="False" />
           </Grid>
         </DockPanel>
 
@@ -326,7 +341,6 @@
         <views:StagingView x:Name="StagingPane" DataContext="{Binding Staging}" IsVisible="{Binding $parent[views:RepositoryView].((vm:RepositoryViewModel)DataContext).ShowStaging}" />
         <views:WorktreeChangesView x:Name="WorktreeChangesPane" DataContext="{Binding WorktreeChanges}" IsVisible="{Binding $parent[views:RepositoryView].((vm:RepositoryViewModel)DataContext).ShowWorktreeChanges}" />
         <views:CommitRangeView DataContext="{Binding Range}" IsVisible="{Binding $parent[views:RepositoryView].((vm:RepositoryViewModel)DataContext).ShowRange}" />
-        <views:PullRequestView x:Name="PullRequestPane" DataContext="{Binding PullRequest}" IsVisible="{Binding $parent[views:RepositoryView].((vm:RepositoryViewModel)DataContext).ShowPullRequest}" />
         <TextBlock Text="Select a commit to see its details" Foreground="{StaticResource MutedTextBrush}"
                    HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="12">
           <TextBlock.IsVisible>
@@ -334,7 +348,6 @@
               <Binding Path="!ShowDetails" />
               <Binding Path="!ShowStaging" />
               <Binding Path="!ShowWorktreeChanges" />
-              <Binding Path="!ShowPullRequest" />
               <Binding Path="!ShowRange" />
               <Binding Path="HasRepository" />
             </MultiBinding>

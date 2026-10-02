@@ -177,6 +177,11 @@ public partial class ShellViewModel : ObservableObject
         {
             foreach (var tab in Tabs.Where(t => t != source)) tab.DiffMode = source.DiffMode;
         }
+        // So is showing whole files.
+        if (e.PropertyName == nameof(RepositoryViewModel.WholeFileDiff) && sender is RepositoryViewModel changed)
+        {
+            foreach (var tab in Tabs.Where(t => t != changed)) tab.WholeFileDiff = changed.WholeFileDiff;
+        }
     }
 
     private void SaveTabs()

@@ -196,6 +196,39 @@ public sealed class RepositorySessionTests : IDisposable
     }
 
     [Fact]
+    public void Whole_file_diffs_include_every_line()
+    {
+        // 30 lines with one change in the middle: a normal diff shows only the 3 lines around it.
+        var lines = Enumerable.Range(1, 30).Select(i => $"line {i}").ToList();
+        _repo.Commit("base", "a.txt", string.Join("\n", lines) + "\n");
+        lines[14] = "CHANGED";
+        _repo.Write("a.txt", string.Join("\n", lines) + "\n");
+        _repo.Git("add", "-A");
+        _repo.Git("commit", "-q", "-m", "change");
+        var sha = _repo.Git("rev-parse", "HEAD");
+        _repo.Write("a.txt", string.Join("\n", lines) + "\nadded at the end\n");
+        using var session = RepositorySession.Open(_repo.Root);
+
+        static int Shown(FileDiff d) => d.Lines.Count(l => l.Kind is DiffLineKind.Context or DiffLineKind.Added);
+
+        var normal = session.GetCommitFileDiff(sha, "a.txt");
+        var whole = session.GetCommitFileDiff(sha, "a.txt", wholeFile: true);
+        Assert.Equal(7, Shown(normal));
+        Assert.False(normal.IsWholeFile);
+        Assert.Equal(30, Shown(whole));
+        Assert.True(whole.IsWholeFile);
+        Assert.Contains(whole.Lines, l => l is { Kind: DiffLineKind.Added, Text: "CHANGED", NewLine: 15 });
+        Assert.Contains(whole.Lines, l => l is { Kind: DiffLineKind.Context, Text: "line 1", OldLine: 1, NewLine: 1 });
+
+        var working = session.GetWorkingFileDiff("a.txt", staged: false, wholeFile: true);
+        Assert.Equal(31, Shown(working));
+        Assert.True(working.IsWholeFile);
+
+        var range = session.GetRangeFileDiff(_repo.Git("rev-parse", "HEAD~1"), sha, "a.txt", wholeFile: true);
+        Assert.Equal(30, Shown(range));
+    }
+
+    [Fact]
     public void State_reports_tracking_ahead_and_behind()
     {
         using var remote = new TestRepo(bare: true);

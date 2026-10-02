@@ -109,7 +109,30 @@ public sealed record PullRequestDetails(
     int Deletions,
     int ChangedFiles,
     /// <summary>The signed-in user opened it (hosts don't let authors approve their own pull requests).</summary>
-    bool ViewerIsAuthor);
+    bool ViewerIsAuthor)
+{
+    /// <summary>The host's id for the pull request (GitHub's node id), for calls that address it by id.</summary>
+    public string? NodeId { get; init; }
+
+    /// <summary>The signed-in user's "viewed" mark on each changed file, by path (files not listed are unviewed).</summary>
+    public IReadOnlyDictionary<string, FileViewState> ViewedFiles { get; init; } = new Dictionary<string, FileViewState>();
+
+    /// <summary>The head commit of the signed-in user's latest submitted review, or null when they haven't reviewed.</summary>
+    public string? LastViewerReviewSha { get; init; }
+
+    /// <summary>When the signed-in user's latest review was submitted.</summary>
+    public DateTimeOffset? LastViewerReviewAt { get; init; }
+}
+
+/// <summary>The signed-in user's "viewed" mark on one file of a pull request.</summary>
+public enum FileViewState
+{
+    Unviewed,
+    Viewed,
+
+    /// <summary>Marked viewed, then the file changed (the host clears the mark).</summary>
+    ChangedSinceViewed,
+}
 
 /// <summary>A line comment waiting to be sent with a review.</summary>
 public sealed record DraftComment(CommentAnchor Anchor, string Body);

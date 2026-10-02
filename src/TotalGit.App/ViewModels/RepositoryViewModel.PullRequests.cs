@@ -7,25 +7,27 @@ using TotalGit.Core.Worktrees;
 
 namespace TotalGit.App.ViewModels;
 
-// Pull requests from the repository's hosting service: the sidebar list, the panel for one pull request, its files
-// (diffed locally after fetching its head), and checking it out into a worktree.
+// Pull requests from the repository's hosting service: the sidebar list, opening one in its review window, and
+// checking it out into a worktree.
 public partial class RepositoryViewModel
 {
     private IPullRequestProvider? _prProvider;
     private RemoteHostInfo? _prHost;
     private IReadOnlyList<PullRequestSummary> _pullRequests = [];
     private int _prListRequest;
-    private int _prRequest;
     private DateTimeOffset _prListLoadedAt;
 
     /// <summary>Creates pull request providers for supported hosts; set by the shell. Null hides pull requests.</summary>
     public IPullRequestProviderFactory? PullRequestProviders { get; init; }
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShowPullRequest))]
-    public partial PullRequestViewModel? PullRequest { get; set; }
+    /// <summary>Review windows open for this repository's pull requests, by number.</summary>
+    private readonly Dictionary<int, PullRequestReviewViewModel> _reviews = [];
 
-    public bool ShowPullRequest => PullRequest is not null;
+    /// <summary>Marks of files reviewed, kept on this machine (shared by every repository).</summary>
+    private static readonly Lazy<ReviewMarks> Marks = new(() => new ReviewMarks(Path.Combine(AppSettings.DataDirectory, "review-marks.json")));
+
+    /// <summary>Raised to show a pull request's review window (new, or already open: then it's brought to the front).</summary>
+    public event Action<PullRequestReviewViewModel>? ReviewWindowRequested;
 
     /// <summary>After a repository loads: picks the provider for its remote and lists its pull requests.</summary>
     private void UpdatePullRequestHost()
@@ -35,7 +37,7 @@ public partial class RepositoryViewModel
         _prHost = host;
         _prProvider = host is null ? null : PullRequestProviders!.TryCreate(host);
         _pullRequests = [];
-        PullRequest = null;
+        CloseReviewWindows();
         if (_prProvider is null)
         {
             Sidebar.SetPullRequests(false, [], null);
@@ -71,253 +73,43 @@ public partial class RepositoryViewModel
     [RelayCommand]
     private Task RefreshPullRequestList() => RefreshPullRequestsAsync();
 
-    /// <summary>Shows a pull request in the right-hand panel and loads its details and files.</summary>
+    /// <summary>Opens a pull request in its own review window (or brings its window to the front).</summary>
     [RelayCommand]
-    private async Task OpenPullRequestAsync(PullRequestSummary summary)
+    private void OpenPullRequest(PullRequestSummary summary)
     {
         if (_prProvider is not { } provider || _state is null || _session is not { } session) return;
-        var request = ++_prRequest;
-
-        // Leaves the commit selection: the panel shows the pull request instead.
-        SelectedSha = null;
-        SelectedRange = null;
-        PullRequestViewModel? created = null;
-        var vm = created = new PullRequestViewModel(summary, Settings.ChangedFilesTree, SaveChangedFilesTree)
+        if (_reviews.TryGetValue(summary.Number, out var open))
         {
-            Capabilities = provider.Capabilities,
-            OpenInBrowserCommand = new RelayCommand(() => OpenUrl(summary.Url)),
-            CheckoutCommand = new AsyncRelayCommand(() => CheckoutPullRequestAsync(summary)),
-            RefreshCommand = new AsyncRelayCommand(() => OpenPullRequestAsync(summary)),
-            ReviewCommand = new AsyncRelayCommand(() => SubmitReviewAsync(created!)),
-            Reply = (thread, body) => PostAsync(created!, "Replying…", () => provider.ReplyAsync(summary.Number, thread, body)),
-            SetResolved = (thread, resolved) => PostAsync(created!, resolved ? "Resolving…" : "Unresolving…",
-                () => provider.SetResolvedAsync(thread, resolved)),
-            PostConversationComment = body => PostAsync(created!, "Commenting…", () => provider.AddCommentAsync(summary.Number, body)),
-        };
-        vm.PropertyChanged += OnChildPropertyChanged;
-        vm.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName is nameof(PullRequestViewModel.Details) or nameof(PullRequestViewModel.Composer)) RebuildDiffThreads();
-        };
-        vm.PendingCommentsChanged += RebuildDiffThreads;
-        PullRequest = vm;
-
-        var details = LoadPullRequestDetailsAsync(provider, vm, summary.Number, request);
-        try
-        {
-            var (mergeBase, head, files) = await FetchPullRequestFilesAsync(provider, summary, session);
-            if (request != _prRequest) return;
-            vm.SetFiles(files, mergeBase, head);
-        }
-        catch (Exception ex) when (ex is GitCommandException or LibGit2Sharp.LibGit2SharpException or IOException or InvalidOperationException)
-        {
-            if (request == _prRequest) vm.Error = $"Couldn't get the pull request's changes: {ex.Message}";
-        }
-        await details;
-        if (request == _prRequest) vm.IsLoading = false;
-    }
-
-    private async Task LoadPullRequestDetailsAsync(IPullRequestProvider provider, PullRequestViewModel vm, int number, int request)
-    {
-        try
-        {
-            var details = await Task.Run(() => provider.GetPullRequestAsync(number));
-            if (request == _prRequest) vm.Details = details;
-        }
-        catch (HostException ex)
-        {
-            if (request == _prRequest) vm.Error = ex.Message;
-        }
-    }
-
-    /// <summary>
-    /// Fetches the pull request's head (and its base branch) into local refs, then lists the files changed since
-    /// the merge-base, as the host's "Files changed" view does.
-    /// </summary>
-    private async Task<(string MergeBase, string Head, IReadOnlyList<FileChange> Files)> FetchPullRequestFilesAsync(
-        IPullRequestProvider provider, PullRequestSummary pr, RepositorySession session)
-    {
-        var dir = _state!.WorkingDirectory;
-        var remote = provider.Host.RemoteName;
-        var local = PullRequestRef(pr.Number);
-        var refspecs = new List<string> { $"+{provider.HeadRefSpec(pr.Number)}:{local}", $"+refs/heads/{pr.BaseRef}:refs/remotes/{remote}/{pr.BaseRef}" };
-        // A branch on this remote: update its remote branch too, so checking it out tracks the latest.
-        if (!pr.IsCrossRepository) refspecs.Add($"+refs/heads/{pr.HeadRef}:refs/remotes/{remote}/{pr.HeadRef}");
-        await GitActions.FetchRefsAsync(dir, remote, [.. refspecs]);
-
-        return await Task.Run(() =>
-        {
-            var head = session.ResolveCommit(local) ?? throw new InvalidOperationException($"{local} wasn't fetched.");
-            var mergeBase = session.MergeBase(head, $"refs/remotes/{remote}/{pr.BaseRef}")
-                ?? throw new InvalidOperationException($"{pr.HeadRef} has no history in common with {pr.BaseRef}.");
-            return (mergeBase, head, session.GetRangeChanges(mergeBase, head));
-        });
-    }
-
-    // ------------------------------------------------------------------ comments and reviews
-
-    /// <summary>Threads, the comment being written and pending review comments on the open diff's lines.</summary>
-    [ObservableProperty]
-    public partial IReadOnlyList<DiffThreadItem> DiffThreads { get; private set; } = [];
-
-    /// <summary>The diff shows a pull request's file, so its lines can be commented on.</summary>
-    [ObservableProperty]
-    public partial bool CanCommentOnDiff { get; private set; }
-
-    // Any diff change (another file, a commit, closing it) or another pull request changes what's shown.
-    partial void OnDiffChanged(FileDiff? value) => RebuildDiffThreads();
-
-    partial void OnPullRequestChanged(PullRequestViewModel? value) => RebuildDiffThreads();
-
-    // Thread view models are kept while the details are the same, so a half-written reply survives rebuilding.
-    private readonly Dictionary<string, ReviewThreadViewModel> _threadViewModels = [];
-    private PullRequestDetails? _threadViewModelsFor;
-
-    /// <summary>Rebuilds what's shown between the diff's lines for the pull request file it shows.</summary>
-    private void RebuildDiffThreads()
-    {
-        if (PullRequest is not { SelectedFile: { } file } pr || Diff is not { } diff || diff.Path != file.Path)
-        {
-            DiffThreads = [];
-            CanCommentOnDiff = false;
+            ReviewWindowRequested?.Invoke(open);
             return;
         }
-        CanCommentOnDiff = pr.CanComment && pr.HeadSha is not null && !diff.IsBinary;
-
-        if (_threadViewModelsFor != pr.Details)
-        {
-            _threadViewModels.Clear();
-            _threadViewModelsFor = pr.Details;
-        }
-        var items = new List<DiffThreadItem>();
-        var placement = ThreadAnchoring.Place(diff.Lines, pr.Details?.Threads ?? [], file.Path);
-        foreach (var (line, threads) in placement.ByLine)
-        {
-            foreach (var thread in threads)
-            {
-                if (!_threadViewModels.TryGetValue(thread.Id, out var threadVm)) _threadViewModels[thread.Id] = threadVm = pr.NewThread(thread);
-                items.Add(new DiffThreadItem(line, threadVm));
-            }
-        }
-        foreach (var pending in pr.Pending.Where(p => p.Draft.Anchor.Path == file.Path))
-        {
-            if (LineIndexOf(diff, pending.Draft.Anchor) is { } line) items.Add(new DiffThreadItem(line, pending));
-        }
-        if (pr.Composer is { } composer && composer.Anchor.Path == file.Path) items.Add(new DiffThreadItem(composer.LineIndex, composer));
-        DiffThreads = items.OrderBy(i => i.LineIndex).ToList();
+        var ticket = PullRequestTriage.Ticket(summary.Title).Key ?? PullRequestTriage.TicketFromBranch(summary.HeadRef,
+            _pullRequests.Select(p => PullRequestTriage.Ticket(p.Title).Key).OfType<string>().Select(PullRequestTriage.Project)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase));
+        var ctx = new ReviewContext(provider, session, _state.WorkingDirectory, Marks.Value, _settings,
+            CheckoutPullRequestAsync, OpenTicketAsync);
+        var vm = new PullRequestReviewViewModel(summary, ctx) { Ticket = ticket };
+        _reviews[summary.Number] = vm;
+        vm.CloseRequested += () => _reviews.Remove(summary.Number);
+        ReviewWindowRequested?.Invoke(vm);
+        _ = vm.LoadAsync();
     }
 
-    private static int? LineIndexOf(FileDiff diff, CommentAnchor anchor)
+    /// <summary>A review window was closed by the user.</summary>
+    public void OnReviewWindowClosed(PullRequestReviewViewModel vm)
     {
-        for (var i = 0; i < diff.Lines.Count; i++)
-        {
-            var line = diff.Lines[i];
-            if (anchor.Side == DiffSide.Right ? line.Kind != DiffLineKind.Removed && line.NewLine == anchor.Line
-                    : line.Kind != DiffLineKind.Added && line.OldLine == anchor.Line)
-                return i;
-        }
-        return null;
+        if (_reviews.TryGetValue(vm.Number, out var open) && open == vm) _reviews.Remove(vm.Number);
     }
 
-    /// <summary>The "+" on a diff line: starts writing a comment there.</summary>
-    public void StartComment(int lineIndex)
+    /// <summary>The repository went away (tab closed, another repository opened): close its review windows.</summary>
+    private void CloseReviewWindows()
     {
-        if (PullRequest is not { SelectedFile: { } file } pr || Diff is not { } diff || lineIndex < 0 || lineIndex >= diff.Lines.Count) return;
-        if (CommentComposerViewModel.AnchorFor(file.Path, diff.Lines[lineIndex]) is not { } anchor) return;
-        // Keep a comment that's being written on that line.
-        if (pr.Composer is { Text.Length: > 0 } && pr.Composer.LineIndex == lineIndex) return;
-        pr.Composer = new CommentComposerViewModel(anchor, lineIndex, pr.Pending.Count,
-            postNow: c => PostLineCommentAsync(pr, c),
-            addToReview: c =>
-            {
-                pr.AddPending(new DraftComment(c.Anchor, c.Text.Trim()));
-                pr.Composer = null;
-            },
-            cancel: _ => pr.Composer = null);
-    }
-
-    private async Task<bool> PostLineCommentAsync(PullRequestViewModel pr, CommentComposerViewModel composer)
-    {
-        if (_prProvider is not { } provider || pr.HeadSha is not { } head) return false;
-        var ok = await PostAsync(pr, "Commenting…", () => provider.AddLineCommentAsync(pr.Number, composer.Anchor, composer.Text.Trim(), head));
-        if (ok && pr.Composer == composer) pr.Composer = null;
-        return ok;
-    }
-
-    /// <summary>Sends something to the host, then reloads the pull request's details (threads, conversation, reviews).</summary>
-    private async Task<bool> PostAsync(PullRequestViewModel pr, string busyText, Func<Task> action)
-    {
-        if (_prProvider is not { } provider) return false;
-        IsBusy = true;
-        BusyText = busyText;
-        try
-        {
-            await Task.Run(action);
-        }
-        catch (Exception ex) when (ex is HostException or ArgumentException)
-        {
-            ShowError(ex.Message);
-            return false;
-        }
-        finally
-        {
-            IsBusy = false;
-            BusyText = null;
-        }
-        try
-        {
-            var details = await Task.Run(() => provider.GetPullRequestAsync(pr.Number));
-            if (PullRequest == pr) pr.Details = details;
-        }
-        catch (HostException ex)
-        {
-            ShowError(ex.Message);
-        }
-        return true;
-    }
-
-    /// <summary>Submits a review: a summary, the pending line comments, and comment / approve / request changes.</summary>
-    private async Task SubmitReviewAsync(PullRequestViewModel pr)
-    {
-        if (_prProvider is not { } provider || Dialogs is null || pr.HeadSha is not { } head) return;
-        (ReviewVerdict Verdict, FormChoice Choice)[] verdicts = pr.ViewerIsAuthor
-            ? [(ReviewVerdict.Comment, new FormChoice("Comment", "Send your comments. Hosts don't let you approve or request changes on your own pull request."))]
-            :
-            [
-                (ReviewVerdict.Comment, new FormChoice("Comment", "Send your comments without approving.")),
-                (ReviewVerdict.Approve, new FormChoice("Approve", "Approve these changes for merging.")),
-                (ReviewVerdict.RequestChanges, new FormChoice("Request changes", "Changes are needed before this can be merged.", IsWarning: true)),
-            ];
-        var summary = new FormField(FormFieldKind.MultilineText, "Summary") { Placeholder = "Leave a comment (optional)" };
-        var verdict = FormField.Choice("Review", verdicts.Select(v => v.Choice).ToList());
-        var pendingText = pr.Pending.Count switch
-        {
-            0 => "No line comments are waiting.",
-            1 => "1 line comment will be sent with the review.",
-            var n => $"{n} line comments will be sent with the review.",
-        };
-        var spec = new FormSpec($"Review #{pr.Number}", pendingText, "Submit review", [summary, verdict], Validate: () =>
-            verdicts[verdict.SelectedIndex].Verdict != ReviewVerdict.Approve && summary.Text.Trim().Length == 0 && pr.Pending.Count == 0
-                ? "Write a summary or add line comments."
-                : null);
-        if (!await Dialogs.ShowFormAsync(spec)) return;
-
-        var drafts = pr.Pending.Select(p => p.Draft).ToList();
-        var choice = verdicts[verdict.SelectedIndex].Verdict;
-        if (await PostAsync(pr, "Submitting review…", () => provider.SubmitReviewAsync(pr.Number, choice, summary.Text.Trim(), drafts, head)))
-        {
-            pr.ClearPending();
-            ShowInfo(choice switch
-            {
-                ReviewVerdict.Approve => $"Approved #{pr.Number}.",
-                ReviewVerdict.RequestChanges => $"Requested changes on #{pr.Number}.",
-                _ => $"Review sent on #{pr.Number}.",
-            });
-        }
+        foreach (var vm in _reviews.Values.ToList()) vm.Close();
+        _reviews.Clear();
     }
 
     /// <summary>Where a pull request's head is fetched to (outside refs/heads and refs/remotes, so it isn't listed as a branch).</summary>
-    private static string PullRequestRef(int number) => $"refs/totalgit/pr/{number}";
+    private static string PullRequestRef(int number) => PullRequestReviewViewModel.PullRequestRef(number);
 
     /// <summary>
     /// Checks the pull request out into a new worktree: its own branch when it's on this remote (so pushes update

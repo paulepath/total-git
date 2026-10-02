@@ -33,10 +33,15 @@ public partial class MergeToolView : UserControl
         {
             if (e.Property == RangeBase.ValueProperty && !_syncing) _scroll.SetOffset(VScroll.Value);
         };
-        HScroll.SmallChange = CharWidth * 4;
-        HScroll.PropertyChanged += (_, e) =>
+        SourceHScroll.SmallChange = CharWidth * 4;
+        SourceHScroll.PropertyChanged += (_, e) =>
         {
-            if (e.Property == RangeBase.ValueProperty && !_syncing) _scroll.SetHOffset(HScroll.Value);
+            if (e.Property == RangeBase.ValueProperty && !_syncing) _scroll.SetHOffset(SourceHScroll.Value);
+        };
+        ResultHScroll.SmallChange = CharWidth * 4;
+        ResultHScroll.PropertyChanged += (_, e) =>
+        {
+            if (e.Property == RangeBase.ValueProperty && !_syncing) _scroll.SetResultHOffset(ResultHScroll.Value);
         };
         ResultPane.SegmentEditRequested += BeginEdit;
         // Tunnel: the shortcuts work whichever pane has the focus (but not while typing).
@@ -61,6 +66,7 @@ public partial class MergeToolView : UserControl
         _vm.RevealConflict += OnRevealConflict;
         _vm.PropertyChanged += OnViewModelChanged;
         _scroll.SetHOffset(0);
+        _scroll.SetResultHOffset(0);
         OnLayoutChanged();
         ApplyShowBase();
         // Once the panes have their sizes, show the first conflict.
@@ -116,23 +122,40 @@ public partial class MergeToolView : UserControl
         VScroll.LargeChange = Math.Max(MergeScroll.LineHeight, _scroll.Viewport - MergeScroll.LineHeight);
         VScroll.Value = _scroll.Offset;
 
-        var longest = 0;
-        if (_vm?.Layout is { } layout)
+        // The source panes share one sideways scroll: as far as their longest line needs in the narrowest of them.
+        var layout = _vm?.Layout;
+        var sourceLongest = 0;
+        var resultLongest = 0;
+        if (layout is not null)
         {
-            foreach (var l in layout.OursLines) longest = Math.Max(longest, l.Length);
-            foreach (var l in layout.TheirsLines) longest = Math.Max(longest, l.Length);
-            foreach (var l in layout.ResultLines) longest = Math.Max(longest, l.Text.Length);
+            if (_vm!.ShowBase) foreach (var l in layout.BaseLines) sourceLongest = Math.Max(sourceLongest, Expanded(l));
+            foreach (var l in layout.OursLines) sourceLongest = Math.Max(sourceLongest, Expanded(l));
+            foreach (var l in layout.TheirsLines) sourceLongest = Math.Max(sourceLongest, Expanded(l));
+            foreach (var l in layout.ResultLines) resultLongest = Math.Max(resultLongest, Expanded(l.Text));
         }
-        var narrowest = Panes.Where(p => p.IsEffectivelyVisible && p.Bounds.Width > 0).Select(p => p.Bounds.Width).DefaultIfEmpty(0).Min();
-        var hMax = Math.Max(0, longest * CharWidth + 90 - narrowest);
-        HScroll.Maximum = hMax;
-        HScroll.ViewportSize = Math.Max(1, narrowest);
-        HScroll.LargeChange = Math.Max(CharWidth, narrowest / 2);
-        HScroll.Value = Math.Min(_scroll.HOffset, hMax);
-        HScroll.IsVisible = hMax > 0 && _vm?.IsPaneMode == true;
+        var narrowest = new[] { BasePane, OursPane, TheirsPane }.Where(p => p.IsEffectivelyVisible && p.Bounds.Width > 0)
+            .Select(p => p.Bounds.Width).DefaultIfEmpty(0).Min();
+        SyncSideways(SourceHScroll, sourceLongest, narrowest, _scroll.HOffset, max => _scroll.MaxHOffset = max);
+        SyncSideways(ResultHScroll, resultLongest, ResultPane.Bounds.Width, _scroll.ResultHOffset, max => _scroll.MaxResultHOffset = max);
         _syncing = false;
         PositionEditor();
     }
+
+    /// <summary>Sizes a sideways scroll bar to a pane's width and its longest line; hidden when everything fits.</summary>
+    private void SyncSideways(ScrollBar bar, int longest, double width, double value, Action<double> setMax)
+    {
+        // The gutter (pick margin and line numbers) plus a little room after the end of the line.
+        var max = width <= 0 ? 0 : Math.Max(0, longest * CharWidth + 90 - width);
+        setMax(max);
+        bar.Maximum = max;
+        bar.ViewportSize = Math.Max(1, width);
+        bar.LargeChange = Math.Max(CharWidth, width / 2);
+        bar.Value = Math.Min(value, max);
+        bar.IsVisible = max > 0 && _vm?.IsPaneMode == true;
+    }
+
+    /// <summary>A line's length on screen, with tabs drawn as four spaces.</summary>
+    private static int Expanded(string line) => line.Length + line.Count(c => c == '\t') * 3;
 
     // ------------------------------------------------------------------ keys
 

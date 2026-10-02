@@ -19,7 +19,16 @@ public sealed class MergeScroll
     private readonly Dictionary<object, double> _viewports = [];
 
     public double Offset { get; private set; }
+
+    /// <summary>How far the three source panes (base, ours, theirs) are scrolled sideways: they move together.</summary>
     public double HOffset { get; private set; }
+
+    /// <summary>How far the result pane is scrolled sideways: it has its own width, so it scrolls on its own.</summary>
+    public double ResultHOffset { get; private set; }
+
+    /// <summary>The furthest each can scroll sideways (set by the view from the longest line and the pane widths).</summary>
+    public double MaxHOffset { get; set; } = double.MaxValue;
+    public double MaxResultHOffset { get; set; } = double.MaxValue;
     public int RowCount { get; private set; }
 
     public double TotalHeight => RowCount * LineHeight;
@@ -52,8 +61,21 @@ public sealed class MergeScroll
 
     public void SetHOffset(double value)
     {
-        HOffset = Math.Max(0, value);
+        HOffset = Math.Clamp(value, 0, Math.Max(0, MaxHOffset));
         Changed?.Invoke();
+    }
+
+    public void SetResultHOffset(double value)
+    {
+        ResultHOffset = Math.Clamp(value, 0, Math.Max(0, MaxResultHOffset));
+        Changed?.Invoke();
+    }
+
+    /// <summary>Scrolls a pane sideways: the result on its own, any source pane with the other two.</summary>
+    public void ScrollSideways(MergePane pane, double value)
+    {
+        if (pane == MergePane.Result) SetResultHOffset(value);
+        else SetHOffset(value);
     }
 
     /// <summary>Brings a run of rows into view with a few rows of context above.</summary>
@@ -168,7 +190,7 @@ public sealed class MergePaneView : Control
     }
 
     private double Offset => _scroll?.Offset ?? 0;
-    private double HOffset => _scroll?.HOffset ?? 0;
+    private double HOffset => Pane == MergePane.Result ? _scroll?.ResultHOffset ?? 0 : _scroll?.HOffset ?? 0;
 
     // ------------------------------------------------------------------ input
 
@@ -176,7 +198,7 @@ public sealed class MergePaneView : Control
     {
         if (_scroll is null) return;
         if (e.KeyModifiers.HasFlag(KeyModifiers.Shift) || e.Delta.X != 0)
-            _scroll.SetHOffset(HOffset - (e.Delta.X != 0 ? e.Delta.X : e.Delta.Y) * _charWidth * 6);
+            _scroll.ScrollSideways(Pane, HOffset - (e.Delta.X != 0 ? e.Delta.X : e.Delta.Y) * _charWidth * 6);
         else
             _scroll.SetOffset(Offset - e.Delta.Y * LineHeight * 3);
         e.Handled = true;

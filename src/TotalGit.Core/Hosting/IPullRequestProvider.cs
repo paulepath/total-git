@@ -13,6 +13,9 @@ public enum PrCapabilities
     RequestChanges = 1 << 5,
     Checks = 1 << 6,
     Drafts = 1 << 7,
+
+    /// <summary>Files can be marked as viewed (reviewed), and the host remembers it.</summary>
+    ViewedFiles = 1 << 8,
 }
 
 /// <summary>
@@ -51,6 +54,9 @@ public interface IPullRequestProvider
     /// <summary>Submits a review with its line comments in one go.</summary>
     /// <param name="headSha">The pull request head the review (and its comments' line numbers) refer to.</param>
     Task SubmitReviewAsync(int number, ReviewVerdict verdict, string body, IReadOnlyList<DraftComment> comments, string headSha, CancellationToken ct = default);
+
+    /// <summary>Marks a file of the pull request as viewed by the signed-in user, or clears the mark.</summary>
+    Task SetFileViewedAsync(int number, string path, bool viewed, CancellationToken ct = default);
 }
 
 /// <summary>Creates the provider for a repository's host; null when the host isn't supported.</summary>

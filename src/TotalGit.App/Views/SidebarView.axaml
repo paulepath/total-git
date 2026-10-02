@@ -164,33 +164,6 @@
               <PathIcon Classes="gone" Data="{StaticResource CloseIcon}" Width="9" Height="9" Foreground="#E5484D" VerticalAlignment="Center"
                         IsVisible="{Binding IsUpstreamGone}" Background="Transparent"
                         ToolTip.Tip="Deleted on the remote. Double-click to clean up branches deleted on the remote." />
-              <StackPanel Orientation="Horizontal" Spacing="-4" IsVisible="{Binding HasReviewers}" VerticalAlignment="Center" Margin="2,0,0,0">
-                <ItemsControl ItemsSource="{Binding Reviewers}">
-                  <ItemsControl.ItemsPanel>
-                    <ItemsPanelTemplate>
-                      <StackPanel Orientation="Horizontal" Spacing="-4" />
-                    </ItemsPanelTemplate>
-                  </ItemsControl.ItemsPanel>
-                  <ItemsControl.ItemTemplate>
-                    <DataTemplate x:DataType="vm:PrPerson">
-                      <Panel Width="16" Height="16" ToolTip.Tip="{Binding ToolTip}" Background="Transparent">
-                        <Border Width="16" Height="16" CornerRadius="8" ClipToBounds="True" BorderBrush="#1E2227" BorderThickness="1.5"
-                                Background="{Binding Background}">
-                          <Panel>
-                            <TextBlock Text="{Binding Initials}" FontSize="7" FontWeight="Bold" Foreground="White"
-                                       HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding !HasAvatar}" />
-                            <Image Source="{Binding Avatar}" Stretch="UniformToFill" IsVisible="{Binding HasAvatar}" />
-                          </Panel>
-                        </Border>
-                        <Ellipse Width="6" Height="6" Fill="{Binding StateBrush}" Stroke="#1E2227" StrokeThickness="1"
-                                 HorizontalAlignment="Right" VerticalAlignment="Bottom" IsVisible="{Binding HasState}" />
-                      </Panel>
-                    </DataTemplate>
-                  </ItemsControl.ItemTemplate>
-                </ItemsControl>
-                <TextBlock Text="{Binding MoreReviewers}" FontSize="10" Foreground="#8A9099" VerticalAlignment="Center" Margin="6,0,0,0"
-                           IsVisible="{Binding HasMoreReviewers}" />
-              </StackPanel>
               <TextBlock Text="{Binding Count}" FontSize="11" Foreground="#5AA9F2" IsVisible="{Binding ShowCount}" />
               <Button IsVisible="{Binding IsPullRequestsSection}" Padding="4,0" MinHeight="0" Height="18" Background="Transparent"
                       ToolTip.Tip="Refresh pull requests" Click="OnRefreshPullRequestsClick">

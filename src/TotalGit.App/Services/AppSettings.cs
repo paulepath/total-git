@@ -62,6 +62,17 @@ public sealed class AppSettings
     /// <summary>"Inline" or "Split".</summary>
     public string DiffMode { get; set; } = "Inline";
 
+    /// <summary>Diffs show the whole file (changes marked in place), not just the changes and a few lines round them.</summary>
+    public bool DiffWholeFile { get; set; }
+
+    /// <summary>The pull request review window's last size (and whether it was maximised).</summary>
+    public double ReviewWindowWidth { get; set; } = 1500;
+    public double ReviewWindowHeight { get; set; } = 950;
+    public bool ReviewWindowMaximized { get; set; }
+
+    /// <summary>The review window's file list leaves out test files (to look at later).</summary>
+    public bool ReviewHideTests { get; set; }
+
     /// <summary>The preselected option for uncommitted changes when checking out a branch or commit.</summary>
     public TotalGit.Core.Git.LocalChanges CheckoutLocalChanges { get; set; }
 

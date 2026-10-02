@@ -23,6 +23,7 @@ public partial class RepositoryView : UserControl
         SetUpSidebarFolding();
         Graph.AttachScrollBar(GraphScrollBar);
         DiffView.AttachScrollBar(DiffScrollBar);
+        DiffView.AttachHorizontalScrollBar(DiffHScrollBar);
 
         Graph.NearEnd += () => _ = _vm?.LoadMoreAsync();
         Graph.ColumnsChanged += () => SaveGraphColumns(_vm?.Settings);
@@ -65,15 +66,10 @@ public partial class RepositoryView : UserControl
         Sidebar.AddWorktreeRequested += () => _vm?.CreateWorktreeCommand.Execute(null);
         Sidebar.RefreshPullRequestsRequested += () => _vm?.RefreshPullRequestListCommand.Execute(null);
         Sidebar.RefreshWorkflowsRequested += () => _vm?.RefreshWorkflowListCommand.Execute(null);
-        PullRequestPane.FileContextRequested += (file, control) =>
-        {
-            if (_vm is not null) ShowMenu(control, _vm.ActionsForFile(file));
-        };
         StagingPane.NodeContextRequested += (node, control) =>
         {
             if (_vm is not null) ShowMenu(control, _vm.ActionsForStagingNode(node));
         };
-        DiffView.AddCommentRequested += (_, lineIndex) => _vm?.StartComment(lineIndex);
         DiffView.LineContextRequested += (diff, line, column) =>
         {
             if (_vm is null) return;
@@ -107,30 +103,37 @@ public partial class RepositoryView : UserControl
         if (_vm is not null)
         {
             _vm.ScrollToShaRequested -= Graph.ScrollToSha;
-            _vm.PropertyChanged -= OnViewModelPropertyChanged;
+            _vm.ReviewWindowRequested -= ShowReviewWindow;
         }
         _vm = DataContext as RepositoryViewModel;
         if (_vm is null) return;
 
         _vm.ScrollToShaRequested += Graph.ScrollToSha;
-        _vm.PropertyChanged += OnViewModelPropertyChanged;
+        _vm.ReviewWindowRequested += ShowReviewWindow;
         ApplyLayout(_vm.Settings);
-        ShowDiffThreads();
     }
 
-    private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName is nameof(RepositoryViewModel.DiffThreads) or nameof(RepositoryViewModel.CanCommentOnDiff)) ShowDiffThreads();
-    }
+    // The review windows of this tab's pull requests: one per pull request, brought to the front when opened again.
+    private readonly Dictionary<PullRequestReviewViewModel, PullRequestWindow> _reviewWindows = [];
 
-    /// <summary>Review threads and comment boxes go between the diff's lines as real controls (new ones each time).</summary>
-    private void ShowDiffThreads()
+    private void ShowReviewWindow(PullRequestReviewViewModel review)
     {
-        if (_vm is null) return;
-        DiffView.CanAddComments = _vm.CanCommentOnDiff;
-        DiffView.Annotations = _vm.DiffThreads
-            .Select(t => new DiffAnnotation(t.LineIndex, new ReviewThreadView { DataContext = t.ViewModel }))
-            .ToList();
+        if (_reviewWindows.TryGetValue(review, out var open))
+        {
+            if (open.WindowState == WindowState.Minimized) open.WindowState = WindowState.Normal;
+            open.Activate();
+            return;
+        }
+        var owner = TopLevel.GetTopLevel(this) as Window;
+        var window = new PullRequestWindow(review, _vm!.Settings, owner);
+        _reviewWindows[review] = window;
+        var vm = _vm;
+        window.Closed += (_, _) =>
+        {
+            _reviewWindows.Remove(review);
+            vm.OnReviewWindowClosed(review);
+        };
+        window.Show();
     }
 
     /// <summary>Pane and column widths are shared by all tabs; apply the saved ones when this tab is shown.</summary>

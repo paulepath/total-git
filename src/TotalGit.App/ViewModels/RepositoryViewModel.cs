@@ -63,6 +63,7 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
         PendingPath = path;
         if (path is not null) RepositoryName = Path.GetFileName(Path.TrimEndingDirectorySeparator(path));
         DiffMode = Enum.TryParse<DiffViewMode>(settings.DiffMode, out var mode) ? mode : DiffViewMode.Inline;
+        WholeFileDiff = settings.DiffWholeFile;
     }
 
     /// <summary>Path to load when the tab is first selected; null once loaded or for an empty tab.</summary>
@@ -96,6 +97,7 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
 
     public void Dispose()
     {
+        CloseReviewWindows();
         _watcher?.Dispose();
         _watcher = null;
         _session?.Dispose();
@@ -191,6 +193,20 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void SetDiffMode(DiffViewMode mode) => DiffMode = mode;
 
+    /// <summary>Show the whole file with its changes marked, instead of only the changes and the lines round them.</summary>
+    [ObservableProperty]
+    public partial bool WholeFileDiff { get; set; }
+
+    partial void OnWholeFileDiffChanged(bool value)
+    {
+        if (_settings.DiffWholeFile != value)
+        {
+            _settings.DiffWholeFile = value;
+            _settings.Save();
+        }
+        if (Diff is not null) _ = ReloadDiffAsync();
+    }
+
     [ObservableProperty]
     public partial string? AheadText { get; set; }
 
@@ -266,7 +282,6 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
                 SelectedSha = null;
                 Details = null;
                 Staging = null;
-                PullRequest = null;
                 Diff = null;
                 Banner = null;
             }
@@ -299,7 +314,7 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
                 Sidebar.Clear();
                 _prHost = null;
                 _prProvider = null;
-                PullRequest = null;
+                CloseReviewWindows();
             }
         }
         finally
@@ -489,7 +504,6 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
     {
         var request = ++_detailsRequest;
         Diff = null;
-        PullRequest = null;
         SelectedRange = null;
 
         if (sha is null)
@@ -573,6 +587,7 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
         FileChangeItem? file;
         Func<FileDiff> load;
         string title;
+        var whole = WholeFileDiff;
         if (Staging is { SelectedFile: { Change.Kind: ChangeKind.Conflicted } conflicted } && SelectedSha == CommitInfo.WorkingTreeSha)
         {
             Diff = null;
@@ -585,25 +600,19 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
         if (Staging is { SelectedFile: { } sf } && SelectedSha == CommitInfo.WorkingTreeSha)
         {
             file = sf;
-            load = () => session.GetWorkingFileDiff(sf.Path, sf.IsStaged);
+            load = () => session.GetWorkingFileDiff(sf.Path, sf.IsStaged, whole);
             title = $"{sf.Path}  ({(sf.IsStaged ? "staged" : "unstaged")})";
         }
         else if (WorktreeChanges is { SelectedFile: { } wf } changes)
         {
             file = wf;
-            load = () => changes.Session.GetWorkingFileDiff(wf.Path, wf.IsStaged);
+            load = () => changes.Session.GetWorkingFileDiff(wf.Path, wf.IsStaged, whole);
             title = $"{wf.Path}  ({changes.Name}, {(wf.IsStaged ? "staged" : "unstaged")})";
-        }
-        else if (PullRequest is { SelectedFile: { } pf, MergeBase: { } mergeBase, HeadSha: { } head } pr)
-        {
-            file = pf;
-            load = () => session.GetRangeFileDiff(mergeBase, head, pf.Path);
-            title = $"{pf.Path}  (#{pr.Number})";
         }
         else if (Details is { SelectedFile: { } df } details)
         {
             file = df;
-            load = () => session.GetCommitFileDiff(details.Sha, df.Path);
+            load = () => session.GetCommitFileDiff(details.Sha, df.Path, whole);
             title = $"{df.Path}  ({details.ShortSha})";
         }
         else
@@ -632,7 +641,6 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
         if (Details is not null) Details.SelectedFile = null;
         if (Staging is not null) Staging.SelectedFile = null;
         if (WorktreeChanges is not null) WorktreeChanges.SelectedFile = null;
-        if (PullRequest is not null) PullRequest.SelectedFile = null;
         Diff = null;
     }
 

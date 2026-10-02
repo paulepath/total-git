@@ -117,8 +117,10 @@
         </Grid>
       </Border>
 
-      <!-- Base | Ours | Theirs -->
-      <Grid Grid.Row="1" x:Name="SourcePanes" ColumnDefinitions="*,4,*,4,*">
+      <!-- Base | Ours | Theirs, scrolled sideways together -->
+      <DockPanel Grid.Row="1">
+      <ScrollBar DockPanel.Dock="Bottom" x:Name="SourceHScroll" Orientation="Horizontal" IsVisible="False" AllowAutoHide="False" />
+      <Grid x:Name="SourcePanes" ColumnDefinitions="*,4,*,4,*">
         <DockPanel Grid.Column="0" x:Name="BaseColumn">
           <Border DockPanel.Dock="Top" Background="#3A2E17" Padding="10,4" Height="26">
             <StackPanel Orientation="Horizontal">
@@ -146,6 +148,7 @@
           <views:MergePaneView x:Name="TheirsPane" Pane="Theirs" />
         </DockPanel>
       </Grid>
+      </DockPanel>
 
       <GridSplitter Grid.Row="2" ResizeDirection="Rows" Background="#2B2F36" />
 
@@ -171,7 +174,8 @@
                              ToolTip.Tip="Conflicts in the file (red: unresolved). Click to go there." />
         <ScrollBar x:Name="VScroll" Orientation="Vertical" Margin="0,26,0,0" AllowAutoHide="False" />
       </DockPanel>
-      <ScrollBar Grid.Row="5" x:Name="HScroll" Orientation="Horizontal" IsVisible="{Binding IsPaneMode}" AllowAutoHide="False" />
+      <!-- The result scrolls sideways on its own -->
+      <ScrollBar Grid.Row="5" x:Name="ResultHScroll" Orientation="Horizontal" IsVisible="False" AllowAutoHide="False" />
     </Grid>
   </DockPanel>
 </UserControl>

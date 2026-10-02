@@ -66,8 +66,47 @@ internal static class GitHubMapping
             pr.Int("additions") ?? 0,
             pr.Int("deletions") ?? 0,
             pr.Int("changedFiles") ?? 0,
-            pr.Bool("viewerDidAuthor"));
+            pr.Bool("viewerDidAuthor"))
+        {
+            NodeId = pr.Str("id"),
+            ViewedFiles = ViewedFiles(pr.Obj("files")),
+            LastViewerReviewSha = LastReview(pr, viewer)?.Obj("commit")?.Str("oid"),
+            LastViewerReviewAt = LastReview(pr, viewer) is { } r ? (r.Obj("submittedAt") ?? r.GetProperty("createdAt")).GetDateTimeOffset() : null,
+        };
     }
+
+    /// <summary>The signed-in user's newest submitted (not pending) review.</summary>
+    private static JsonElement? LastReview(JsonElement pr, string viewer) =>
+        Nodes(pr.Obj("reviews"))
+            .Where(r => r.Str("state") != "PENDING" && string.Equals(r.Obj("author")?.Str("login"), viewer, StringComparison.OrdinalIgnoreCase))
+            .Select(r => (JsonElement?)r)
+            .LastOrDefault();
+
+    /// <summary>The viewer's viewed marks from a page of a pull request's files.</summary>
+    public static Dictionary<string, FileViewState> ViewedFiles(JsonElement? files)
+    {
+        var result = new Dictionary<string, FileViewState>();
+        AddViewedFiles(result, files);
+        return result;
+    }
+
+    public static void AddViewedFiles(Dictionary<string, FileViewState> into, JsonElement? files)
+    {
+        foreach (var f in Nodes(files))
+        {
+            if (f.Str("path") is not { } path) continue;
+            into[path] = f.Str("viewerViewedState") switch
+            {
+                "VIEWED" => FileViewState.Viewed,
+                "DISMISSED" => FileViewState.ChangedSinceViewed,
+                _ => FileViewState.Unviewed,
+            };
+        }
+    }
+
+    /// <summary>The cursor for the next page of a connection, or null on the last page.</summary>
+    public static string? NextPage(JsonElement? connection) =>
+        connection?.Obj("pageInfo") is { } info && info.Bool("hasNextPage") ? info.Str("endCursor") : null;
 
     /// <summary>
     /// Requested reviewers first (carrying their earlier review's state when they've been asked again), then everyone
@@ -99,12 +138,35 @@ internal static class GitHubMapping
                 : (r.Str("login"), r.Str("login") ?? "", r.Str("avatarUrl")))
             .Where(r => r.Item2.Length > 0);
 
-    private static List<CheckItem> Checks(JsonElement pr) =>
-        Nodes(Rollup(pr)?.Obj("contexts")).Select(c => c.Str("__typename") == "StatusContext"
-            ? new CheckItem(c.Str("context") ?? "", CheckStatus(c.Str("state")), c.Bool("isRequired"), c.Str("targetUrl"), c.Str("description"))
-            // A check run's conclusion only exists once it has completed.
-            : new CheckItem(c.Str("name") ?? "", CheckStatus(c.Str("status") == "COMPLETED" ? c.Str("conclusion") : c.Str("status")),
-                c.Bool("isRequired"), c.Str("detailsUrl"), c.Str("title"))).ToList();
+    /// <summary>
+    /// The commit's checks as GitHub's pull request page shows them. When a workflow ran more than once on the commit
+    /// (pushed, then the pull request edited, or re-run), the rollup lists every run's check runs: only the newest
+    /// run of each workflow counts, so a superseded run's failures (or its jobs cancelled by the newer run) don't.
+    /// </summary>
+    private static List<CheckItem> Checks(JsonElement pr)
+    {
+        var contexts = Nodes(Rollup(pr)?.Obj("contexts")).ToList();
+        // The newest run of each workflow (runs started later have larger ids).
+        var latestRun = contexts
+            .Select(c => c.Obj("checkSuite")?.Obj("workflowRun"))
+            .Where(r => r is not null && r.Value.Obj("workflow")?.Str("name") is not null)
+            .GroupBy(r => r!.Value.Obj("workflow")!.Value.Str("name")!)
+            .ToDictionary(g => g.Key, g => g.Max(r => r!.Value.Long("databaseId")));
+
+        return contexts
+            .Where(c =>
+            {
+                var run = c.Obj("checkSuite")?.Obj("workflowRun");
+                var workflow = run?.Obj("workflow")?.Str("name");
+                return workflow is null || run!.Value.Long("databaseId") == latestRun[workflow];
+            })
+            .Select(c => c.Str("__typename") == "StatusContext"
+                ? new CheckItem(c.Str("context") ?? "", CheckStatus(c.Str("state")), c.Bool("isRequired"), c.Str("targetUrl"), c.Str("description"))
+                // A check run's conclusion only exists once it has completed.
+                : new CheckItem(c.Str("name") ?? "", CheckStatus(c.Str("status") == "COMPLETED" ? c.Str("conclusion") : c.Str("status")),
+                    c.Bool("isRequired"), c.Str("detailsUrl"), c.Str("title")))
+            .ToList();
+    }
 
     private static ReviewThread Thread(JsonElement t)
     {
@@ -194,6 +256,8 @@ internal static class GitHubJson
     public static string? Str(this JsonElement e, string name) => e.Obj(name) is { ValueKind: JsonValueKind.String } v ? v.GetString() : null;
 
     public static int? Int(this JsonElement e, string name) => e.Obj(name) is { ValueKind: JsonValueKind.Number } v ? v.GetInt32() : null;
+
+    public static long? Long(this JsonElement e, string name) => e.Obj(name) is { ValueKind: JsonValueKind.Number } v ? v.GetInt64() : null;
 
     public static bool Bool(this JsonElement e, string name) => e.Obj(name) is { ValueKind: JsonValueKind.True };
 }

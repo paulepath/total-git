@@ -215,13 +215,23 @@ public sealed class RepositorySession : IDisposable
         }
     }
 
-    public FileDiff GetCommitFileDiff(string sha, string path)
+    /// <param name="wholeFile">Include every line of the file, not just the changes and the lines around them.</param>
+    public FileDiff GetCommitFileDiff(string sha, string path, bool wholeFile = false)
     {
         lock (_lock)
         {
             var c = _repo.Lookup<Commit>(sha) ?? throw new ArgumentException($"Commit {sha} not found.", nameof(sha));
-            return ToFileDiff(path, CommitPatch(c)[path]);
+            var entry = CommitPatch(c)[path];
+            return wholeFile && entry is not null
+                ? WholeFile(path, WholeFilePatch(c.Parents.FirstOrDefault()?.Tree, c.Tree, entry)[path])
+                : ToFileDiff(path, entry);
         }
+    }
+
+    /// <summary>The blob (content hash) of a file at a commit, or null when the file isn't there.</summary>
+    public string? BlobAt(string commitSha, string path)
+    {
+        lock (_lock) return LookupCommit(commitSha)?[path]?.Target is Blob blob ? blob.Sha : null;
     }
 
     /// <summary>The SHA of the commit a ref or revspec points to (tags peeled), or null when it doesn't resolve.</summary>
@@ -253,26 +263,34 @@ public sealed class RepositorySession : IDisposable
     }
 
     /// <summary>One file's diff between two commits' trees. For a renamed file <paramref name="path"/> is the new path.</summary>
-    public FileDiff GetRangeFileDiff(string baseSha, string headSha, string path)
-    {
-        lock (_lock) return ToFileDiff(path, RangePatch(baseSha, headSha)[path]);
-    }
-
-    /// <summary>Diff of a working-tree file: index vs HEAD when <paramref name="staged"/>, else working tree vs index.</summary>
-    public FileDiff GetWorkingFileDiff(string path, bool staged)
+    public FileDiff GetRangeFileDiff(string baseSha, string headSha, string path, bool wholeFile = false)
     {
         lock (_lock)
         {
+            var entry = RangePatch(baseSha, headSha)[path];
+            if (!wholeFile || entry is null) return ToFileDiff(path, entry);
+            var from = _repo.Lookup<Commit>(baseSha)!.Tree;
+            var to = _repo.Lookup<Commit>(headSha)!.Tree;
+            return WholeFile(path, WholeFilePatch(from, to, entry)[path]);
+        }
+    }
+
+    /// <summary>Diff of a working-tree file: index vs HEAD when <paramref name="staged"/>, else working tree vs index.</summary>
+    public FileDiff GetWorkingFileDiff(string path, bool staged, bool wholeFile = false)
+    {
+        lock (_lock)
+        {
+            var options = wholeFile ? WholeFileOptions : new CompareOptions();
             var patch = staged
-                ? _repo.Diff.Compare<Patch>(_repo.Head.Tip?.Tree, DiffTargets.Index, [path])
-                : _repo.Diff.Compare<Patch>([path], includeUntracked: true);
+                ? _repo.Diff.Compare<Patch>(_repo.Head.Tip?.Tree, DiffTargets.Index, [path], null, options)
+                : _repo.Diff.Compare<Patch>([path], true, null, options);
             var entry = patch[path];
             if (entry is not null && !string.IsNullOrEmpty(entry.Patch) && entry.Patch.Contains("@@"))
-                return ToFileDiff(path, entry.IsBinaryComparison, entry.Patch);
+                return ToFileDiff(path, entry.IsBinaryComparison, entry.Patch) with { IsWholeFile = wholeFile };
 
             // Untracked files: libgit2 may omit the content, so show the file as all-added.
             var full = Path.Combine(WorkingDirectory, path);
-            if (!staged && File.Exists(full)) return UntrackedFileDiff(path, full);
+            if (!staged && File.Exists(full)) return UntrackedFileDiff(path, full) with { IsWholeFile = wholeFile };
             return new FileDiff(path, entry?.IsBinaryComparison ?? false, [], false);
         }
     }
@@ -296,6 +314,26 @@ public sealed class RepositorySession : IDisposable
         }
         return new FileDiff(path, false, lines, truncated);
     }
+
+    /// <summary>Enough context lines to take in any file, so the diff is the whole file with its changes marked.</summary>
+    private static readonly CompareOptions WholeFileOptions = new() { ContextLines = 10_000_000, InterhunkLines = 0 };
+
+    /// <summary>
+    /// One file's diff between two trees with every line as context. Only this file (and its old name, for a
+    /// rename) is compared, so a large commit isn't diffed whole again.
+    /// </summary>
+    private Patch WholeFilePatch(Tree? from, Tree to, PatchEntryChanges entry)
+    {
+        var paths = entry.OldPath != entry.Path ? new[] { entry.OldPath, entry.Path } : [entry.Path];
+        return _repo.Diff.Compare<Patch>(from, to, paths, new CompareOptions
+        {
+            ContextLines = WholeFileOptions.ContextLines,
+            InterhunkLines = 0,
+            Similarity = SimilarityOptions.Renames,
+        });
+    }
+
+    private static FileDiff WholeFile(string path, PatchEntryChanges? entry) => ToFileDiff(path, entry) with { IsWholeFile = true };
 
     private Commit? LookupCommit(string revision)
     {

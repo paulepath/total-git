@@ -104,7 +104,11 @@ public sealed record CommitDetails(
     string FullMessage,
     IReadOnlyList<FileChange> Files);
 
-public sealed record FileDiff(string Path, bool IsBinary, IReadOnlyList<DiffLine> Lines, bool Truncated);
+public sealed record FileDiff(string Path, bool IsBinary, IReadOnlyList<DiffLine> Lines, bool Truncated)
+{
+    /// <summary>Every line of the file is included (unchanged ones as context), not just the changes and a few around them.</summary>
+    public bool IsWholeFile { get; init; }
+}
 
 public enum IgnoreTarget
 {

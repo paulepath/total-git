@@ -133,6 +133,34 @@ public class GitHubProviderTests
     }
 
     [Fact]
+    public async Task Only_the_newest_run_of_a_workflow_counts()
+    {
+        // PR CI ran twice on the commit (run 254, then 255): the first run's failures and the job the second run
+        // cancelled in it are not checks of the pull request any more. CodeRabbit (not a workflow) always counts.
+        static string Run(string name, string conclusion, long run) =>
+            """{"__typename":"CheckRun","name":"NAME","status":"COMPLETED","conclusion":"CONCLUSION","checkSuite":{"workflowRun":{"databaseId":RUN,"workflow":{"name":"PR CI"}}}}"""
+                .Replace("NAME", name).Replace("CONCLUSION", conclusion).Replace("RUN", run.ToString());
+        const string rabbit = """{"__typename":"CheckRun","name":"CodeRabbit","status":"COMPLETED","conclusion":"SUCCESS","checkSuite":{"workflowRun":null}}""";
+        var contexts = string.Join(",", Run("branch-policy", "FAILURE", 254), Run("api", "CANCELLED", 254),
+            Run("branch-policy", "FAILURE", 255), Run("api", "SUCCESS", 255), rabbit);
+        var json = """
+            {"data":{"viewer":{"login":"Me"},"repository":{"pullRequests":{"nodes":[
+              {"number":93,"title":"Fix","isDraft":false,"state":"OPEN","baseRefName":"main","headRefName":"bug/x","headRefOid":"aaa",
+               "isCrossRepository":false,"updatedAt":"2026-10-01T10:00:00Z","url":"u","reviewDecision":null,"author":null,
+               "reviewRequests":{"nodes":[]},
+               "commits":{"nodes":[{"commit":{"statusCheckRollup":{"state":"FAILURE","contexts":{"nodes":[CONTEXTS]}}}}]}}
+            ]}}}}
+            """.Replace("CONTEXTS", contexts);
+        var (provider, http) = Create();
+        http.Route(GraphQL, () => FakeHttpHandler.Json(json));
+
+        var checks = (await provider.ListOpenAsync())[0].CheckRuns;
+
+        Assert.Equal([("branch-policy", CheckStatus.Failure), ("api", CheckStatus.Success), ("CodeRabbit", CheckStatus.Success)],
+            checks.Select(c => (c.Name, c.Status)));
+    }
+
+    [Fact]
     public async Task Caches_the_viewer()
     {
         var (provider, http) = Create();
@@ -182,6 +210,56 @@ public class GitHubProviderTests
             {"id":"R4","body":"Not sent yet","state":"PENDING","submittedAt":null,"createdAt":"2026-09-30T10:05:00Z","author":{"login":"me","avatarUrl":null}}]}
         }}}}
         """;
+
+    [Fact]
+    public async Task Reads_viewed_files_across_pages_and_the_viewers_last_review()
+    {
+        var (provider, http) = Create();
+        var details = DetailsJson
+            .Replace("\"viewerDidAuthor\":false,", """
+                "viewerDidAuthor":false,"id":"PR_node",
+                "files":{"nodes":[{"path":"src/a.py","viewerViewedState":"VIEWED"},{"path":"src/b.py","viewerViewedState":"DISMISSED"}],
+                         "pageInfo":{"hasNextPage":true,"endCursor":"c1"}},
+                """)
+            .Replace("""{"id":"R4","body":"Not sent yet","state":"PENDING",""",
+                """{"id":"R5","body":"","state":"COMMENTED","submittedAt":"2026-09-30T12:00:00Z","createdAt":"2026-09-30T12:00:00Z","author":{"login":"me","avatarUrl":null},"commit":{"oid":"reviewed1"}},{"id":"R4","body":"Not sent yet","state":"PENDING",""");
+        const string page2 = """
+            {"data":{"repository":{"pullRequest":{"files":{"nodes":[{"path":"src/c.py","viewerViewedState":"UNVIEWED"},{"path":"src/d.py","viewerViewedState":"VIEWED"}],
+              "pageInfo":{"hasNextPage":false,"endCursor":null}}}}}}
+            """;
+        var call = 0;
+        http.Routes[GraphQL] = _ => FakeHttpHandler.Json(call++ == 0 ? details : page2);
+
+        var pr = await provider.GetPullRequestAsync(7);
+
+        Assert.Equal("PR_node", pr.NodeId);
+        Assert.Equal(FileViewState.Viewed, pr.ViewedFiles["src/a.py"]);
+        Assert.Equal(FileViewState.ChangedSinceViewed, pr.ViewedFiles["src/b.py"]);
+        Assert.Equal(FileViewState.Unviewed, pr.ViewedFiles["src/c.py"]);
+        Assert.Equal(FileViewState.Viewed, pr.ViewedFiles["src/d.py"]);
+        Assert.Equal("c1", Body(http, 1).GetProperty("variables").GetProperty("after").GetString());
+        // The pending review isn't submitted, so the last review is R5.
+        Assert.Equal("reviewed1", pr.LastViewerReviewSha);
+        Assert.Equal(new DateTimeOffset(2026, 9, 30, 12, 0, 0, TimeSpan.Zero), pr.LastViewerReviewAt);
+    }
+
+    [Fact]
+    public async Task Marks_and_unmarks_a_file_as_viewed_by_pull_request_id()
+    {
+        var (provider, http) = Create();
+        http.Route(GraphQL, () => FakeHttpHandler.Json("""{"data":{"repository":{"pullRequest":{"id":"PR_node"}},"markFileAsViewed":{"pullRequest":{"id":"PR_node"}}}}"""));
+
+        await provider.SetFileViewedAsync(7, "src/a.py", viewed: true);
+        await provider.SetFileViewedAsync(7, "src/a.py", viewed: false);
+
+        // The id is looked up once, then cached.
+        Assert.Equal(3, http.Requests.Count);
+        Assert.Contains("pullRequest(number: $n) { id }", Body(http, 0).GetProperty("query").GetString());
+        var mark = Body(http, 1);
+        Assert.Contains("markFileAsViewed", mark.GetProperty("query").GetString());
+        Assert.Equal(("PR_node", "src/a.py"), (mark.GetProperty("variables").GetProperty("id").GetString(), mark.GetProperty("variables").GetProperty("path").GetString()));
+        Assert.Contains("unmarkFileAsViewed", Body(http, 2).GetProperty("query").GetString());
+    }
 
     [Fact]
     public async Task Maps_pull_request_details()

@@ -89,14 +89,6 @@ public partial class SidebarNode : ObservableObject
     /// <summary>A pull request's author, shown first on its row.</summary>
     public PrPerson? Author { get; init; }
 
-    /// <summary>The first few people a pull request is for (asked to review, or who reviewed), shown at the end of its row.</summary>
-    public IReadOnlyList<PrPerson> Reviewers { get; init; } = [];
-    public bool HasReviewers => Reviewers.Count > 0;
-
-    /// <summary>"+2" when there are more reviewers than fit.</summary>
-    public string? MoreReviewers { get; init; }
-    public bool HasMoreReviewers => MoreReviewers is not null;
-
     /// <summary>A pull request's hover card.</summary>
     public PrCardViewModel? Card { get; init; }
 
@@ -301,7 +293,7 @@ public partial class SidebarViewModel : ObservableObject
     private void RefreshAvatars()
     {
         foreach (var node in Flatten(Nodes.Where(n => n.IsPullRequestsSection || n.IsWorkflowsSection)).Where(n => n.IsPullRequest || n.IsRun))
-            foreach (var person in (node.Card?.Reviewers.Select(r => r.Person) ?? node.Reviewers).Prepend(node.Author))
+            foreach (var person in (node.Card?.Reviewers.Select(r => r.Person) ?? []).Prepend(node.Author))
                 if (person is { Avatar: null, AvatarUrl: { } url }) person.Avatar = _avatars?.TryGetUrl(url);
     }
 
@@ -492,7 +484,6 @@ public partial class SidebarViewModel : ObservableObject
         // Tickets: from the title, else from the branch name when it uses a project seen in the titles ("E4").
         var titled = prs.ToDictionary(p => p.Number, p => PullRequestTriage.Ticket(p.Title));
         var projects = titled.Values.Where(t => t.Key is not null).Select(t => PullRequestTriage.Project(t.Key!)).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        const int shownReviewers = 2;
         foreach (var group in prs.GroupBy(PullRequestTriage.Group).OrderBy(g => g.Key))
         {
             var key = "PULL REQUESTS/" + group.Key;
@@ -519,8 +510,6 @@ public partial class SidebarViewModel : ObservableObject
                 {
                     PullRequest = p,
                     Author = author,
-                    Reviewers = reviewers.Take(shownReviewers).ToList(),
-                    MoreReviewers = reviewers.Count > shownReviewers ? $"+{reviewers.Count - shownReviewers}" : null,
                     IsDimmed = p.IsDraft,
                     NumberText = $"#{p.Number}",
                     Ticket = ticket,

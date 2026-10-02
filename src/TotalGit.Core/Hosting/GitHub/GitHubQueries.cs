@@ -24,7 +24,7 @@ internal static class GitHubQueries
                 createdAt additions deletions changedFiles mergeStateStatus mergeable
                 commits(last: 1) { nodes { commit { statusCheckRollup { state contexts(first: 100) { nodes {
                   __typename
-                  ... on CheckRun { name status conclusion detailsUrl title }
+                  ... on CheckRun { name status conclusion detailsUrl title startedAt checkSuite { workflowRun { databaseId workflow { name } } } }
                   ... on StatusContext { context state targetUrl description }
                 } } } } } }
                 latestReviews(first: 20) { nodes { state author { login avatarUrl } } }
@@ -46,7 +46,7 @@ internal static class GitHubQueries
                 totalCount
                 nodes { commit { statusCheckRollup { state contexts(first: 100) { nodes {
                   __typename
-                  ... on CheckRun { name status conclusion detailsUrl title isRequired(pullRequestNumber: $n) }
+                  ... on CheckRun { name status conclusion detailsUrl title isRequired(pullRequestNumber: $n) startedAt checkSuite { workflowRun { databaseId workflow { name } } } }
                   ... on StatusContext { context state targetUrl description isRequired(pullRequestNumber: $n) }
                 } } } } }
               }
@@ -56,7 +56,9 @@ internal static class GitHubQueries
                 comments(first: 100) { nodes { id body createdAt author { login avatarUrl } commit { oid } originalCommit { oid } } }
               } }
               comments(first: 100) { nodes { id body createdAt author { login avatarUrl } } }
-              reviews(first: 100) { nodes { id body state submittedAt createdAt author { login avatarUrl } } }
+              reviews(first: 100) { nodes { id body state submittedAt createdAt author { login avatarUrl } commit { oid } } }
+              id
+              files(first: 100) { nodes { path viewerViewedState } pageInfo { hasNextPage endCursor } }
             }
           }
         }
@@ -67,6 +69,23 @@ internal static class GitHubQueries
           addPullRequestReviewThreadReply(input: {pullRequestReviewThreadId: $id, body: $body}) { comment { id } }
         }
         """;
+
+    /// <summary>More of a pull request's files (after the first 100 that come with its details).</summary>
+    public const string Files = """
+        query($owner: String!, $repo: String!, $n: Int!, $after: String!) {
+          repository(owner: $owner, name: $repo) {
+            pullRequest(number: $n) { files(first: 100, after: $after) { nodes { path viewerViewedState } pageInfo { hasNextPage endCursor } } }
+          }
+        }
+        """;
+
+    public const string PullRequestId = """
+        query($owner: String!, $repo: String!, $n: Int!) { repository(owner: $owner, name: $repo) { pullRequest(number: $n) { id } } }
+        """;
+
+    public const string MarkViewed = "mutation($id: ID!, $path: String!) { markFileAsViewed(input: {pullRequestId: $id, path: $path}) { pullRequest { id } } }";
+
+    public const string UnmarkViewed = "mutation($id: ID!, $path: String!) { unmarkFileAsViewed(input: {pullRequestId: $id, path: $path}) { pullRequest { id } } }";
 
     public const string Resolve = "mutation($id: ID!) { resolveReviewThread(input: {threadId: $id}) { thread { id isResolved } } }";
 

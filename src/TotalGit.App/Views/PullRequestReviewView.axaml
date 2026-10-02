@@ -1,0 +1,527 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:TotalGit.App.ViewModels"
+             xmlns:views="using:TotalGit.App.Views"
+             x:Class="TotalGit.App.Views.PullRequestReviewView"
+             x:DataType="vm:PullRequestReviewViewModel"
+             Background="#1C1F24">
+  <UserControl.Styles>
+    <Style Selector="TextBlock.muted">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="#8A9099" />
+    </Style>
+    <Style Selector="TextBlock.section">
+      <Setter Property="FontSize" Value="10.5" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="#7D848E" />
+      <Setter Property="LetterSpacing" Value="0.8" />
+    </Style>
+    <Style Selector="Button.link">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Padding" Value="4,0" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="#5AA9F2" />
+    </Style>
+    <Style Selector="Button.small, ToggleButton.small">
+      <Setter Property="Padding" Value="9,3" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="FontSize" Value="12" />
+    </Style>
+    <Style Selector="ToggleButton.small:checked /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#1F4E7A" />
+    </Style>
+    <!-- The review box: ☐ not reviewed, ◩ changed since review (amber), ☑ reviewed (green). -->
+    <Style Selector="Button.reviewBox">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="Width" Value="22" />
+      <Setter Property="Height" Value="22" />
+      <Setter Property="CornerRadius" Value="4" />
+    </Style>
+    <Style Selector="TabItem">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="MinHeight" Value="30" />
+      <Setter Property="Padding" Value="12,0" />
+    </Style>
+    <Style Selector="Border.tab">
+      <Setter Property="Padding" Value="12,6" />
+      <Setter Property="BorderThickness" Value="0,0,0,2" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="Border.tab.active">
+      <Setter Property="BorderBrush" Value="#3B82C4" />
+      <Setter Property="Background" Value="#23272D" />
+    </Style>
+  </UserControl.Styles>
+
+  <DockPanel>
+    <!-- Header: title, branches, ticket and the actions -->
+    <Border DockPanel.Dock="Top" Background="#23272D" BorderBrush="#30353C" BorderThickness="0,0,0,1" Padding="16,10">
+      <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
+        <StackPanel Spacing="4">
+          <SelectableTextBlock TextWrapping="Wrap" FontSize="16" FontWeight="SemiBold" Foreground="#EEF0F2">
+            <Run Text="{Binding Pr.NumberText}" Foreground="#8A9099" FontWeight="Normal" />
+            <Run Text=" " />
+            <Run Text="{Binding Pr.Title}" />
+          </SelectableTextBlock>
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <Border Background="#3A4250" CornerRadius="9" Padding="7,1" IsVisible="{Binding Pr.IsDraft}">
+              <TextBlock Text="Draft" FontSize="11" Foreground="#C2C7CE" />
+            </Border>
+            <Border Background="#24303C" CornerRadius="3" Padding="6,1">
+              <TextBlock Text="{Binding BranchesText}" FontFamily="Cascadia Mono, Consolas, monospace" FontSize="11" Foreground="#9DC4EA" />
+            </Border>
+            <Button Classes="link" IsVisible="{Binding HasTicket}" Command="{Binding OpenTicketCommand}" ToolTip.Tip="Open the ticket">
+              <TextBlock Text="{Binding Ticket}" FontFamily="Cascadia Mono, Consolas, monospace" />
+            </Button>
+            <TextBlock Text="{Binding AuthorText}" Classes="muted" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding Pr.StatsText}" Classes="muted" VerticalAlignment="Center" />
+          </StackPanel>
+        </StackPanel>
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Top">
+          <ProgressBar IsIndeterminate="True" Width="50" IsVisible="{Binding IsBusy}" VerticalAlignment="Center" />
+          <TextBlock Text="{Binding BusyText}" Classes="muted" IsVisible="{Binding IsBusy}" VerticalAlignment="Center" />
+          <Button Classes="small" Command="{Binding LoadCommand}" ToolTip.Tip="Reload the pull request (F5)">
+            <PathIcon Data="{StaticResource RefreshIcon}" Width="12" Height="12" />
+          </Button>
+          <Button Classes="small" Command="{Binding OpenInBrowserCommand}" ToolTip.Tip="Open on the web">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <PathIcon Data="{StaticResource BrowserIcon}" Width="12" Height="12" />
+              <TextBlock Text="Open on web" />
+            </StackPanel>
+          </Button>
+          <Button Classes="small" Command="{Binding CheckoutCommand}" ToolTip.Tip="Check the pull request out into a new worktree">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <PathIcon Data="{StaticResource WorktreeIcon}" Width="12" Height="12" />
+              <TextBlock Text="Check out" />
+            </StackPanel>
+          </Button>
+          <Button Classes="accent small" Command="{Binding SubmitReviewCommand}" IsVisible="{Binding Pr.CanReview}"
+                  ToolTip.Tip="Submit your review: comment, approve or request changes, with your pending line comments">
+            <TextBlock Text="{Binding ReviewButtonText}" />
+          </Button>
+        </StackPanel>
+        <Border Grid.Row="1" Grid.ColumnSpan="2" Margin="0,8,0,0" BorderBrush="{Binding Pr.MergeBrush}" BorderThickness="3,0,0,0"
+                Background="#262A31" Padding="8,4" CornerRadius="2" HorizontalAlignment="Left"
+                IsVisible="{Binding Pr.MergeText, Converter={x:Static ObjectConverters.IsNotNull}}">
+          <TextBlock Text="{Binding Pr.MergeText}" FontSize="12" Foreground="#D5D8DD" TextWrapping="Wrap" />
+        </Border>
+      </Grid>
+    </Border>
+
+    <!-- Messages: errors stay until dismissed -->
+    <Border DockPanel.Dock="Top" Padding="16,6" IsVisible="{Binding HasMessage}"
+            Background="{Binding MessageIsError, Converter={x:Static views:ReviewConverters.MessageBackground}}">
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBlock Text="{Binding Message}" Foreground="#EEF0F2" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center" />
+        <Button Grid.Column="1" Classes="small" Background="Transparent" Command="{Binding DismissMessageCommand}" ToolTip.Tip="Dismiss">
+          <PathIcon Data="{StaticResource CloseIcon}" Width="9" Height="9" />
+        </Button>
+      </Grid>
+    </Border>
+
+    <Grid x:Name="Panes" ColumnDefinitions="290,4,*,4,360">
+      <!-- Left: the files, with review boxes and progress -->
+      <DockPanel Grid.Column="0" Background="#20242A">
+        <StackPanel DockPanel.Dock="Top" Margin="12,10,12,6" Spacing="6">
+          <Grid ColumnDefinitions="*,Auto,Auto">
+            <TextBlock Classes="section" Text="FILES" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1" Text="{Binding ProgressText}" FontSize="11.5" Foreground="#C9CED6" VerticalAlignment="Center" />
+            <ToggleButton Grid.Column="2" Classes="small" IsChecked="{Binding ShowAsTree}" Margin="8,0,0,0" Padding="6,3"
+                          ToolTip.Tip="Group files by folder">
+              <PathIcon Data="{StaticResource FolderIcon}" Width="12" Height="12" />
+            </ToggleButton>
+          </Grid>
+          <ProgressBar Value="{Binding ProgressValue}" Minimum="0" Maximum="100" Height="4" MinHeight="4" Foreground="#4CC38A" Background="#30353C" />
+          <ToggleButton Classes="small" IsChecked="{Binding SinceLastReview}" IsVisible="{Binding CanShowSinceLastReview}" HorizontalAlignment="Stretch"
+                        ToolTip.Tip="{Binding SinceLastReviewText}">
+            <TextBlock Text="Only what changed since my last review" FontSize="11.5" />
+          </ToggleButton>
+        </StackPanel>
+        <StackPanel DockPanel.Dock="Bottom" Margin="12,4,12,6">
+          <CheckBox Content="Hide reviewed files" IsChecked="{Binding HideReviewed}" FontSize="12" />
+          <CheckBox Content="{Binding HideTestsText}" IsChecked="{Binding HideTests}" FontSize="12" IsVisible="{Binding HasTests}"
+                    ToolTip.Tip="Leave test files out of the list and out of Next, to review them later" />
+        </StackPanel>
+        <TreeView x:Name="FileList" ItemsSource="{Binding FileNodes}" SelectedItem="{Binding SelectedNode}" Background="Transparent"
+                  ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+          <TreeView.Styles>
+            <Style Selector="TreeViewItem" x:DataType="vm:ReviewTreeNode">
+              <Setter Property="IsExpanded" Value="{Binding IsExpanded}" />
+              <Setter Property="MinHeight" Value="0" />
+              <Setter Property="Padding" Value="0,2" />
+            </Style>
+          </TreeView.Styles>
+          <TreeView.ItemTemplate>
+            <TreeDataTemplate x:DataType="vm:ReviewTreeNode" ItemsSource="{Binding Children}">
+              <Panel>
+                <!-- Folder: name and how many of its files are reviewed -->
+                <Grid ColumnDefinitions="Auto,*,Auto" IsVisible="{Binding IsFolder}" Background="Transparent">
+                  <PathIcon Data="{StaticResource FolderIcon}" Width="12" Height="12" Foreground="#8A9099" Margin="2,0,6,0" VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="12" Foreground="#A9AFB8" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="2" Text="{Binding ReviewedText}" FontSize="10.5" Foreground="#6B727C" Margin="6,0,4,0" VerticalAlignment="Center" />
+                </Grid>
+                <!-- File: review box, status, name, comments, size -->
+                <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto" IsVisible="{Binding IsFile}" ToolTip.Tip="{Binding File.ToolTip}" Background="Transparent"
+                      Opacity="{Binding File.IsGenerated, FallbackValue=1, Converter={x:Static views:ReviewConverters.GeneratedOpacity}}">
+                  <Button Classes="reviewBox" ToolTip.Tip="{Binding File.StateText}"
+                          Command="{Binding $parent[views:PullRequestReviewView].((vm:PullRequestReviewViewModel)DataContext).ToggleReviewedCommand}"
+                          CommandParameter="{Binding File}">
+                    <views:ReviewBox State="{Binding File.State, FallbackValue=NotReviewed}" />
+                  </Button>
+                  <TextBlock Grid.Column="1" Text="{Binding File.StatusLetter}" Foreground="{Binding File.StatusBrush}" FontSize="11" FontWeight="Bold"
+                             Width="14" VerticalAlignment="Center" Margin="4,0,2,0" />
+                  <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <TextBlock Text="{Binding Name}" FontSize="12.5" Foreground="#E6E8EB" TextTrimming="CharacterEllipsis" />
+                      <Border Background="#2B3340" CornerRadius="3" Padding="4,0" VerticalAlignment="Center"
+                              IsVisible="{Binding File.IsTest, FallbackValue=False}">
+                        <TextBlock Text="test" FontSize="9.5" Foreground="#9DB8D6" />
+                      </Border>
+                    </StackPanel>
+                    <TextBlock Text="{Binding File.Folder}" FontSize="10.5" Foreground="#6B727C" TextTrimming="LeadingCharacterEllipsis">
+                      <TextBlock.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                          <Binding Path="ShowFolder" />
+                          <Binding Path="File.HasFolder" FallbackValue="False" />
+                        </MultiBinding>
+                      </TextBlock.IsVisible>
+                    </TextBlock>
+                  </StackPanel>
+                  <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="3" VerticalAlignment="Center" Margin="6,0,0,0"
+                              IsVisible="{Binding File.HasThreads, FallbackValue=False}" ToolTip.Tip="Open comment threads">
+                    <PathIcon Data="{StaticResource CommentIcon}" Width="11" Height="11" Foreground="#8A9099" />
+                    <TextBlock Text="{Binding File.ThreadText}" FontSize="11" Foreground="#8A9099" />
+                  </StackPanel>
+                  <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center" Margin="6,0,4,0">
+                    <TextBlock Text="{Binding File.AddedText}" FontSize="10.5" Foreground="#4CC38A" FontFamily="Cascadia Mono, Consolas, monospace" />
+                    <TextBlock Text="{Binding File.DeletedText}" FontSize="10.5" Foreground="#E5484D" FontFamily="Cascadia Mono, Consolas, monospace" />
+                  </StackPanel>
+                </Grid>
+              </Panel>
+            </TreeDataTemplate>
+          </TreeView.ItemTemplate>
+        </TreeView>
+      </DockPanel>
+      <GridSplitter Grid.Column="1" ResizeDirection="Columns" Background="#2B2F36" />
+
+      <!-- Middle: the overview, or the one open file -->
+      <DockPanel Grid.Column="2">
+        <Border DockPanel.Dock="Top" Background="#1F2328" BorderBrush="#30353C" BorderThickness="0,0,0,1">
+          <StackPanel Orientation="Horizontal">
+            <Border x:Name="OverviewTab" Classes="tab" Classes.active="{Binding IsOverview}">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <PathIcon Data="{StaticResource PullRequestIcon}" Width="12" Height="12" Foreground="#A9AFB8" />
+                <TextBlock Text="Overview" FontSize="12.5" Foreground="#E6E8EB" />
+              </StackPanel>
+            </Border>
+            <Border Classes="tab active" IsVisible="{Binding HasOpenFile}">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <views:ReviewBox State="{Binding SelectedFile.State}" />
+                <TextBlock Text="{Binding OpenFileTitle}" FontSize="12.5" Foreground="#E6E8EB" VerticalAlignment="Center" />
+              </StackPanel>
+            </Border>
+          </StackPanel>
+        </Border>
+
+        <Panel>
+          <!-- Overview -->
+          <ScrollViewer IsVisible="{Binding IsOverview}" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Margin="22,16" Spacing="18" MaxWidth="980" HorizontalAlignment="Left">
+              <TextBlock Text="Loading the pull request…" Classes="muted" IsVisible="{Binding IsLoading}" />
+
+              <!-- Since the last review -->
+              <Border Background="#2A2140" BorderBrush="#A371F7" BorderThickness="3,0,0,0" CornerRadius="3" Padding="12,8"
+                      IsVisible="{Binding CanShowSinceLastReview}">
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock Text="{Binding SinceLastReviewText}" FontSize="12.5" Foreground="#E6E8EB" TextWrapping="Wrap" VerticalAlignment="Center" />
+                  <Button Grid.Column="1" Classes="small" Content="Show only those" Command="{Binding ShowSinceLastReviewCommand}" Margin="12,0,0,0" />
+                </Grid>
+              </Border>
+
+              <!-- Description -->
+              <StackPanel Spacing="6">
+                <TextBlock Classes="section" Text="DESCRIPTION" />
+                <Border Background="#23272D" CornerRadius="4" Padding="12,10">
+                  <Panel>
+                    <views:MarkdownView Markdown="{Binding Pr.Body}" IsVisible="{Binding Pr.HasBody}" />
+                    <TextBlock Text="No description." Classes="muted" IsVisible="{Binding !Pr.HasBody}" />
+                  </Panel>
+                </Border>
+              </StackPanel>
+
+              <!-- Reviewers and checks side by side -->
+              <Grid ColumnDefinitions="*,24,*">
+                <StackPanel Spacing="6">
+                  <TextBlock Classes="section" Text="REVIEWERS" />
+                  <TextBlock Text="No reviewers yet." Classes="muted" IsVisible="{Binding !Pr.HasReviewers}" />
+                  <ItemsControl ItemsSource="{Binding Pr.Reviewers}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:ReviewerItem">
+                        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,2">
+                          <TextBlock Text="{Binding Name}" FontSize="12.5" Foreground="#E6E8EB" />
+                          <TextBlock Text="{Binding StateText}" FontSize="11.5" Foreground="{Binding StateBrush}" VerticalAlignment="Center" />
+                        </StackPanel>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+                <StackPanel Grid.Column="2" Spacing="6">
+                  <TextBlock Classes="section" Text="{Binding Pr.ChecksTabText, Converter={x:Static views:ReviewConverters.Upper}}" />
+                  <TextBlock Text="No checks." Classes="muted" IsVisible="{Binding !Pr.HasChecks}" />
+                  <ItemsControl ItemsSource="{Binding Pr.Checks}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:CheckItemViewModel">
+                        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,2">
+                          <Ellipse Width="8" Height="8" Fill="{Binding StatusBrush}" VerticalAlignment="Center" />
+                          <TextBlock Text="{Binding Name}" FontSize="12.5" Foreground="#E6E8EB" />
+                          <TextBlock Text="{Binding StatusText}" FontSize="11.5" Foreground="{Binding StatusBrush}" VerticalAlignment="Center" />
+                        </StackPanel>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+              </Grid>
+
+              <!-- Files: review state, size and comments -->
+              <StackPanel Spacing="6">
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock Classes="section" Text="FILES" />
+                  <TextBlock Grid.Column="1" Text="{Binding ProgressText}" Classes="muted" />
+                </Grid>
+                <ItemsControl ItemsSource="{Binding SourceFiles}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:ReviewFileItem">
+                      <Grid ColumnDefinitions="Auto,*,130,Auto,Auto" Margin="0,1">
+                        <Button Classes="reviewBox" ToolTip.Tip="{Binding StateText}"
+                                Command="{Binding $parent[views:PullRequestReviewView].((vm:PullRequestReviewViewModel)DataContext).ToggleReviewedCommand}"
+                                CommandParameter="{Binding}">
+                          <views:ReviewBox State="{Binding State}" />
+                        </Button>
+                        <Button Grid.Column="1" Classes="link" HorizontalAlignment="Left" Padding="6,0" ToolTip.Tip="Open the file"
+                                Command="{Binding $parent[views:PullRequestReviewView].((vm:PullRequestReviewViewModel)DataContext).OpenFileCommand}"
+                                CommandParameter="{Binding}">
+                          <TextBlock FontSize="12.5" TextTrimming="LeadingCharacterEllipsis">
+                            <Run Text="{Binding Folder, StringFormat='{}{0}/'}" Foreground="#6B727C" />
+                            <Run Text="{Binding FileName}" Foreground="#E6E8EB" />
+                          </TextBlock>
+                        </Button>
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0">
+                          <Border Background="#4CC38A" Width="{Binding AddedBarWidth}" Height="6" CornerRadius="1" />
+                          <Border Background="#E5484D" Width="{Binding DeletedBarWidth}" Height="6" CornerRadius="1" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="3" VerticalAlignment="Center" Margin="0,0,10,0" IsVisible="{Binding HasThreads}">
+                          <PathIcon Data="{StaticResource CommentIcon}" Width="11" Height="11" Foreground="#8A9099" />
+                          <TextBlock Text="{Binding ThreadText}" FontSize="11" Foreground="#8A9099" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" MinWidth="80">
+                          <TextBlock Text="{Binding AddedText}" FontSize="11" Foreground="#4CC38A" FontFamily="Cascadia Mono, Consolas, monospace" />
+                          <TextBlock Text="{Binding DeletedText}" FontSize="11" Foreground="#E5484D" FontFamily="Cascadia Mono, Consolas, monospace" />
+                        </StackPanel>
+                      </Grid>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <Expander IsVisible="{Binding HasGeneratedFiles}" Header="{Binding GeneratedHeader}" Padding="8,4">
+                  <ItemsControl ItemsSource="{Binding GeneratedFiles}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:ReviewFileItem">
+                        <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,1">
+                          <Button Classes="reviewBox" ToolTip.Tip="{Binding StateText}"
+                                  Command="{Binding $parent[views:PullRequestReviewView].((vm:PullRequestReviewViewModel)DataContext).ToggleReviewedCommand}"
+                                  CommandParameter="{Binding}">
+                            <views:ReviewBox State="{Binding State}" />
+                          </Button>
+                          <Button Grid.Column="1" Classes="link" HorizontalAlignment="Left" Padding="6,0" Content="{Binding Path}"
+                                  Command="{Binding $parent[views:PullRequestReviewView].((vm:PullRequestReviewViewModel)DataContext).OpenFileCommand}"
+                                  CommandParameter="{Binding}" Foreground="#8A9099" />
+                          <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding AddedText}" FontSize="11" Foreground="#4CC38A" FontFamily="Cascadia Mono, Consolas, monospace" />
+                            <TextBlock Text="{Binding DeletedText}" FontSize="11" Foreground="#E5484D" FontFamily="Cascadia Mono, Consolas, monospace" />
+                          </StackPanel>
+                        </Grid>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </Expander>
+              </StackPanel>
+
+              <!-- Commits -->
+              <StackPanel Spacing="6">
+                <TextBlock Classes="section" Text="{Binding CommitsHeader, Converter={x:Static views:ReviewConverters.Upper}}" />
+                <ItemsControl ItemsSource="{Binding Commits}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="x:String">
+                      <TextBlock Text="{Binding}" FontSize="12" Foreground="#C9CED6" FontFamily="Cascadia Mono, Consolas, monospace" Margin="0,1"
+                                 TextTrimming="CharacterEllipsis" />
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+
+              <TextBlock Classes="muted" TextWrapping="Wrap"
+                         Text="Keys: N / P next or previous file · J / K next or previous change · R mark reviewed and go to the next file · C comment · O overview · F5 reload" />
+            </StackPanel>
+          </ScrollViewer>
+
+          <!-- The open file -->
+          <DockPanel IsVisible="{Binding HasOpenFile}">
+            <Border DockPanel.Dock="Top" Background="#23272D" BorderBrush="#30353C" BorderThickness="0,0,0,1" Padding="10,5">
+              <Grid ColumnDefinitions="*,Auto">
+                <Grid ColumnDefinitions="Auto,*" VerticalAlignment="Center" Margin="0,0,10,0">
+                  <TextBlock Text="{Binding SelectedFile.Path}" FontFamily="Cascadia Mono, Consolas, monospace" FontSize="12" Foreground="#E6E8EB"
+                             VerticalAlignment="Center" TextTrimming="LeadingCharacterEllipsis" MaxWidth="420" />
+                  <Border Grid.Column="1" Background="#2A2140" CornerRadius="3" Padding="6,1" Margin="10,0,0,0" IsVisible="{Binding HasFileNote}"
+                          HorizontalAlignment="Left" ToolTip.Tip="{Binding FileNote}">
+                    <DockPanel>
+                      <Border DockPanel.Dock="Left" Width="3" Margin="0,0,6,0" Background="#A371F7"
+                              IsVisible="{Binding SinceReview, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                      <TextBlock Text="{Binding FileNote}" FontSize="11.5" Foreground="#D9CCFA" TextTrimming="CharacterEllipsis" />
+                    </DockPanel>
+                  </Border>
+                </Grid>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+                  <ToggleButton Classes="small" IsChecked="{Binding WholeFileDiff}" ToolTip.Tip="Show the whole file with the changes marked">
+                    <TextBlock Text="Whole file" />
+                  </ToggleButton>
+                  <StackPanel Orientation="Horizontal">
+                    <Button Classes="seg small" Classes.active="{Binding IsInlineDiff}" Command="{Binding SetDiffModeCommand}"
+                            CommandParameter="{x:Static vm:DiffViewMode.Inline}" CornerRadius="4,0,0,4" Content="Inline" />
+                    <Button Classes="seg small" Classes.active="{Binding IsSplitDiff}" Command="{Binding SetDiffModeCommand}"
+                            CommandParameter="{x:Static vm:DiffViewMode.Split}" CornerRadius="0,4,4,0" Content="Side by side" />
+                  </StackPanel>
+                  <Button Classes="accent small" Command="{Binding MarkReviewedAndNextCommand}" ToolTip.Tip="Mark this file reviewed and open the next one (R)">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <PathIcon Data="{StaticResource CheckIcon}" Width="11" Height="11" />
+                      <TextBlock Text="Reviewed, next" />
+                    </StackPanel>
+                  </Button>
+                  <Button Classes="small" Command="{Binding NextFileCommand}" ToolTip.Tip="Next file (N)">
+                    <PathIcon Data="{StaticResource ChevronIcon}" Width="11" Height="11" />
+                  </Button>
+                </StackPanel>
+              </Grid>
+            </Border>
+            <Panel>
+              <Grid ColumnDefinitions="*,Auto" RowDefinitions="*,Auto" IsVisible="{Binding !IsGeneratedHidden}">
+                <views:DiffView x:Name="DiffView" Diff="{Binding Diff}" Mode="{Binding DiffMode}" SinceReview="{Binding SinceReview}" />
+                <ScrollBar Grid.Column="1" x:Name="DiffScrollBar" Orientation="Vertical" AllowAutoHide="False" />
+                <ScrollBar Grid.Row="1" x:Name="DiffHScrollBar" Orientation="Horizontal" AllowAutoHide="False" IsVisible="False" />
+              </Grid>
+              <StackPanel IsVisible="{Binding IsGeneratedHidden}" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10">
+                <TextBlock Text="Generated file, hidden" FontSize="14" Foreground="#C9CED6" HorizontalAlignment="Center" />
+                <TextBlock Text="Lock files, generated code and build output are usually not worth reading line by line." Classes="muted" HorizontalAlignment="Center" />
+                <Button Classes="small" Content="Show anyway" Command="{Binding ShowGeneratedFileCommand}" HorizontalAlignment="Center" />
+              </StackPanel>
+            </Panel>
+          </DockPanel>
+        </Panel>
+      </DockPanel>
+      <GridSplitter Grid.Column="3" ResizeDirection="Columns" Background="#2B2F36" />
+
+      <!-- Right: conversation, checks, your pending review -->
+      <TabControl Grid.Column="4" Padding="0" Background="#23272D">
+        <TabItem Header="{Binding Pr.ConversationTabText}">
+          <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Margin="14,8" Spacing="10">
+              <ItemsControl ItemsSource="{Binding Pr.Conversation}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:ConversationItem">
+                    <StackPanel Spacing="3" Margin="0,0,0,10">
+                      <StackPanel Orientation="Horizontal" Spacing="6">
+                        <TextBlock Text="{Binding Author}" FontSize="12" FontWeight="SemiBold" Foreground="#E6E8EB" />
+                        <TextBlock Text="{Binding Verdict}" FontSize="11" Foreground="{Binding VerdictBrush}" IsVisible="{Binding HasVerdict}" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding When}" Classes="muted" VerticalAlignment="Center" />
+                      </StackPanel>
+                      <views:MarkdownView Markdown="{Binding Body}" BaseFontSize="12" IsVisible="{Binding HasBody}" />
+                    </StackPanel>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+              <StackPanel Spacing="4" IsVisible="{Binding Pr.HasFileThreads}">
+                <TextBlock Text="{Binding Pr.FileThreadsHeader}" FontSize="11" FontWeight="SemiBold" Foreground="#8A9099" />
+                <ItemsControl ItemsSource="{Binding Pr.FileThreads}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:ReviewThreadViewModel">
+                      <StackPanel Margin="0,0,0,6">
+                        <Button Classes="link" Content="{Binding Location}" HorizontalAlignment="Left" ToolTip.Tip="Open the file"
+                                Command="{Binding $parent[views:PullRequestReviewView].((vm:PullRequestReviewViewModel)DataContext).OpenThreadCommand}"
+                                CommandParameter="{Binding}" />
+                        <views:ReviewThreadView DataContext="{Binding}" />
+                      </StackPanel>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+              <StackPanel Spacing="6" Margin="0,4,0,8">
+                <TextBox Text="{Binding Pr.ConversationText}" PlaceholderText="Add a comment to the conversation" AcceptsReturn="True"
+                         TextWrapping="Wrap" MinHeight="60" FontSize="12" />
+                <Button Classes="accent small" Content="Comment" Command="{Binding Pr.SendConversationCommentCommand}" HorizontalAlignment="Left" />
+              </StackPanel>
+            </StackPanel>
+          </ScrollViewer>
+        </TabItem>
+
+        <TabItem Header="{Binding Pr.ChecksTabText}">
+          <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Margin="14,8" Spacing="2">
+              <TextBlock Text="No checks on this pull request." Classes="muted" IsVisible="{Binding !Pr.HasChecks}" />
+              <ItemsControl ItemsSource="{Binding Pr.Checks}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:CheckItemViewModel">
+                    <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,3">
+                      <Ellipse Width="8" Height="8" Fill="{Binding StatusBrush}" VerticalAlignment="Top" Margin="0,5,8,0" />
+                      <StackPanel Grid.Column="1" Spacing="1">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                          <TextBlock Text="{Binding Name}" FontSize="12" Foreground="#E6E8EB" TextTrimming="CharacterEllipsis" />
+                          <TextBlock Text="required" Classes="muted" IsVisible="{Binding IsRequired}" VerticalAlignment="Center" />
+                        </StackPanel>
+                        <TextBlock Text="{Binding Description}" Classes="muted" TextWrapping="Wrap" IsVisible="{Binding HasDescription}" />
+                      </StackPanel>
+                      <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Top">
+                        <TextBlock Text="{Binding StatusText}" FontSize="11" Foreground="{Binding StatusBrush}" VerticalAlignment="Center" />
+                        <Button Classes="link" Content="Details" IsVisible="{Binding HasDetailsUrl}" Margin="6,0,0,0"
+                                Command="{Binding $parent[views:PullRequestReviewView].((vm:PullRequestReviewViewModel)DataContext).OpenUrlCommand}"
+                                CommandParameter="{Binding DetailsUrl}" />
+                      </StackPanel>
+                    </Grid>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+          </ScrollViewer>
+        </TabItem>
+
+        <TabItem Header="Your review">
+          <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Margin="14,10" Spacing="10">
+              <TextBlock Text="{Binding ProgressText}" FontSize="12.5" Foreground="#E6E8EB" />
+              <TextBlock Classes="muted" TextWrapping="Wrap" IsVisible="{Binding !Pr.HasPending}"
+                         Text="No line comments yet. Hover a line in a file and click + to add one, then choose Add to review." />
+              <ItemsControl ItemsSource="{Binding Pr.Pending}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:PendingCommentViewModel">
+                    <Border Background="#262A31" CornerRadius="4" Padding="10,6" Margin="0,0,0,6">
+                      <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
+                        <TextBlock Text="{Binding Location}" FontFamily="Cascadia Mono, Consolas, monospace" FontSize="11" Foreground="#9DC4EA" />
+                        <Button Grid.Column="1" Classes="link" Content="Remove" Command="{Binding RemoveCommand}" />
+                        <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Text="{Binding Body}" FontSize="12" Foreground="#C9CED6" TextWrapping="Wrap" Margin="0,4,0,0" />
+                      </Grid>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+              <Button Classes="accent" Command="{Binding SubmitReviewCommand}" IsVisible="{Binding Pr.CanReview}" HorizontalAlignment="Left">
+                <TextBlock Text="{Binding ReviewButtonText}" />
+              </Button>
+            </StackPanel>
+          </ScrollViewer>
+        </TabItem>
+      </TabControl>
+    </Grid>
+  </DockPanel>
+</UserControl>
