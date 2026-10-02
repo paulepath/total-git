@@ -33,6 +33,10 @@
     <Style Selector="ListBox#TabStrip ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="Background" Value="{StaticResource ToolbarBackgroundBrush}" />
     </Style>
+    <!-- A coloured tab: tinted, a little stronger when selected. -->
+    <Style Selector="ListBox#TabStrip ListBoxItem:selected Border.tabTint" x:DataType="vm:RepositoryViewModel">
+      <Setter Property="Background" Value="{Binding TabTintStrong}" />
+    </Style>
     <Style Selector="ListBox#TabStrip ListBoxItem:selected TextBlock.tabTitle">
       <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
     </Style>
@@ -72,16 +76,23 @@
         </ListBox.ItemsPanel>
         <ListBox.ItemTemplate>
           <DataTemplate x:DataType="vm:RepositoryViewModel">
-            <Grid ColumnDefinitions="Auto,*,Auto" Height="32" MinWidth="120" MaxWidth="240" Background="Transparent"
-                  ToolTip.Tip="{Binding TabPath}">
-              <PathIcon Data="{StaticResource FolderIcon}" Width="12" Height="12" Margin="12,0,8,0" Foreground="#8A9099" />
-              <TextBlock Grid.Column="1" Classes="tabTitle" Text="{Binding TabTitle}" FontSize="12" Foreground="#A9AFB8"
-                         VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-              <Button Grid.Column="2" Classes="tabClose" Margin="6,0,6,0" ToolTip.Tip="Close tab (Ctrl+W)"
-                      Command="{Binding $parent[Window].((vm:ShellViewModel)DataContext).CloseTabCommand}" CommandParameter="{Binding}">
-                <PathIcon Data="{StaticResource CloseIcon}" Width="9" Height="9" />
-              </Button>
-            </Grid>
+            <Panel Height="32" MinWidth="120" MaxWidth="240" ToolTip.Tip="{Binding TabPath}" Background="Transparent">
+              <!-- The repository's colour: a tint and a bar along the top. -->
+              <Border Classes="tabTint" Background="{Binding TabTint}" CornerRadius="6,6,0,0" />
+              <Border Height="3" VerticalAlignment="Top" Background="{Binding TabAccent}" CornerRadius="6,6,0,0" />
+              <Grid ColumnDefinitions="Auto,*,Auto">
+                <Panel Margin="12,0,8,0" VerticalAlignment="Center">
+                  <Image Source="{Binding TabIcon}" Width="14" Height="14" IsVisible="{Binding HasTabIcon}" />
+                  <PathIcon Data="{StaticResource FolderIcon}" Width="12" Height="12" Foreground="#8A9099" IsVisible="{Binding HasNoTabIcon}" />
+                </Panel>
+                <TextBlock Grid.Column="1" Classes="tabTitle" Text="{Binding TabTitle}" FontSize="12" Foreground="#A9AFB8"
+                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                <Button Grid.Column="2" Classes="tabClose" Margin="6,0,6,0" ToolTip.Tip="Close tab (Ctrl+W)"
+                        Command="{Binding $parent[Window].((vm:ShellViewModel)DataContext).CloseTabCommand}" CommandParameter="{Binding}">
+                  <PathIcon Data="{StaticResource CloseIcon}" Width="9" Height="9" />
+                </Button>
+              </Grid>
+            </Panel>
           </DataTemplate>
         </ListBox.ItemTemplate>
       </ListBox>

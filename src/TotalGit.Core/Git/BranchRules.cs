@@ -27,6 +27,16 @@ public sealed class BranchRule
     /// <summary>Colour for a recolourable icon (<c>#E5A33B</c>), or null for the icon's own.</summary>
     public string? IconColor { get; set; }
 
+    /// <summary>
+    /// Matching branches are main lines (main, features, bugs…): the graph draws their line thicker. Null (rules
+    /// saved before this setting existed) means the built-in main, features and bugs icons decide.
+    /// </summary>
+    public bool? MainLine { get; set; }
+
+    /// <summary>Whether matching branches are drawn as main lines, with <see cref="MainLine"/> unset falling back to the icon.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsMainLine => MainLine ?? Icon is "builtin:main" or "builtin:features" or "builtin:bugs";
+
     public BranchRule Clone() => (BranchRule)MemberwiseClone();
 
     /// <summary>The part of the pattern before its first wildcard ("bug/" for "bug/*").</summary>
@@ -73,13 +83,13 @@ public sealed class BranchRuleSet
     /// </summary>
     public static List<BranchRule> Defaults() =>
     [
-        new() { Pattern = "main", Icon = "builtin:main" },
-        new() { Pattern = "master", Icon = "builtin:main" },
+        new() { Pattern = "main", Icon = "builtin:main", MainLine = true },
+        new() { Pattern = "master", Icon = "builtin:main", MainLine = true },
         new() { Pattern = "feature/*", Icon = "builtin:feature", GroupUnder = "features" },
-        new() { Pattern = "features/*", Icon = "builtin:features" },
+        new() { Pattern = "features/*", Icon = "builtin:features", MainLine = true },
         new() { Pattern = "bug/*", Icon = "builtin:bug", GroupUnder = "bugs" },
         new() { Pattern = "bugfix/*", Icon = "builtin:bug" },
-        new() { Pattern = "bugs/*", Icon = "builtin:bugs" },
+        new() { Pattern = "bugs/*", Icon = "builtin:bugs", MainLine = true },
         new() { Pattern = "hot-fix/*", Icon = "builtin:hot-fix" },
         new() { Pattern = "hotfix/*", Icon = "builtin:hot-fix" },
     ];

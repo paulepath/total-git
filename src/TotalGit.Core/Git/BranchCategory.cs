@@ -24,6 +24,9 @@ public static class BranchCategory
         return (KindOf(match.Rule), match.ShortName);
     }
 
+    /// <summary>Whether a branch is a main line (its rule says so): the graph draws its line thicker.</summary>
+    public static bool IsMainLine(string? name) => BranchRuleSet.Current.Match(name).Rule?.IsMainLine == true;
+
     /// <summary>The kind of a folder name in the sidebar tree ("feature", "bugs", "hot-fix").</summary>
     public static BranchKind ForFolder(string folder) => KindOf(BranchRuleSet.Current.ForFolder(folder));
 

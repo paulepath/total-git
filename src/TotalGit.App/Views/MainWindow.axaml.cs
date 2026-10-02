@@ -30,6 +30,14 @@ public partial class MainWindow : Window, IDialogService
             TitleRow.IsVisible = false;
         }
 
+        // Right-click on a tab: its colour and icon, copy or reveal its folder, close it or the others.
+        TabStrip.ContextRequested += (_, e) =>
+        {
+            if (_shell is null || (e.Source as Control)?.DataContext is not RepositoryViewModel tab) return;
+            RepositoryView.ShowMenu(TabStrip, _shell.ActionsForTab(tab));
+            e.Handled = true;
+        };
+
         KeyDown += (_, e) =>
         {
             if (e.Key == Key.F && e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Alt))
@@ -241,6 +249,9 @@ public partial class MainWindow : Window, IDialogService
 
     public Task<bool> ShowRebaseCommitsAsync(RebaseCommitsViewModel viewModel) =>
         Zoomed(new RebaseCommitsDialog { DataContext = viewModel }).ShowDialog<bool>(this);
+
+    public Task<bool> ShowTabStyleAsync(TabStyleViewModel viewModel) =>
+        Zoomed(new TabStyleDialog { DataContext = viewModel }).ShowDialog<bool>(this);
 
     public Task<bool> ShowBranchRulesAsync(BranchRulesViewModel viewModel) =>
         Zoomed(new BranchRulesDialog { DataContext = viewModel }).ShowDialog<bool>(this);

@@ -5,6 +5,28 @@
              x:Class="TotalGit.App.Views.RepositoryView"
              x:DataType="vm:RepositoryViewModel">
   <!-- One repository tab: toolbar, banner, sidebar, graph/diff and details. -->
+  <UserControl.Styles>
+    <Style Selector="Button.recentTile">
+      <Setter Property="Background" Value="#23272D" />
+      <Setter Property="BorderBrush" Value="#30353C" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="6" />
+    </Style>
+    <Style Selector="Button.recentTile:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#2B3038" />
+      <Setter Property="BorderBrush" Value="#4A505A" />
+    </Style>
+    <Style Selector="Button.tileRemove">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Padding" Value="5" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="Opacity" Value="0" />
+    </Style>
+    <!-- The remove button shows on hover, and always on a tile whose folder has gone. -->
+    <Style Selector="Button.recentTile:pointerover Button.tileRemove, Button.recentTile.missing Button.tileRemove">
+      <Setter Property="Opacity" Value="1" />
+    </Style>
+  </UserControl.Styles>
   <DockPanel>
     <!-- Toolbar -->
     <Border DockPanel.Dock="Top" Background="{StaticResource ToolbarBackgroundBrush}" Padding="10,6">
@@ -314,11 +336,83 @@
           </Grid>
         </DockPanel>
 
-        <StackPanel IsVisible="{Binding ShowEmptyState}" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12">
-          <TextBlock Text="Open a git repository to view its history" FontSize="16"
-                     Foreground="{StaticResource MutedTextBrush}" HorizontalAlignment="Center" />
-          <Button Content="Open repository..." Command="{Binding OpenRepositoryCommand}" HorizontalAlignment="Center" />
-        </StackPanel>
+        <!-- A new tab: open a folder, or pick one of the repositories opened before. -->
+        <ScrollViewer IsVisible="{Binding ShowEmptyState}" HorizontalScrollBarVisibility="Disabled">
+          <StackPanel Margin="40,36" Spacing="14" MaxWidth="1180" HorizontalAlignment="Center">
+            <Grid ColumnDefinitions="*,Auto">
+              <StackPanel Spacing="4">
+                <TextBlock Text="Open a repository" FontSize="20" FontWeight="SemiBold" Foreground="#E6E8EB" />
+                <TextBlock Text="Pick one you've opened before, or open another folder." Foreground="{StaticResource MutedTextBrush}" />
+              </StackPanel>
+              <Button Grid.Column="1" Classes="accent" Command="{Binding OpenRepositoryCommand}" VerticalAlignment="Center">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <PathIcon Data="{StaticResource FolderIcon}" Width="13" Height="13" />
+                  <TextBlock Text="Open folder…" />
+                </StackPanel>
+              </Button>
+            </Grid>
+
+            <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding HasRecent}" Margin="0,10,0,0">
+              <TextBlock Text="RECENT" FontSize="10.5" FontWeight="SemiBold" Foreground="#7D848E" LetterSpacing="0.8" VerticalAlignment="Center" />
+              <TextBox Grid.Column="1" Text="{Binding RecentFilter}" PlaceholderText="Filter" Width="220" IsVisible="{Binding ShowRecentFilter}" />
+            </Grid>
+
+            <ItemsControl x:Name="RecentTiles" ItemsSource="{Binding RecentItems}">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <WrapPanel Orientation="Horizontal" />
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:RecentRepositoryItem">
+                  <Button Classes="recentTile" Classes.missing="{Binding IsMissing}" Width="272" Height="104" Margin="0,0,12,12" Padding="0"
+                          HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"
+                          Command="{Binding $parent[views:RepositoryView].((vm:RepositoryViewModel)DataContext).OpenRecentCommand}"
+                          CommandParameter="{Binding}" ToolTip.Tip="{Binding Path}"
+                          Opacity="{Binding Exists, Converter={x:Static vm:Converters.DimWhenFalse}}">
+                    <Panel>
+                      <Border Background="{Binding Tint}" CornerRadius="6" />
+                      <Border Width="4" HorizontalAlignment="Left" Background="{Binding Accent}" CornerRadius="6,0,0,6" />
+                      <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,*,Auto" Margin="14,10,10,10">
+                        <Panel Grid.RowSpan="2" Width="28" Height="28" Margin="0,2,10,0" VerticalAlignment="Top">
+                          <Image Source="{Binding Icon}" Width="22" Height="22" IsVisible="{Binding HasIcon}" />
+                          <PathIcon Data="{StaticResource FolderIcon}" Width="20" Height="20" Foreground="#8A9099" IsVisible="{Binding HasNoIcon}" />
+                        </Panel>
+                        <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" Foreground="#E6E8EB"
+                                   TextTrimming="CharacterEllipsis" Margin="0,0,22,0" />
+                        <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Spacing="5" Margin="0,3,0,0">
+                          <Image Source="{Binding BranchIcon}" Width="12" Height="12" IsVisible="{Binding HasBranchIcon}" VerticalAlignment="Center" />
+                          <PathIcon Data="{StaticResource BranchIcon}" Width="11" Height="11" Foreground="#8A9099" VerticalAlignment="Center">
+                            <PathIcon.IsVisible>
+                              <MultiBinding Converter="{x:Static BoolConverters.And}">
+                                <Binding Path="HasBranch" />
+                                <Binding Path="!HasBranchIcon" />
+                              </MultiBinding>
+                            </PathIcon.IsVisible>
+                          </PathIcon>
+                          <TextBlock Text="{Binding BranchDisplay}" FontSize="12" Foreground="#9DC4EA" IsVisible="{Binding HasBranch}"
+                                     FontFamily="Cascadia Mono, Consolas, monospace" TextTrimming="CharacterEllipsis" MaxWidth="190" />
+                          <TextBlock Text="Folder not found" FontSize="12" Foreground="#E5484D" IsVisible="{Binding IsMissing}" />
+                        </StackPanel>
+                        <TextBlock Grid.Row="3" Grid.ColumnSpan="2" Text="{Binding Path}" FontSize="11" Foreground="#6B727C"
+                                   TextTrimming="LeadingCharacterEllipsis" />
+                        <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Text="{Binding OpenedText}" FontSize="11" Foreground="#8A9099"
+                                   VerticalAlignment="Bottom" Margin="0,0,0,2" />
+                      </Grid>
+                      <!-- Forget this repository (only the entry; nothing on disk changes). -->
+                      <Button Classes="tileRemove" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,6,6,0"
+                              ToolTip.Tip="Remove from recent"
+                              Command="{Binding $parent[views:RepositoryView].((vm:RepositoryViewModel)DataContext).RemoveRecentCommand}"
+                              CommandParameter="{Binding}">
+                        <PathIcon Data="{StaticResource CloseIcon}" Width="9" Height="9" />
+                      </Button>
+                    </Panel>
+                  </Button>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </ScrollViewer>
 
         <TextBlock IsVisible="{Binding IsLoading}" Text="Loading repository..." FontSize="16"
                    Foreground="{StaticResource MutedTextBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />

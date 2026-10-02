@@ -96,6 +96,8 @@
           <TextBlock Classes="hint" Text="In the sidebar, put these branches under this name, e.g. bugs. If a branch has that name, its row holds them." />
           <CheckBox IsChecked="{Binding HidePrefix}" Margin="0,8,0,0" FontSize="12"
                     Content="Show names without the pattern's prefix (fix-login rather than bug/fix-login)" />
+          <CheckBox IsChecked="{Binding MainLine}" Margin="0,4,0,0" FontSize="12"
+                    Content="Main line: draw these branches' line thicker in the graph (like main, features, bugs)" />
 
           <TextBlock Classes="field" Text="Icon" />
           <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,6">

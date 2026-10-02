@@ -83,6 +83,12 @@ public partial class RepositoryView : UserControl
             if (_vm is not null) ShowMenu(control, _vm.ActionsForFile(file));
         };
         DetailsView.CopyRequested += sha => _ = _vm?.Dialogs?.CopyToClipboardAsync(sha);
+        RecentTiles.ContextRequested += (_, e) =>
+        {
+            if (_vm is null || (e.Source as Control)?.DataContext is not RecentRepositoryItem item) return;
+            ShowMenu(RecentTiles, _vm.ActionsForRecent(item));
+            e.Handled = true;
+        };
         WorktreeChangesPane.OpenTabRequested += wt => _vm?.OpenWorktreeInTabCommand.Execute(wt);
         WorktreeChangesPane.OpenInCodeRequested += path => _vm?.OpenInVsCodeCommand.Execute(path);
         WorktreeChangesPane.FileContextRequested += (file, folder, control) =>
@@ -164,7 +170,7 @@ public partial class RepositoryView : UserControl
         save?.Save();
     }
 
-    private static ContextMenu? ShowMenu(Control target, IReadOnlyList<MenuAction> actions)
+    internal static ContextMenu? ShowMenu(Control target, IReadOnlyList<MenuAction> actions)
     {
         if (actions.Count == 0) return null;
         var menu = new ContextMenu

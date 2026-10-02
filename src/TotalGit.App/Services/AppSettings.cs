@@ -12,6 +12,15 @@ public sealed class RepoSettings
     /// <summary>The Jira site ticket keys in pull request titles link to, e.g. https://example.atlassian.net.</summary>
     public string? JiraUrl { get; set; }
 
+    /// <summary>The colour of this repository's tabs (#RRGGBB), or null for none.</summary>
+    public string? TabColor { get; set; }
+
+    /// <summary>The icon of this repository's tabs (an icon library id), or null for the folder icon.</summary>
+    public string? TabIcon { get; set; }
+
+    /// <summary>The name its tabs show instead of the folder's name, or null for the folder's name.</summary>
+    public string? TabName { get; set; }
+
     /// <summary>The graph shows only the current branch's line down to the main branch.</summary>
     public bool CurrentBranchOnly { get; set; }
 
@@ -97,6 +106,63 @@ public sealed class AppSettings
 
     public Dictionary<string, RepoSettings> Repositories { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>Repositories opened before, most recently opened first (shown as tiles on a new tab).</summary>
+    public List<RecentRepository>? RecentRepositories { get; set; }
+
+    private const int MaxRecent = 30;
+
+    /// <summary>The recent repositories; the first time, made from the repositories and tabs already known.</summary>
+    public IReadOnlyList<RecentRepository> Recent()
+    {
+        if (RecentRepositories is null)
+        {
+            RecentRepositories = Repositories.Keys
+                .Concat(OpenTabs ?? [])
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Select(p => new RecentRepository(p, Path.GetFileName(Path.TrimEndingDirectorySeparator(p)), DateTimeOffset.MinValue))
+                .Take(MaxRecent)
+                .ToList();
+        }
+        return RecentRepositories;
+    }
+
+    /// <summary>Records a repository as just opened (moving it to the front).</summary>
+    public void TouchRecent(string path, string name)
+    {
+        var list = Recent().Where(r => !string.Equals(r.Path, path, StringComparison.OrdinalIgnoreCase)).ToList();
+        list.Insert(0, new RecentRepository(path, name, DateTimeOffset.Now));
+        RecentRepositories = list.Take(MaxRecent).ToList();
+        Save();
+    }
+
+    public void RemoveRecent(string path)
+    {
+        RecentRepositories = Recent().Where(r => !string.Equals(r.Path, path, StringComparison.OrdinalIgnoreCase)).ToList();
+        Save();
+    }
+
+    /// <summary>Raised when a repository's tab colour or icon changes, so every tab of it (and the tiles) update.</summary>
+    public event Action<string>? TabStyleChanged;
+
+    public void SetTabStyle(string mainRoot, string? colour, string? icon)
+    {
+        var repo = ForRepository(mainRoot);
+        repo.TabColor = colour;
+        repo.TabIcon = icon;
+        Save();
+        TabStyleChanged?.Invoke(mainRoot);
+    }
+
+    public void SetTabName(string mainRoot, string? name)
+    {
+        ForRepository(mainRoot).TabName = string.IsNullOrWhiteSpace(name) ? null : name.Trim();
+        Save();
+        TabStyleChanged?.Invoke(mainRoot);
+    }
+
+    /// <summary>A repository's saved settings, if it has any (without creating them).</summary>
+    public RepoSettings? FindRepository(string mainRoot) => Repositories.GetValueOrDefault(mainRoot);
+
     public RepoSettings ForRepository(string mainRoot)
     {
         if (!Repositories.TryGetValue(mainRoot, out var s)) Repositories[mainRoot] = s = new RepoSettings();
@@ -128,3 +194,6 @@ public sealed class AppSettings
         catch (IOException) { }
     }
 }
+
+/// <summary>A repository opened before: its folder (the main working directory), name and when it was last opened.</summary>
+public sealed record RecentRepository(string Path, string Name, DateTimeOffset LastOpened);

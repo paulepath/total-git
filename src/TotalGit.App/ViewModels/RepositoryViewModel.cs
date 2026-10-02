@@ -60,6 +60,7 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
         Avatars = avatars;
         Sidebar.Avatars = avatars;
         IconLibrary.Changed += OnBranchRulesChanged;
+        settings.TabStyleChanged += OnTabStyleChanged;
         PendingPath = path;
         if (path is not null) RepositoryName = Path.GetFileName(Path.TrimEndingDirectorySeparator(path));
         DiffMode = Enum.TryParse<DiffViewMode>(settings.DiffMode, out var mode) ? mode : DiffViewMode.Inline;
@@ -76,7 +77,10 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
 
     /// <summary>Tab header: repository, plus the worktree when viewing a linked one.</summary>
     public string TabTitle => IsEmptyTab && LoadError is null ? "New tab"
-        : WorktreeName is null ? RepositoryName : $"{RepositoryName} › {WorktreeName}";
+        : WorktreeName is null ? TabDisplayName : $"{TabDisplayName} › {WorktreeName}";
+
+    /// <summary>The repository's name on its tab: the one the user gave it, else the folder's.</summary>
+    private string TabDisplayName => TabSettings?.TabName ?? RepositoryName;
 
     [ObservableProperty]
     public partial bool IsSelected { get; set; }
@@ -104,6 +108,7 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
         _session = null;
         Sidebar.Avatars = null; // the cache is shared by every tab
         IconLibrary.Changed -= OnBranchRulesChanged;
+        _settings.TabStyleChanged -= OnTabStyleChanged;
         _wfTimer?.Stop();
         _wfProvider = null;
     }
@@ -298,6 +303,8 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
             OnPropertyChanged(nameof(TabPath));
             OnPropertyChanged(nameof(IsEmptyTab));
             OnPropertyChanged(nameof(TabTitle));
+            if (!sameRepo) _settings.TouchRecent(state.MainWorkingDirectory, state.RepositoryName);
+            RefreshTabStyle();
             Loaded?.Invoke();
         }
         catch (Exception ex) when (ex is RepositoryOpenException or LibGit2Sharp.LibGit2SharpException or IOException or GitCommandException)
@@ -1323,6 +1330,8 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
     private void OnBranchRulesChanged()
     {
         Sidebar.RefreshRules();
+        // Which lines are main lines (drawn thicker) comes from the rules too.
+        if (_state is not null && Graph is not null) RebuildGraph();
         OnPropertyChanged(nameof(CurrentBranchDisplay));
         OnPropertyChanged(nameof(CurrentBranchIcon));
         OnPropertyChanged(nameof(HasCurrentBranchIcon));

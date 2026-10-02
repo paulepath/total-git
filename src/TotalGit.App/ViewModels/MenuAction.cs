@@ -92,6 +92,7 @@ public interface IDialogService
     Task<bool> ShowBranchCleanupAsync(BranchCleanupViewModel viewModel);
     Task<bool> ShowRebaseCommitsAsync(RebaseCommitsViewModel viewModel);
     Task<bool> ShowBranchRulesAsync(BranchRulesViewModel viewModel);
+    Task<bool> ShowTabStyleAsync(TabStyleViewModel viewModel);
     Task CopyToClipboardAsync(string text);
     Task RevealFolderAsync(string path);
 }

@@ -21,7 +21,12 @@ public sealed partial class BranchRuleItem : ObservableObject
         HidePrefix = rule.HidePrefix;
         Icon = rule.Icon;
         IconColor = rule.IconColor;
+        MainLine = rule.IsMainLine;
     }
+
+    /// <summary>Matching branches are main lines, drawn with a thicker line in the graph.</summary>
+    [ObservableProperty]
+    public partial bool MainLine { get; set; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(Summary))]
@@ -70,6 +75,7 @@ public sealed partial class BranchRuleItem : ObservableObject
         HidePrefix = HidePrefix,
         Icon = Icon,
         IconColor = IconColor,
+        MainLine = MainLine,
     };
 }
 

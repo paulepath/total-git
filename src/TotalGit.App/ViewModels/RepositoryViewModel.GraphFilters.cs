@@ -191,14 +191,14 @@ public partial class RepositoryViewModel
     }
 
     /// <summary>
-    /// The main-line branches' first-parent lines (main/master, features, bugs, as the branch rules classify them),
+    /// The main-line branches' first-parent lines (those whose branch rule is marked "main line"),
     /// drawn heavier. Worked out on the loaded history, so a line stays heavy across commits the filters hide.
     /// </summary>
     private static HashSet<string> TrunkCommits(IReadOnlyList<CommitInfo> commits, RepositoryState state)
     {
         var tips = state.Refs
             .Where(r => r.Kind is RefKind.LocalBranch or RefKind.RemoteBranch
-                        && BranchCategory.Classify(r.ShortName).Kind is BranchKind.Main or BranchKind.Features or BranchKind.Bugs)
+                        && BranchCategory.IsMainLine(r.ShortName))
             .Select(r => r.TargetSha);
         return FirstParentLines(commits, tips);
     }

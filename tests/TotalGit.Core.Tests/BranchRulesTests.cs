@@ -83,4 +83,23 @@ public sealed class BranchRulesTests
         Assert.Equal("lucide:wrench", rules.ForFolder("fixes")!.Icon);
         Assert.Null(rules.ForFolder("other"));
     }
+
+    [Fact]
+    public void Main_lines_come_from_the_rule_or_for_older_rules_its_icon()
+    {
+        var rules = new BranchRuleSet(
+        [
+            new() { Pattern = "develop", Icon = "lucide:git-branch", MainLine = true },
+            new() { Pattern = "release/*", Icon = "builtin:main", MainLine = false },
+            new() { Pattern = "trunk", Icon = "builtin:main" },        // saved before the setting: the icon decides
+            new() { Pattern = "features/*", Icon = "lucide:star" },    // a user's own icon, no setting: not a main line
+        ]);
+
+        Assert.True(rules.Match("develop").Rule!.IsMainLine);
+        Assert.False(rules.Match("release/2.4").Rule!.IsMainLine);
+        Assert.True(rules.Match("trunk").Rule!.IsMainLine);
+        Assert.False(rules.Match("features").Rule!.IsMainLine);
+        Assert.Equal(["main", "master", "features/*", "bugs/*"],
+            BranchRuleSet.Defaults().Where(r => r.MainLine == true).Select(r => r.Pattern));
+    }
 }

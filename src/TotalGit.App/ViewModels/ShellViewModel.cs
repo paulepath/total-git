@@ -144,6 +144,33 @@ public partial class ShellViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private void CloseOtherTabs(RepositoryViewModel? keep)
+    {
+        keep ??= SelectedTab;
+        if (keep is null) return;
+        foreach (var tab in Tabs.Where(t => t != keep).ToList()) CloseTab(tab);
+        SelectedTab = keep;
+    }
+
+    /// <summary>Right-click on a tab.</summary>
+    public IReadOnlyList<MenuAction> ActionsForTab(RepositoryViewModel tab)
+    {
+        var actions = new List<MenuAction>();
+        if (tab.TabPath is { } path)
+        {
+            actions.Add(new MenuAction("Rename tab…", tab.RenameTabCommand));
+            actions.Add(new MenuAction("Colour and icon…", tab.EditTabStyleCommand));
+            actions.Add(MenuAction.Separator);
+            actions.Add(new MenuAction("Copy path", tab.CopyCommand, path, Icon: MenuIcons.Copy));
+            actions.Add(new MenuAction("Reveal in Explorer", tab.RevealCommand, path, Icon: MenuIcons.Folder));
+            actions.Add(MenuAction.Separator);
+        }
+        actions.Add(new MenuAction("Close tab", CloseTabCommand, tab, Icon: MenuIcons.Delete));
+        actions.Add(new MenuAction("Close other tabs", CloseOtherTabsCommand, tab, IsEnabled: Tabs.Count > 1));
+        return actions;
+    }
+
+    [RelayCommand]
     private void NextTab() => MoveSelection(1);
 
     [RelayCommand]
