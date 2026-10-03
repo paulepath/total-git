@@ -141,6 +141,30 @@ public static class GitActions
     public static Task DeleteRemoteTagAsync(string worktree, string remote, string name) =>
         GitCli.RunAsync(worktree, "push", remote, $":refs/tags/{name}");
 
+    /// <summary>Deletes a branch on the remote (its remote-tracking branch goes too). Local branches are kept.</summary>
+    public static Task DeleteRemoteBranchAsync(string worktree, string remote, string branch) =>
+        GitCli.RunAsync(worktree, "push", remote, "--delete", $"refs/heads/{branch}");
+
+    /// <summary>
+    /// The authors of a branch's own commits, newest first: those reachable from <paramref name="tip"/> but not from
+    /// <paramref name="exclude"/> (the main lines), merges left out. For branches beyond the loaded history.
+    /// </summary>
+    public static async Task<IReadOnlyList<OwnCommit>> OwnCommitsAsync(string worktree, string tip, IEnumerable<string> exclude, int max = 200)
+    {
+        var result = await GitCli.RunAsync(worktree,
+            ["log", "--no-merges", "--first-parent", $"-n{max}", "--format=%H%x00%an%x00%ae%x00%ct", tip, "--not", .. exclude, "--"],
+            throwOnError: false);
+        if (result.ExitCode != 0) return [];
+        var list = new List<OwnCommit>();
+        foreach (var line in result.StdOut.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var p = line.TrimEnd('\r').Split('\0');
+            if (p.Length < 4) continue;
+            list.Add(new OwnCommit(p[0], p[1], p[2], long.TryParse(p[3], out var t) ? DateTimeOffset.FromUnixTimeSeconds(t) : default));
+        }
+        return list;
+    }
+
     /// <summary>The rules of <c>git check-ref-format</c> for a branch or tag name.</summary>
     public static bool IsValidRefName(string name)
     {

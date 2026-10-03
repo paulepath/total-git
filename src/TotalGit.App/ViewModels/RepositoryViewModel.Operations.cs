@@ -37,6 +37,33 @@ public partial class RepositoryViewModel
         await RefreshRefsAsync();
     }
 
+    /// <summary>Deletes a branch on its remote, for everyone. Local branches (even ones tracking it) are kept.</summary>
+    [RelayCommand]
+    private async Task DeleteRemoteBranchAsync(BranchTarget target)
+    {
+        if (_state is null || Dialogs is null || target is not { Kind: RefKind.RemoteBranch, RemoteName: { } remote }) return;
+        var branch = target.ShortName;
+        var details = new List<string>();
+        var tip = _commits.FirstOrDefault(c => c.Sha == target.Sha);
+        if (tip is not null) details.Add($"Newest commit: {tip.ShortSha} {tip.MessageShort} ({tip.AuthorName})");
+        if (_pullRequests.FirstOrDefault(p => !p.IsCrossRepository && p.HeadRef == branch) is { } pr)
+            details.Add($"Pull request #{pr.Number} \"{pr.Title}\" uses this branch: deleting it closes the pull request.");
+        var tracking = _state.Refs.Where(r => r.Kind == RefKind.LocalBranch && r.Upstream == target.Name).Select(r => r.Name).ToList();
+        if (tracking.Count > 0) details.Add($"Kept: your local branch {string.Join(", ", tracking)} (it will show as deleted on the remote).");
+
+        if (!await Dialogs.ConfirmAsync("Delete branch from remote",
+                $"Delete '{branch}' from {remote}? This removes it for everyone who uses {remote}.", details, "Delete from remote"))
+            return;
+        if (BranchCategory.IsMainLine(branch) && !await Dialogs.ConfirmAsync("Delete a main line",
+                $"'{branch}' is a main line (its branch rule marks it as one). Other branches are probably based on it. Really delete it from {remote}?",
+                null, "Delete it"))
+            return;
+
+        var wt = _state.WorkingDirectory;
+        await RunGitAsync($"Deleting {branch} from {remote}…", () => GitActions.DeleteRemoteBranchAsync(wt, remote, branch),
+            $"Deleted {branch} from {remote}.");
+    }
+
     /// <summary>Local branches whose remote branch was deleted and which aren't checked out anywhere.</summary>
     private List<RefInfo> GoneBranches() => _state?.Refs
         .Where(r => r is { Kind: RefKind.LocalBranch, UpstreamGone: true, IsCurrent: false }

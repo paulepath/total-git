@@ -457,6 +457,7 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
 
         HasStashes = state.Stashes.Count > 0;
         UpdateOperationBanner();
+        LoadJiraProjects(state);
         Sidebar.Update(state.Refs, state.Stashes, _worktrees, WorktreeService.FindLeftovers(state.MainWorkingDirectory, _worktrees), state.WorkingDirectory);
     }
 
@@ -491,6 +492,7 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
             wip) { Folds = projected.Folds, ShownAs = projected.ShownAs };
         UpdateFilterSummary(projected.Commits.Count);
         UpdateCommitCount();
+        UpdateBranchOwners(state);
     }
 
     private void UpdateCommitCount()
@@ -1233,6 +1235,10 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
                 actions.Add(new MenuAction("Create branch here…", CreateBranchCommand, target, Icon: MenuIcons.Branch));
                 actions.Add(new MenuAction("Create tag here…", CreateTagCommand, target, Icon: MenuIcons.Tag));
                 actions.Add(new MenuAction("Copy branch name", CopyCommand, target.Name, Icon: MenuIcons.Copy));
+                // The remote's default branch can't be deleted (the host refuses, and everything is based on it).
+                var isDefault = _state?.DefaultBranch is { } main && (main == target.ShortName || main == target.Name);
+                dangerous.Add(new MenuAction(isDefault ? "Delete from remote (default branch)" : "Delete from remote…",
+                    DeleteRemoteBranchCommand, target, IsEnabled: !isDefault, Icon: MenuIcons.Delete));
                 break;
             case RefKind.Tag:
                 actions.Add(new MenuAction("Create worktree from tag…", CreateWorktreeCommand, target, Icon: MenuIcons.Worktree));
@@ -1242,6 +1248,9 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
                 dangerous.Add(new MenuAction("Delete tag from remote…", DeleteRemoteTagCommand, target, Icon: MenuIcons.Delete));
                 break;
         }
+
+        if (target.Kind is RefKind.LocalBranch or RefKind.RemoteBranch && TicketInBranch(target.ShortName) is { } ticket)
+            actions.Add(new MenuAction($"Open {ticket} in Jira", OpenTicketCommand, ticket, Icon: MenuIcons.Browser));
 
         var mergeRebase = isCheckedOutHere ? [] : MergeRebaseActions(target, isCurrentTip: _state?.HeadSha == target.Sha).ToList();
         if (mergeRebase.Count > 0)

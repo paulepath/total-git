@@ -93,7 +93,21 @@ public partial class SidebarNode : ObservableObject
     public PrCardViewModel? Card { get; init; }
 
     /// <summary>What the row shows on hover: a pull request's or run's card, otherwise the plain tooltip text.</summary>
-    public object? Tip => (object?)Card ?? (object?)RunCard ?? ToolTip;
+    public object? Tip => (object?)Card ?? (object?)RunCard ?? (Owner is null ? ToolTip : $"{ToolTip}\n{Owner.ToolTip}");
+
+    /// <summary>Who a remote branch belongs to, shown as an avatar at the start of its row.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasOwner), nameof(Tip))]
+    public partial BranchOwnerBadge? Owner { get; set; }
+
+    public bool HasOwner => Owner is not null;
+
+    /// <summary>A ticket key in the branch's label ("E4-2361"), drawn highlighted; the label is split around it.</summary>
+    public (int Start, int Length, string Key)? LabelTicket { get; init; }
+    public string? TicketKey => LabelTicket?.Key;
+    public string LabelBefore => LabelTicket is { } t ? Label[..t.Start] : Label;
+    public string LabelKey => LabelTicket is { } t ? Label.Substring(t.Start, t.Length) : "";
+    public string LabelAfter => LabelTicket is { } t ? Label[(t.Start + t.Length)..] : "";
 
     public bool IsWorkflowsSection { get; init; }
     public bool IsRun => Kind == SidebarNodeKind.WorkflowRun;
@@ -200,6 +214,57 @@ public sealed partial class PrPerson : ObservableObject
     };
 }
 
+/// <summary>
+/// Who a remote branch belongs to: the main author of its own commits, or its pull request's author. Shows their
+/// avatar (initials, in the colour the graph gives them, until it loads); faded when it's only a guess.
+/// </summary>
+public sealed partial class BranchOwnerBadge : ObservableObject
+{
+    public BranchOwnerBadge(string name, string? email, string? avatarUrl, string? sampleSha, bool isGuess, string toolTip)
+    {
+        Name = name;
+        Email = email;
+        AvatarUrl = avatarUrl;
+        SampleSha = sampleSha;
+        IsGuess = isGuess;
+        ToolTip = toolTip;
+        Initials = Core.Avatars.AvatarIdentity.Initials(name);
+        InitialsBrush = new SolidColorBrush(HslColor.FromHsl(Core.Avatars.AvatarIdentity.Hue(email ?? name), 0.45, 0.42).ToRgb());
+    }
+
+    public string Name { get; }
+    public string? Email { get; }
+    public string? AvatarUrl { get; }
+    public string? SampleSha { get; }
+    public bool IsGuess { get; }
+    public string ToolTip { get; }
+    public string Initials { get; }
+    public IBrush InitialsBrush { get; }
+    public double Opacity => IsGuess ? 0.45 : 1;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasAvatar), nameof(Background))]
+    public partial Bitmap? Avatar { get; set; }
+
+    public bool HasAvatar => Avatar is not null;
+    public IBrush? Background => HasAvatar ? null : InitialsBrush;
+
+    /// <summary>The badge for an owner worked out from the branch's commits.</summary>
+    public static BranchOwnerBadge From(BranchOwner owner)
+    {
+        var o = owner.Owner;
+        string tip;
+        if (owner.IsGuess)
+            tip = $"Owner: {o.Name}? No commits of its own (merged, or nothing added yet), so this is who wrote its newest commit.";
+        else
+        {
+            tip = $"Owner: {o.Name}, {o.Commits} of {owner.OwnCommits} commit{(owner.OwnCommits == 1 ? "" : "s")} not on a main line";
+            if (owner.Others.Count > 0) tip += "\nAlso: " + string.Join(", ", owner.Others.Select(a => $"{a.Name} ({a.Commits})"));
+        }
+        return new BranchOwnerBadge(o.Name, o.Email, null, owner.SampleSha, owner.IsGuess, tip);
+    }
+}
+
 /// <summary>GitKraken-style left panel: LOCAL, REMOTE, TAGS and WORKTREES with a filter.</summary>
 public partial class SidebarViewModel : ObservableObject
 {
@@ -289,9 +354,52 @@ public partial class SidebarViewModel : ObservableObject
 
     private AvatarCache? _avatars;
 
+    // Who remote branches belong to (by full name, "origin/x"), worked out from history by the repository view model.
+    private IReadOnlyDictionary<string, BranchOwner> _owners = new Dictionary<string, BranchOwner>();
+    private (string Owner, string Repo)? _gitHubRepo;
+
+    /// <summary>Sets remote branches' owners and fills them into the rows (without rebuilding the tree).</summary>
+    public void SetOwners(IReadOnlyDictionary<string, BranchOwner> owners, (string Owner, string Repo)? gitHubRepo)
+    {
+        _owners = owners;
+        _gitHubRepo = gitHubRepo;
+        var prs = PullRequestsByBranch();
+        foreach (var node in Flatten(Nodes.Where(n => n.IsSection && n.Label == "REMOTE")).Where(n => n.Kind == SidebarNodeKind.RemoteBranch))
+            node.Owner = OwnerBadge(node.Target!, prs);
+    }
+
+    /// <summary>Jira projects ("E4") whose lower-case keys count in branch names; set by the repository view model.</summary>
+    public IReadOnlySet<string> JiraProjects { get; set; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Open pull requests from this repository by their branch, whose author owns the branch.</summary>
+    private Dictionary<string, PullRequestSummary> PullRequestsByBranch() => _pullRequests
+        .Where(p => !p.IsCrossRepository)
+        .GroupBy(p => p.HeadRef, StringComparer.Ordinal)
+        .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+
+    /// <summary>A remote branch's owner: its pull request's author, else from its commits.</summary>
+    private BranchOwnerBadge? OwnerBadge(BranchTarget target, Dictionary<string, PullRequestSummary> prs)
+    {
+        BranchOwnerBadge? badge = null;
+        if (prs.TryGetValue(target.ShortName, out var pr))
+            badge = new BranchOwnerBadge(pr.Author.Login, null, pr.Author.AvatarUrl, null, false,
+                $"Owner: {pr.Author.Login}, who opened pull request #{pr.Number}");
+        else if (_owners.TryGetValue(target.Name, out var owner))
+            badge = BranchOwnerBadge.From(owner);
+        if (badge is not null) badge.Avatar = AvatarOf(badge);
+        return badge;
+    }
+
+    private Bitmap? AvatarOf(BranchOwnerBadge badge) =>
+        badge.AvatarUrl is { } url ? _avatars?.TryGetUrl(url)
+        : badge.Email is { } email ? _avatars?.TryGet(email, _gitHubRepo, badge.SampleSha)
+        : null;
+
     /// <summary>Fills in avatars that have loaded since the rows were built (without rebuilding the tree).</summary>
     private void RefreshAvatars()
     {
+        foreach (var node in Flatten(Nodes.Where(n => n.IsSection && n.Label == "REMOTE")))
+            if (node.Owner is { Avatar: null } badge) badge.Avatar = AvatarOf(badge);
         foreach (var node in Flatten(Nodes.Where(n => n.IsPullRequestsSection || n.IsWorkflowsSection)).Where(n => n.IsPullRequest || n.IsRun))
             foreach (var person in (node.Card?.Reviewers.Select(r => r.Person) ?? []).Prepend(node.Author))
                 if (person is { Avatar: null, AvatarUrl: { } url }) person.Avatar = _avatars?.TryGetUrl(url);
@@ -365,6 +473,11 @@ public partial class SidebarViewModel : ObservableObject
         var worktreeByBranch = _worktrees.Where(w => w.Branch is not null).GroupBy(w => w.Branch!).ToDictionary(g => g.Key, g => g.First());
 
         var running = ActiveRunsByBranch();
+        // Ticket keys: capitals always, lower case for projects seen in pull request titles.
+        var projects = new HashSet<string>(JiraProjects, StringComparer.OrdinalIgnoreCase);
+        foreach (var p in _pullRequests)
+            if (PullRequestTriage.Ticket(p.Title).Key is { } k) projects.Add(PullRequestTriage.Project(k));
+        var prsByBranch = PullRequestsByBranch();
         var locals = _refs.Where(r => r.Kind == RefKind.LocalBranch && Match(r.Name)).OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase).ToList();
         var local = Section("LOCAL", locals.Count);
         var localTree = new BranchTree(this, local, remote: null);
@@ -375,6 +488,7 @@ public partial class SidebarViewModel : ObservableObject
             localTree.Add(r.Name, leaf => new SidebarNode(SidebarNodeKind.LocalBranch, leaf)
             {
                 KindIcon = BranchIcons.ForBranch(r.Name),
+                LabelTicket = PullRequestTriage.KeyInBranch(leaf, projects),
                 Target = BranchTarget.From(r, wt),
                 IsCurrent = r.IsCurrent,
                 Ahead = r.Ahead > 0 ? $"{r.Ahead}↑" : null,
@@ -398,12 +512,15 @@ public partial class SidebarViewModel : ObservableObject
             var remoteTree = new BranchTree(this, remote, group.Key);
             foreach (var r in group)
             {
+                var target = BranchTarget.From(r, null);
                 remoteTree.Add(r.ShortName, leaf => new SidebarNode(SidebarNodeKind.RemoteBranch, leaf)
                 {
                     KindIcon = BranchIcons.ForBranch(r.ShortName),
-                    Target = BranchTarget.From(r, null),
+                    LabelTicket = PullRequestTriage.KeyInBranch(leaf, projects),
+                    Target = target,
                     ToolTip = r.Name,
                     ActiveRunsTip = running.GetValueOrDefault(r.ShortName),
+                    Owner = OwnerBadge(target, prsByBranch),
                 });
             }
             remoteTree.Build();
@@ -483,7 +600,6 @@ public partial class SidebarViewModel : ObservableObject
             prSection.Children.Add(new SidebarNode(SidebarNodeKind.Message, message) { IsDimmed = true, ToolTip = message });
         // Tickets: from the title, else from the branch name when it uses a project seen in the titles ("E4").
         var titled = prs.ToDictionary(p => p.Number, p => PullRequestTriage.Ticket(p.Title));
-        var projects = titled.Values.Where(t => t.Key is not null).Select(t => PullRequestTriage.Project(t.Key!)).ToHashSet(StringComparer.OrdinalIgnoreCase);
         foreach (var group in prs.GroupBy(PullRequestTriage.Group).OrderBy(g => g.Key))
         {
             var key = "PULL REQUESTS/" + group.Key;

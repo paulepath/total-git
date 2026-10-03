@@ -79,6 +79,21 @@ public static partial class PullRequestTriage
         return null;
     }
 
+    /// <summary>
+    /// Where a ticket key is in a branch name, and the key in capitals. Capitals ("feature/E4-2361-docker") always
+    /// count; lower case ("e4-2361") only for a project in <paramref name="knownProjects"/>, so "fix-2" isn't a ticket.
+    /// </summary>
+    public static (int Start, int Length, string Key)? KeyInBranch(string name, IReadOnlySet<string>? knownProjects)
+    {
+        foreach (Match m in BranchKey().Matches(name))
+        {
+            var g = m.Groups["key"];
+            var key = g.Value.ToUpperInvariant();
+            if (g.Value == key || knownProjects?.Contains(key[..key.IndexOf('-')]) == true) return (g.Index, g.Length, key);
+        }
+        return null;
+    }
+
     /// <summary>The project part of a key ("E4" for "E4-2007").</summary>
     public static string Project(string key) => key[..key.IndexOf('-')];
 

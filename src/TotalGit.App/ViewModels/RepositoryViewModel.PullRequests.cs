@@ -60,6 +60,7 @@ public partial class RepositoryViewModel
             var list = await Task.Run(() => provider.ListOpenAsync());
             if (request != _prListRequest || provider != _prProvider) return;
             _pullRequests = list;
+            LearnJiraProjects(list);
             Sidebar.SetPullRequests(true, list, list.Count == 0 ? "No open pull requests" : null);
         }
         catch (HostException ex)

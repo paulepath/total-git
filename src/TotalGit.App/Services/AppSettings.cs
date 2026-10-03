@@ -12,6 +12,12 @@ public sealed class RepoSettings
     /// <summary>The Jira site ticket keys in pull request titles link to, e.g. https://example.atlassian.net.</summary>
     public string? JiraUrl { get; set; }
 
+    /// <summary>
+    /// Jira projects seen in pull request titles ("E4"), remembered so lower-case keys in branch names
+    /// ("feature/e4-2361") are recognised before pull requests load.
+    /// </summary>
+    public List<string>? JiraProjects { get; set; }
+
     /// <summary>The colour of this repository's tabs (#RRGGBB), or null for none.</summary>
     public string? TabColor { get; set; }
 
