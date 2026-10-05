@@ -88,6 +88,8 @@ public partial class RepositoryViewModel
         SelectedRange?.Contains(commit.Sha) == true && Range is { } range
             ?
             [
+                new MenuAction(range.Commits.Count == 1 ? "Review this commit" : $"Review these {range.Commits.Count} commits", ReviewRangeCommand, Icon: MenuIcons.Open),
+                MenuAction.Separator,
                 new MenuAction(range.Commits.Count == 1 ? "Rebase selected commit onto…" : $"Rebase {range.Commits.Count} selected commits onto…",
                     RebaseRangeCommand, IsEnabled: !IsOperationInProgress, Icon: MenuIcons.Rebase),
                 new MenuAction($"Squash {range.Commits.Count} commits into one…", SquashRangeCommand,

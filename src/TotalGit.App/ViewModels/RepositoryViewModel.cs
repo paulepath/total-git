@@ -1249,6 +1249,12 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
                 break;
         }
 
+        if (target.Kind is RefKind.LocalBranch or RefKind.RemoteBranch && !(target.Kind == RefKind.RemoteBranch && target.ShortName == _state?.DefaultBranch))
+        {
+            actions.Add(MenuAction.Separator);
+            actions.Add(new MenuAction("Review changes against base", ReviewBranchNearestCommand, target, Icon: MenuIcons.Open));
+            actions.Add(new MenuAction("Review against…", ReviewBranchAgainstCommand, target));
+        }
         if (target.Kind is RefKind.LocalBranch or RefKind.RemoteBranch && TicketInBranch(target.ShortName) is { } ticket)
             actions.Add(new MenuAction($"Open {ticket} in Jira", OpenTicketCommand, ticket, Icon: MenuIcons.Browser));
 

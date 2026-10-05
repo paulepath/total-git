@@ -33,6 +33,12 @@ public partial class PullRequestReviewView : UserControl
         if (_vm is not null) _vm.PropertyChanged -= OnViewModelChanged;
         _vm = DataContext as PullRequestReviewViewModel;
         if (_vm is not null) _vm.PropertyChanged += OnViewModelChanged;
+        // A local review has no conversation or checks: no right-hand pane.
+        if (_vm is { IsLocal: true })
+        {
+            Panes.ColumnDefinitions[3].Width = new GridLength(0);
+            Panes.ColumnDefinitions[4].Width = new GridLength(0);
+        }
         ShowDiffThreads();
     }
 

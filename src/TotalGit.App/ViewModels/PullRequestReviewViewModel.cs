@@ -17,7 +17,6 @@ public interface IReviewDialogs
 
 /// <summary>What the review window needs from the repository tab that opened it.</summary>
 public sealed record ReviewContext(
-    IPullRequestProvider Provider,
     RepositorySession Session,
     string WorkingDirectory,
     ReviewMarks Marks,
@@ -28,10 +27,13 @@ public sealed record ReviewContext(
 /// <summary>
 /// A pull request in its own review window: an overview, the changed files with how far each has been reviewed, one
 /// file open at a time (with the lines changed since it was reviewed marked), comments and the review itself.
+/// Also reviews changes that haven't gone to a pull request (<see cref="BranchReviewSource"/>,
+/// <see cref="CommitsReviewSource"/>): the same files and review marks, without the host's parts.
 /// </summary>
 public sealed partial class PullRequestReviewViewModel : ObservableObject
 {
     private readonly ReviewContext _ctx;
+    private readonly ReviewSource _source;
     private readonly string _marksKey;
     private readonly Dictionary<string, FileViewState> _viewed = [];
     private readonly Dictionary<string, ReviewThreadViewModel> _threadViewModels = [];
@@ -40,16 +42,45 @@ public sealed partial class PullRequestReviewViewModel : ObservableObject
     private int _loadRequest;
     private int _diffRequest;
 
-    public PullRequestReviewViewModel(PullRequestSummary summary, ReviewContext ctx)
+    public PullRequestReviewViewModel(ReviewSource source, ReviewContext ctx)
     {
         _ctx = ctx;
-        _marksKey = ReviewMarks.Key(ctx.Provider.Host, summary.Number);
+        _source = source;
+        _marksKey = source.MarksKey;
         DiffMode = Enum.TryParse<DiffViewMode>(ctx.Settings.DiffMode, out var mode) ? mode : DiffViewMode.Inline;
         WholeFileDiff = ctx.Settings.DiffWholeFile;
         ShowAsTree = ctx.Settings.ChangedFilesTree;
         HideTests = ctx.Settings.ReviewHideTests;
-        Pr = NewPullRequest(summary);
+        Pr = source is PullRequestSource pr ? NewPullRequest(pr.Summary, pr.Provider) : new PullRequestViewModel(LocalSummary(source), false, null);
     }
+
+    /// <summary>The host, for a pull request; null for a local review.</summary>
+    private IPullRequestProvider? Provider => (_source as PullRequestSource)?.Provider;
+
+    /// <summary>Reviewing a pull request (comments, checks, viewed marks on the host), not local changes.</summary>
+    public bool IsPullRequest => _source is PullRequestSource;
+    public bool IsLocal => !IsPullRequest;
+
+    /// <summary>"#12" before a pull request's title; nothing for a local review.</summary>
+    public string NumberText => IsPullRequest ? Pr.NumberText + " " : "";
+
+    /// <summary>Which review this is (a window per review).</summary>
+    public string ReviewKey => _marksKey;
+
+    /// <summary>A stand-in for the pull request a local review doesn't have (it has no host capabilities).</summary>
+    private static PullRequestSummary LocalSummary(ReviewSource source)
+    {
+        var (title, head, @base) = source switch
+        {
+            BranchReviewSource b => ($"{b.HeadRef} against {b.BaseRef}", b.HeadRef, b.BaseRef),
+            CommitsReviewSource c => (c.Count == 1 ? "1 commit" : $"{c.Count} commits", Short(c.NewestSha), Short(c.OldestSha) + "^"),
+            _ => ("Review", "", ""),
+        };
+        return new PullRequestSummary(0, title, new PrUser("", null), false, PullRequestState.Open, @base, head, "", false,
+            DateTimeOffset.Now, ChecksState.None, ReviewDecision.None, false, "");
+    }
+
+    private static string Short(string sha) => sha[..Math.Min(7, sha.Length)];
 
     public IReviewDialogs? Dialogs { get; set; }
 
@@ -57,22 +88,27 @@ public sealed partial class PullRequestReviewViewModel : ObservableObject
 
     public PullRequestSummary Summary => Pr.Summary;
     public int Number => Summary.Number;
-    public string WindowTitle => $"#{Number} {Summary.Title} · Review";
-    public string BranchesText => $"{Summary.HeadRef} → {Summary.BaseRef}";
-    public string AuthorText => $"{Summary.Author.Login} wants to merge into {Summary.BaseRef}";
+    public string WindowTitle => IsPullRequest ? $"#{Number} {Summary.Title} · Review" : $"{Summary.Title} · Review";
+    public string BranchesText => _source switch
+    {
+        CommitsReviewSource c => $"{Short(c.OldestSha)} … {Short(c.NewestSha)}",
+        _ => $"{Summary.HeadRef} → {Summary.BaseRef}",
+    };
+    public string AuthorText => IsPullRequest
+        ? $"{Summary.Author.Login} wants to merge into {Summary.BaseRef}"
+        : CommitItems.Count == 0 ? "" : "By " + string.Join(", ", CommitItems.GroupBy(c => c.Author).OrderByDescending(g => g.Count()).Select(g => g.Key));
     public string? Ticket { get; init; }
     public bool HasTicket => Ticket is not null;
-    public bool CanMarkViewed => _ctx.Provider.Capabilities.HasFlag(PrCapabilities.ViewedFiles);
+    public bool CanMarkViewed => Provider?.Capabilities.HasFlag(PrCapabilities.ViewedFiles) == true;
 
     /// <summary>The window closes itself when this is raised (e.g. the repository tab was closed).</summary>
     public event Action? CloseRequested;
 
     public void Close() => CloseRequested?.Invoke();
 
-    private PullRequestViewModel NewPullRequest(PullRequestSummary summary)
+    private PullRequestViewModel NewPullRequest(PullRequestSummary summary, IPullRequestProvider provider)
     {
         PullRequestViewModel? created = null;
-        var provider = _ctx.Provider;
         var vm = created = new PullRequestViewModel(summary, false, null)
         {
             Capabilities = provider.Capabilities,
@@ -136,19 +172,27 @@ public sealed partial class PullRequestReviewViewModel : ObservableObject
     {
         var request = ++_loadRequest;
         IsLoading = true;
-        var details = LoadDetailsAsync(request);
+        var details = IsPullRequest ? LoadDetailsAsync(request) : Task.CompletedTask;
         try
         {
-            var (mergeBase, head, files) = await FetchFilesAsync();
+            var (mergeBase, head, files) = IsPullRequest ? await FetchFilesAsync() : await LocalFilesAsync();
             if (request != _loadRequest) return;
             var generated = await GitActions.GeneratedAttrAsync(_ctx.WorkingDirectory, files.Select(f => f.Path));
             Pr.SetFiles(files, mergeBase, head);
+            _allFiles = files;
+            _generated = generated;
+            var commits = await GitActions.CommitListAsync(_ctx.WorkingDirectory, $"{mergeBase}..{head}");
+            CommitItems = commits.Select(c => new ReviewCommitItem(c.Sha, c.Summary, c.Author)).ToList();
+            Commits = CommitItems.Select(c => c.Summary).ToList();
+            // A reload shows all the changes again (the commit picked may be gone after a rebase).
+            _selectedCommit = null;
+            OnPropertyChanged(nameof(SelectedCommit));
+            OnPropertyChanged(nameof(IsCommitView));
             SetFiles(files, generated);
-            Commits = await GitActions.CommitSummariesAsync(_ctx.WorkingDirectory, $"{mergeBase}..{head}");
         }
         catch (Exception ex) when (ex is GitCommandException or LibGit2Sharp.LibGit2SharpException or IOException or InvalidOperationException)
         {
-            if (request == _loadRequest) ShowError($"Couldn't get the pull request's changes: {ex.Message}");
+            if (request == _loadRequest) ShowError(IsPullRequest ? $"Couldn't get the pull request's changes: {ex.Message}" : $"Couldn't get the changes: {ex.Message}");
         }
         await details;
         if (request != _loadRequest) return;
@@ -162,7 +206,7 @@ public sealed partial class PullRequestReviewViewModel : ObservableObject
     {
         try
         {
-            var details = await Task.Run(() => _ctx.Provider.GetPullRequestAsync(Number));
+            var details = await Task.Run(() => Provider!.GetPullRequestAsync(Number));
             if (request == _loadRequest) Pr.Details = details;
         }
         catch (HostException ex)
@@ -174,7 +218,7 @@ public sealed partial class PullRequestReviewViewModel : ObservableObject
     /// <summary>Fetches the head (and the base branch), then lists the files changed since the merge-base.</summary>
     private async Task<(string MergeBase, string Head, IReadOnlyList<FileChange> Files)> FetchFilesAsync()
     {
-        var provider = _ctx.Provider;
+        var provider = Provider!;
         var remote = provider.Host.RemoteName;
         var local = PullRequestRef(Number);
         var refspecs = new List<string> { $"+{provider.HeadRefSpec(Number)}:{local}", $"+refs/heads/{Summary.BaseRef}:refs/remotes/{remote}/{Summary.BaseRef}" };
@@ -192,6 +236,108 @@ public sealed partial class PullRequestReviewViewModel : ObservableObject
     }
 
     public static string PullRequestRef(int number) => $"refs/totalgit/pr/{number}";
+
+    /// <summary>A local review's range, from what's here (nothing to fetch): a branch since it split from its base, or a run of commits.</summary>
+    private Task<(string MergeBase, string Head, IReadOnlyList<FileChange> Files)> LocalFilesAsync()
+    {
+        var session = _ctx.Session;
+        var source = _source;
+        return Task.Run<(string, string, IReadOnlyList<FileChange>)>(() =>
+        {
+            switch (source)
+            {
+                case BranchReviewSource b:
+                {
+                    var head = session.ResolveCommit(b.HeadRef) ?? throw new InvalidOperationException($"{b.HeadRef} doesn't exist any more.");
+                    var @base = session.MergeBase(head, b.BaseRef)
+                        ?? throw new InvalidOperationException($"{b.HeadRef} has no history in common with {b.BaseRef}.");
+                    return (@base, head, session.GetRangeChanges(@base, head));
+                }
+                case CommitsReviewSource c:
+                {
+                    var head = session.ResolveCommit(c.NewestSha) ?? throw new InvalidOperationException($"Commit {Short(c.NewestSha)} isn't here any more.");
+                    var @base = session.ResolveCommit(c.OldestSha + "^")
+                        ?? throw new InvalidOperationException($"Commit {Short(c.OldestSha)} has no parent to compare with.");
+                    return (@base, head, session.GetRangeChanges(@base, head));
+                }
+                default:
+                    throw new InvalidOperationException("Nothing to review.");
+            }
+        });
+    }
+
+    // ------------------------------------------------------------------ one commit at a time
+
+    private IReadOnlyList<FileChange> _allFiles = [];
+    private IReadOnlySet<string> _generated = new HashSet<string>();
+    private ReviewCommitItem? _selectedCommit;
+
+    /// <summary>The commits being reviewed, newest first; picking one shows only its changes.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(AuthorText), nameof(HasSeveralCommits))]
+    public partial IReadOnlyList<ReviewCommitItem> CommitItems { get; private set; } = [];
+
+    public bool HasSeveralCommits => CommitItems.Count > 1;
+
+    /// <summary>The one commit shown, or null for all the changes together.</summary>
+    public ReviewCommitItem? SelectedCommit
+    {
+        get => _selectedCommit;
+        set
+        {
+            if (_selectedCommit == value) return;
+            _selectedCommit = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(IsCommitView));
+            OnPropertyChanged(nameof(CommitViewText));
+            foreach (var c in CommitItems) c.IsSelected = c == value;
+            _ = ShowCommitAsync(value);
+        }
+    }
+
+    /// <summary>Showing one commit's changes: review boxes are read-only (they're for the whole review).</summary>
+    public bool IsCommitView => _selectedCommit is not null;
+
+    public string CommitViewText => _selectedCommit is { } c ? $"Showing only {c.Summary}" : "";
+
+    [RelayCommand]
+    private void ShowCommit(ReviewCommitItem? commit) => SelectedCommit = commit == _selectedCommit ? null : commit;
+
+    [RelayCommand]
+    private void ShowAllCommits() => SelectedCommit = null;
+
+    /// <summary>The range diffs come from: one commit against its parent, else the whole review.</summary>
+    private (string From, string To)? _commitRange;
+
+    private async Task ShowCommitAsync(ReviewCommitItem? commit)
+    {
+        if (commit is null)
+        {
+            _commitRange = null;
+            SetFiles(_allFiles, _generated);
+            UpdateStates();
+            return;
+        }
+        var session = _ctx.Session;
+        try
+        {
+            var (from, files) = await Task.Run(() =>
+            {
+                var parent = session.ResolveCommit(commit.Sha + "^") ?? throw new InvalidOperationException("The first commit has no parent to compare with.");
+                return (parent, session.GetRangeChanges(parent, commit.Sha));
+            });
+            if (_selectedCommit != commit) return;
+            _commitRange = (from, commit.Sha);
+            if (SinceLastReview) SinceLastReview = false;
+            SetFiles(files, _generated);
+            UpdateStates();
+            if (SelectedFile is { } open) await ReloadDiffAsync(open);
+        }
+        catch (Exception ex) when (ex is LibGit2Sharp.LibGit2SharpException or ArgumentException or InvalidOperationException)
+        {
+            ShowError($"Couldn't show {commit.Summary}: {ex.Message}");
+        }
+    }
 
     // ------------------------------------------------------------------ files and review state
 
@@ -366,6 +512,11 @@ public sealed partial class PullRequestReviewViewModel : ObservableObject
     private async Task ToggleReviewedAsync(ReviewFileItem? file)
     {
         if (file is null || Pr.HeadSha is not { } head) return;
+        if (IsCommitView)
+        {
+            ShowInfo("Review boxes are for all the changes: choose All changes to tick files.");
+            return;
+        }
         var reviewed = !file.IsReviewed;
         await SetReviewedAsync(file, reviewed, head);
     }
@@ -392,7 +543,7 @@ public sealed partial class PullRequestReviewViewModel : ObservableObject
         if (!CanMarkViewed) return true;
         try
         {
-            await Task.Run(() => _ctx.Provider.SetFileViewedAsync(Number, file.Path, reviewed));
+            await Task.Run(() => Provider!.SetFileViewedAsync(Number, file.Path, reviewed));
             return true;
         }
         catch (HostException ex)
@@ -412,7 +563,7 @@ public sealed partial class PullRequestReviewViewModel : ObservableObject
         var hash = Convert.ToHexStringLower(SHA1.HashData(Encoding.UTF8.GetBytes(path)))[..12];
         try
         {
-            await GitActions.UpdateRefAsync(_ctx.WorkingDirectory, $"{PullRequestRef(Number)}-reviewed/{hash}", head);
+            await GitActions.UpdateRefAsync(_ctx.WorkingDirectory, $"refs/totalgit/pr/{_source.RefName()}-reviewed/{hash}", head);
         }
         catch (GitCommandException)
         {
@@ -425,6 +576,11 @@ public sealed partial class PullRequestReviewViewModel : ObservableObject
     private async Task MarkReviewedAndNextAsync()
     {
         if (SelectedFile is not { } file || Pr.HeadSha is not { } head) return;
+        if (IsCommitView)
+        {
+            StepFile(1);
+            return;
+        }
         if (!file.IsReviewed && !await SetReviewedAsync(file, true, head)) return;
         var list = VisibleFiles.Where(f => !f.IsGenerated).ToList();
         var start = list.IndexOf(file);
@@ -558,6 +714,7 @@ public sealed partial class PullRequestReviewViewModel : ObservableObject
             return;
         }
         var from = SinceLastReview && LastReviewSha is { } since ? since : mergeBase;
+        if (_commitRange is { } range) (from, head) = range;
         var whole = WholeFileDiff;
         var session = _ctx.Session;
         try
@@ -568,7 +725,7 @@ public sealed partial class PullRequestReviewViewModel : ObservableObject
                 var d = session.GetRangeFileDiff(from, head, file.Path, whole);
                 // The lines changed since the file was reviewed, when the reviewed commit is here to compare with.
                 ReviewDelta? changed = null;
-                if (file.IsChanged && mark is not null && mark.HeadSha != head && session.ResolveCommit(mark.HeadSha) is not null)
+                if (file.IsChanged && mark is not null && mark.HeadSha != head && !IsCommitView && session.ResolveCommit(mark.HeadSha) is not null)
                     changed = ReviewDelta.From(session.GetRangeFileDiff(mark.HeadSha, head, file.Path));
                 return (d, changed);
             });
@@ -595,6 +752,7 @@ public sealed partial class PullRequestReviewViewModel : ObservableObject
         {
             FileReviewState.ChangedSinceReview when SinceReview is { Count: > 0 } d =>
                 $"Changed since you reviewed it: {d.Count} change{(d.Count == 1 ? "" : "s")} marked in violet.",
+            _ when IsCommitView => null,
             FileReviewState.ChangedSinceReview when _ctx.Marks.Get(_marksKey, file.Path) is null =>
                 "Changed since you marked it viewed on GitHub. Total Git can't show which lines, because it was marked elsewhere.",
             FileReviewState.ChangedSinceReview => "Changed since you reviewed it.",
@@ -650,9 +808,14 @@ public sealed partial class PullRequestReviewViewModel : ObservableObject
         // The reviewed head may only be on the host (e.g. reviewed on the web): fetch it.
         if (!await GitActions.HasCommitAsync(_ctx.WorkingDirectory, sha))
         {
+            if (Provider is not { } provider)
+            {
+                LastReviewSha = null;
+                return;
+            }
             try
             {
-                await GitActions.FetchRefsAsync(_ctx.WorkingDirectory, _ctx.Provider.Host.RemoteName, sha);
+                await GitActions.FetchRefsAsync(_ctx.WorkingDirectory, provider.Host.RemoteName, sha);
             }
             catch (GitCommandException)
             {
@@ -753,7 +916,8 @@ public sealed partial class PullRequestReviewViewModel : ObservableObject
     private async Task<bool> PostLineCommentAsync(CommentComposerViewModel composer)
     {
         if (Pr.HeadSha is not { } head) return false;
-        var ok = await PostAsync("Commenting…", () => _ctx.Provider.AddLineCommentAsync(Number, composer.Anchor, composer.Text.Trim(), head));
+        if (Provider is not { } provider) return false;
+        var ok = await PostAsync("Commenting…", () => provider.AddLineCommentAsync(Number, composer.Anchor, composer.Text.Trim(), head));
         if (ok && Pr.Composer == composer) Pr.Composer = null;
         return ok;
     }
@@ -777,9 +941,10 @@ public sealed partial class PullRequestReviewViewModel : ObservableObject
             IsBusy = false;
             BusyText = null;
         }
+        if (Provider is not { } provider) return true;
         try
         {
-            Pr.Details = await Task.Run(() => _ctx.Provider.GetPullRequestAsync(Number));
+            Pr.Details = await Task.Run(() => provider.GetPullRequestAsync(Number));
         }
         catch (HostException ex)
         {
@@ -793,7 +958,7 @@ public sealed partial class PullRequestReviewViewModel : ObservableObject
     private async Task SubmitReviewAsync()
     {
         var pr = Pr;
-        if (Dialogs is null || pr.HeadSha is not { } head) return;
+        if (Dialogs is null || pr.HeadSha is not { } head || Provider is not { } provider) return;
         (ReviewVerdict Verdict, FormChoice Choice)[] verdicts = pr.ViewerIsAuthor
             ? [(ReviewVerdict.Comment, new FormChoice("Comment", "Send your comments. Hosts don't let you approve or request changes on your own pull request."))]
             :
@@ -819,7 +984,7 @@ public sealed partial class PullRequestReviewViewModel : ObservableObject
 
         var drafts = pr.Pending.Select(p => p.Draft).ToList();
         var choice = verdicts[verdict.SelectedIndex].Verdict;
-        if (await PostAsync("Submitting review…", () => _ctx.Provider.SubmitReviewAsync(pr.Number, choice, summary.Text.Trim(), drafts, head)))
+        if (await PostAsync("Submitting review…", () => provider.SubmitReviewAsync(pr.Number, choice, summary.Text.Trim(), drafts, head)))
         {
             pr.ClearPending();
             ShowInfo(choice switch
@@ -834,10 +999,13 @@ public sealed partial class PullRequestReviewViewModel : ObservableObject
     // ------------------------------------------------------------------ header actions
 
     [RelayCommand]
-    private void OpenInBrowser() => UrlLauncher.Open(Summary.Url);
+    private void OpenInBrowser()
+    {
+        if (IsPullRequest) UrlLauncher.Open(Summary.Url);
+    }
 
     [RelayCommand]
-    private Task Checkout() => _ctx.Checkout(Summary);
+    private Task Checkout() => IsPullRequest ? _ctx.Checkout(Summary) : Task.CompletedTask;
 
     [RelayCommand]
     private Task OpenTicket() => Ticket is { } t ? _ctx.OpenTicket(t) : Task.CompletedTask;

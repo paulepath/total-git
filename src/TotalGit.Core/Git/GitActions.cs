@@ -263,6 +263,18 @@ public static class GitActions
         return result.ExitCode != 0 ? [] : result.StdOut.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
     }
 
+    /// <summary>The commits in a revision range, newest first: full SHA, "abc1234 subject" and author.</summary>
+    public static async Task<IReadOnlyList<(string Sha, string Summary, string Author)>> CommitListAsync(string worktree, string range)
+    {
+        var result = await GitCli.RunAsync(worktree, ["log", "--format=%H%x00%h %s%x00%an", range, "--"], throwOnError: false);
+        if (result.ExitCode != 0) return [];
+        return result.StdOut.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(l => l.TrimEnd('\r').Split('\0'))
+            .Where(p => p.Length >= 3)
+            .Select(p => (p[0], p[1], p[2]))
+            .ToList();
+    }
+
     public static Task<OperationOutcome> RebaseContinueAsync(string worktree) =>
         RunStoppableAsync(worktree, ["rebase", "--continue"]);
 

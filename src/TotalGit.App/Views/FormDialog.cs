@@ -84,6 +84,32 @@ public sealed class FormDialog : Window
         }
 
         if (field.Kind == FormFieldKind.Choice) return BuildChoice(field);
+        if (field.Kind == FormFieldKind.Select)
+        {
+            var combo = new ComboBox
+            {
+                ItemsSource = field.Options,
+                SelectedIndex = field.SelectedIndex,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                MaxDropDownHeight = 360,
+            };
+            combo.SelectionChanged += (_, _) =>
+            {
+                field.SelectedIndex = combo.SelectedIndex;
+                _touched = true;
+                Validate();
+            };
+            _controls.Add((field, combo));
+            return new StackPanel
+            {
+                Spacing = 4,
+                Children =
+                {
+                    new TextBlock { Text = field.Label, FontSize = 12, Foreground = new SolidColorBrush(Color.Parse("#8A9099")) },
+                    combo,
+                },
+            };
+        }
 
         var multiline = field.Kind == FormFieldKind.MultilineText;
         var text = new TextBox

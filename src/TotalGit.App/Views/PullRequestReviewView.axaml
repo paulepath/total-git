@@ -52,6 +52,15 @@
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="Cursor" Value="Hand" />
     </Style>
+    <Style Selector="Button.commitRow">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Padding" Value="6,2" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="CornerRadius" Value="3" />
+    </Style>
+    <Style Selector="Button.commitRow.selected">
+      <Setter Property="Background" Value="#24303C" />
+    </Style>
     <Style Selector="Border.tab.active">
       <Setter Property="BorderBrush" Value="#3B82C4" />
       <Setter Property="Background" Value="#23272D" />
@@ -64,8 +73,7 @@
       <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
         <StackPanel Spacing="4">
           <SelectableTextBlock TextWrapping="Wrap" FontSize="16" FontWeight="SemiBold" Foreground="#EEF0F2">
-            <Run Text="{Binding Pr.NumberText}" Foreground="#8A9099" FontWeight="Normal" />
-            <Run Text=" " />
+            <Run Text="{Binding NumberText}" Foreground="#8A9099" FontWeight="Normal" />
             <Run Text="{Binding Pr.Title}" />
           </SelectableTextBlock>
           <StackPanel Orientation="Horizontal" Spacing="8">
@@ -88,13 +96,17 @@
           <Button Classes="small" Command="{Binding LoadCommand}" ToolTip.Tip="Reload the pull request (F5)">
             <PathIcon Data="{StaticResource RefreshIcon}" Width="12" Height="12" />
           </Button>
-          <Button Classes="small" Command="{Binding OpenInBrowserCommand}" ToolTip.Tip="Open on the web">
+          <Border Background="#2A2140" CornerRadius="9" Padding="8,2" IsVisible="{Binding IsLocal}" VerticalAlignment="Center"
+                  ToolTip.Tip="Changes that aren't in a pull request: review boxes are kept on this machine; no comments or checks.">
+            <TextBlock Text="Local review" FontSize="11" Foreground="#D9CCFA" />
+          </Border>
+          <Button Classes="small" Command="{Binding OpenInBrowserCommand}" ToolTip.Tip="Open on the web" IsVisible="{Binding IsPullRequest}">
             <StackPanel Orientation="Horizontal" Spacing="6">
               <PathIcon Data="{StaticResource BrowserIcon}" Width="12" Height="12" />
               <TextBlock Text="Open on web" />
             </StackPanel>
           </Button>
-          <Button Classes="small" Command="{Binding CheckoutCommand}" ToolTip.Tip="Check the pull request out into a new worktree">
+          <Button Classes="small" Command="{Binding CheckoutCommand}" ToolTip.Tip="Check the pull request out into a new worktree" IsVisible="{Binding IsPullRequest}">
             <StackPanel Orientation="Horizontal" Spacing="6">
               <PathIcon Data="{StaticResource WorktreeIcon}" Width="12" Height="12" />
               <TextBlock Text="Check out" />
@@ -137,6 +149,13 @@
             </ToggleButton>
           </Grid>
           <ProgressBar Value="{Binding ProgressValue}" Minimum="0" Maximum="100" Height="4" MinHeight="4" Foreground="#4CC38A" Background="#30353C" />
+          <Border Background="#24303C" BorderBrush="#3B82C4" BorderThickness="3,0,0,0" CornerRadius="2" Padding="8,4" IsVisible="{Binding IsCommitView}">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Text="{Binding CommitViewText}" FontSize="11.5" Foreground="#C9D8EA" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                         ToolTip.Tip="{Binding CommitViewText}" />
+              <Button Grid.Column="1" Classes="small" Content="All changes" Command="{Binding ShowAllCommitsCommand}" Margin="6,0,0,0" />
+            </Grid>
+          </Border>
           <ToggleButton Classes="small" IsChecked="{Binding SinceLastReview}" IsVisible="{Binding CanShowSinceLastReview}" HorizontalAlignment="Stretch"
                         ToolTip.Tip="{Binding SinceLastReviewText}">
             <TextBlock Text="Only what changed since my last review" FontSize="11.5" />
@@ -244,7 +263,7 @@
               </Border>
 
               <!-- Description -->
-              <StackPanel Spacing="6">
+              <StackPanel Spacing="6" IsVisible="{Binding IsPullRequest}">
                 <TextBlock Classes="section" Text="DESCRIPTION" />
                 <Border Background="#23272D" CornerRadius="4" Padding="12,10">
                   <Panel>
@@ -255,7 +274,7 @@
               </StackPanel>
 
               <!-- Reviewers and checks side by side -->
-              <Grid ColumnDefinitions="*,24,*">
+              <Grid ColumnDefinitions="*,24,*" IsVisible="{Binding IsPullRequest}">
                 <StackPanel Spacing="6">
                   <TextBlock Classes="section" Text="REVIEWERS" />
                   <TextBlock Text="No reviewers yet." Classes="muted" IsVisible="{Binding !Pr.HasReviewers}" />
@@ -350,14 +369,24 @@
                 </Expander>
               </StackPanel>
 
-              <!-- Commits -->
+              <!-- Commits: pick one to see only its changes -->
               <StackPanel Spacing="6">
-                <TextBlock Classes="section" Text="{Binding CommitsHeader, Converter={x:Static views:ReviewConverters.Upper}}" />
-                <ItemsControl ItemsSource="{Binding Commits}">
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock Classes="section" Text="{Binding CommitsHeader, Converter={x:Static views:ReviewConverters.Upper}}" />
+                  <TextBlock Grid.Column="1" Classes="muted" Text="Click a commit to see only its changes" IsVisible="{Binding HasSeveralCommits}" />
+                </Grid>
+                <ItemsControl ItemsSource="{Binding CommitItems}">
                   <ItemsControl.ItemTemplate>
-                    <DataTemplate x:DataType="x:String">
-                      <TextBlock Text="{Binding}" FontSize="12" Foreground="#C9CED6" FontFamily="Cascadia Mono, Consolas, monospace" Margin="0,1"
-                                 TextTrimming="CharacterEllipsis" />
+                    <DataTemplate x:DataType="vm:ReviewCommitItem">
+                      <Button Classes="commitRow" Classes.selected="{Binding IsSelected}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                              Command="{Binding $parent[views:PullRequestReviewView].((vm:PullRequestReviewViewModel)DataContext).ShowCommitCommand}"
+                              CommandParameter="{Binding}" ToolTip.Tip="Show only this commit's changes (click again for all)">
+                        <Grid ColumnDefinitions="*,Auto">
+                          <TextBlock Text="{Binding Summary}" FontSize="12" Foreground="#C9CED6" FontFamily="Cascadia Mono, Consolas, monospace"
+                                     TextTrimming="CharacterEllipsis" />
+                          <TextBlock Grid.Column="1" Text="{Binding Author}" Classes="muted" Margin="12,0,0,0" />
+                        </Grid>
+                      </Button>
                     </DataTemplate>
                   </ItemsControl.ItemTemplate>
                 </ItemsControl>
@@ -424,7 +453,7 @@
       <GridSplitter Grid.Column="3" ResizeDirection="Columns" Background="#2B2F36" />
 
       <!-- Right: conversation, checks, your pending review -->
-      <TabControl Grid.Column="4" Padding="0" Background="#23272D">
+      <TabControl Grid.Column="4" Padding="0" Background="#23272D" IsVisible="{Binding IsPullRequest}">
         <TabItem Header="{Binding Pr.ConversationTabText}">
           <ScrollViewer HorizontalScrollBarVisibility="Disabled">
             <StackPanel Margin="14,8" Spacing="10">

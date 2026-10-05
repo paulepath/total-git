@@ -20,8 +20,8 @@ public partial class RepositoryViewModel
     /// <summary>Creates pull request providers for supported hosts; set by the shell. Null hides pull requests.</summary>
     public IPullRequestProviderFactory? PullRequestProviders { get; init; }
 
-    /// <summary>Review windows open for this repository's pull requests, by number.</summary>
-    private readonly Dictionary<int, PullRequestReviewViewModel> _reviews = [];
+    /// <summary>Review windows open for this repository (pull requests and local reviews), by review.</summary>
+    private readonly Dictionary<string, PullRequestReviewViewModel> _reviews = [];
 
     /// <summary>Marks of files reviewed, kept on this machine (shared by every repository).</summary>
     private static readonly Lazy<ReviewMarks> Marks = new(() => new ReviewMarks(Path.Combine(AppSettings.DataDirectory, "review-marks.json")));
@@ -79,27 +79,113 @@ public partial class RepositoryViewModel
     private void OpenPullRequest(PullRequestSummary summary)
     {
         if (_prProvider is not { } provider || _state is null || _session is not { } session) return;
-        if (_reviews.TryGetValue(summary.Number, out var open))
-        {
-            ReviewWindowRequested?.Invoke(open);
-            return;
-        }
         var ticket = PullRequestTriage.Ticket(summary.Title).Key ?? PullRequestTriage.TicketFromBranch(summary.HeadRef,
             _pullRequests.Select(p => PullRequestTriage.Ticket(p.Title).Key).OfType<string>().Select(PullRequestTriage.Project)
                 .ToHashSet(StringComparer.OrdinalIgnoreCase));
-        var ctx = new ReviewContext(provider, session, _state.WorkingDirectory, Marks.Value, _settings,
-            CheckoutPullRequestAsync, OpenTicketAsync);
-        var vm = new PullRequestReviewViewModel(summary, ctx) { Ticket = ticket };
-        _reviews[summary.Number] = vm;
-        vm.CloseRequested += () => _reviews.Remove(summary.Number);
+        OpenReview(new PullRequestSource(provider, summary), ticket);
+    }
+
+    /// <summary>Shows a review in its own window, or brings its window to the front when it's already open.</summary>
+    private void OpenReview(ReviewSource source, string? ticket = null)
+    {
+        if (_state is null || _session is not { } session) return;
+        if (_reviews.TryGetValue(source.MarksKey, out var open))
+        {
+            ReviewWindowRequested?.Invoke(open);
+            _ = open.LoadAsync();
+            return;
+        }
+        var ctx = new ReviewContext(session, _state.WorkingDirectory, Marks.Value, _settings, CheckoutPullRequestAsync, OpenTicketAsync);
+        var vm = new PullRequestReviewViewModel(source, ctx) { Ticket = ticket };
+        _reviews[source.MarksKey] = vm;
+        vm.CloseRequested += () => _reviews.Remove(source.MarksKey);
         ReviewWindowRequested?.Invoke(vm);
         _ = vm.LoadAsync();
+    }
+
+    /// <summary>Reviews a branch against the branch it came off, before there's a pull request.</summary>
+    private void ReviewBranch((string Head, string Base) pair)
+    {
+        if (_state is null) return;
+        OpenReview(new BranchReviewSource(_state.MainWorkingDirectory, pair.Head, pair.Base), TicketInBranch(pair.Head));
+    }
+
+    /// <summary>Reviews a branch against a branch picked from a list.</summary>
+    [RelayCommand]
+    private async Task ReviewBranchAgainstAsync(BranchTarget target)
+    {
+        if (_state is null || Dialogs is null) return;
+        var head = target.Name;
+        var choices = _state.Refs
+            .Where(r => r.Kind is RefKind.LocalBranch or RefKind.RemoteBranch && r.Name != head && r.ShortName != "HEAD")
+            .OrderByDescending(r => BranchCategory.IsMainLine(r.ShortName))
+            .ThenBy(r => r.Kind)
+            .ThenBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(r => r.Name)
+            .ToList();
+        var nearest = await NearestBaseAsync(target);
+        var field = FormField.Select("Compare with", choices, Math.Max(0, nearest is null ? 0 : choices.IndexOf(nearest)));
+        var spec = new FormSpec($"Review {target.ShortName}",
+            "Shows the changes on the branch since it split from the branch you pick, the way a pull request would.", "Review", [field]);
+        if (!await Dialogs.ShowFormAsync(spec) || field.SelectedIndex < 0 || field.SelectedIndex >= choices.Count) return;
+        OpenReview(new BranchReviewSource(_state.MainWorkingDirectory, head, choices[field.SelectedIndex]), TicketInBranch(target.ShortName));
+    }
+
+    /// <summary>
+    /// The branch <paramref name="target"/> most likely came off: the closest main line (remote ones preferred, as
+    /// that's what a pull request would target), else the default branch.
+    /// </summary>
+    private async Task<string?> NearestBaseAsync(BranchTarget target)
+    {
+        if (_state is not { } state) return null;
+        var remote = target.RemoteName ?? "origin";
+        var mainLines = state.Refs
+            .Where(r => r.Kind is RefKind.LocalBranch or RefKind.RemoteBranch && BranchCategory.IsMainLine(r.ShortName) && r.ShortName != target.ShortName)
+            .ToList();
+        // One per line: the remote branch when there is one.
+        var candidates = mainLines.GroupBy(r => r.ShortName)
+            .Select(g => g.FirstOrDefault(r => r.Kind == RefKind.RemoteBranch && r.RemoteName == remote) ?? g.First())
+            .Select(r => r.Name)
+            .ToList();
+        var preferred = state.DefaultBranch is { } d
+            ? state.Refs.FirstOrDefault(r => r.Kind == RefKind.RemoteBranch && r.Name == $"{remote}/{d}")?.Name ?? d
+            : null;
+        if (preferred is not null && !candidates.Contains(preferred)) candidates.Add(preferred);
+        try
+        {
+            return await BaseBranch.NearestAsync(state.WorkingDirectory, target.Name, candidates, preferred) ?? preferred;
+        }
+        catch (GitCommandException)
+        {
+            return preferred;
+        }
+    }
+
+    /// <summary>Opens the branch's review against its nearest base straight away.</summary>
+    [RelayCommand]
+    private async Task ReviewBranchNearestAsync(BranchTarget target)
+    {
+        if (_state is null) return;
+        if (await NearestBaseAsync(target) is not { } @base)
+        {
+            ShowError($"Couldn't find a branch {target.ShortName} came off. Use Review against… to pick one.");
+            return;
+        }
+        ReviewBranch((target.Name, @base));
+    }
+
+    /// <summary>Reviews the commits picked in the graph (all their changes together).</summary>
+    [RelayCommand]
+    private void ReviewRange()
+    {
+        if (_state is null || Range is not { } picked) return;
+        OpenReview(new CommitsReviewSource(_state.MainWorkingDirectory, picked.Range.Oldest.Sha, picked.Range.Newest.Sha, picked.Range.Commits.Count));
     }
 
     /// <summary>A review window was closed by the user.</summary>
     public void OnReviewWindowClosed(PullRequestReviewViewModel vm)
     {
-        if (_reviews.TryGetValue(vm.Number, out var open) && open == vm) _reviews.Remove(vm.Number);
+        if (_reviews.TryGetValue(vm.ReviewKey, out var open) && open == vm) _reviews.Remove(vm.ReviewKey);
     }
 
     /// <summary>The repository went away (tab closed, another repository opened): close its review windows.</summary>

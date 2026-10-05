@@ -6,6 +6,9 @@ public enum FormFieldKind
     MultilineText,
     CheckBox,
     Choice,
+
+    /// <summary>A drop-down list of <see cref="FormField.Options"/> (type to jump to one).</summary>
+    Select,
 }
 
 /// <summary>One option of a <see cref="FormFieldKind.Choice"/> field; a warning option is described in red.</summary>
@@ -24,6 +27,9 @@ public sealed class FormField(FormFieldKind kind, string label)
     public IReadOnlyList<FormChoice> Choices { get; init; } = [];
     public int SelectedIndex { get; set; }
 
+    /// <summary>The entries of a drop-down field; <see cref="SelectedIndex"/> is the picked one.</summary>
+    public IReadOnlyList<string> Options { get; init; } = [];
+
     /// <summary>A checkbox that must be ticked for this field to be enabled (e.g. "Annotated" → message).</summary>
     public FormField? EnabledBy { get; init; }
 
@@ -41,6 +47,9 @@ public sealed class FormField(FormFieldKind kind, string label)
 
     public static FormField Choice(string label, IReadOnlyList<FormChoice> choices, int selectedIndex = 0) =>
         new(FormFieldKind.Choice, label) { Choices = choices, SelectedIndex = selectedIndex };
+
+    public static FormField Select(string label, IReadOnlyList<string> options, int selectedIndex = 0) =>
+        new(FormFieldKind.Select, label) { Options = options, SelectedIndex = selectedIndex };
 }
 
 /// <summary>A small modal form: title, explanation, some fields and a confirm button.</summary>
