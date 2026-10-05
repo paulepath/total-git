@@ -2,3 +2,5 @@ config:
   azure-native:location: westeurope
   totalgit-infra:cloudflareZoneId: f68d13529416055f52ba43b18c3364bd
   azure-native:subscriptionId: d36190c9-fd93-46d0-86c0-b6093de414e3
+  cloudflare:apiToken:
+    secure: AAABAJzREoO+oowNR91HrITvN8JhBIUPsIAdyDEYcB1CETr9lnshZe37kzypvhK6n6XIdoUFD4VSGSr37ej7xVGbvJctdmfc1OSaJPfP8ChCqkScGQ==
