@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Total Git: a visual git client for Windows</title>
+  <meta name="description" content="Total Git is a free visual git client for Windows: a commit graph you can read at a glance, pull request reviews in their own window, local reviews before a pull request, a built-in merge tool, interactive rebase, worktrees and tabs.">
+  <meta name="theme-color" content="#0d1016">
+  <meta property="og:title" content="Total Git: a visual git client for Windows">
+  <meta property="og:description" content="See every branch, review every change, and merge with confidence.">
+  <meta property="og:image" content="https://totalgit.e-path.co.uk/img/og.png">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" type="image/png" href="/img/favicon.png">
+  <link rel="apple-touch-icon" href="/img/apple-touch-icon.png">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <!-- Line icons, drawn once and reused. -->
+  <svg width="0" height="0" class="visually-hidden" aria-hidden="true">
+    <defs>
+      <symbol id="i-graph" viewBox="0 0 24 24"><circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="9" r="2"/><path d="M6 7v10M18 11c0 4-6 3-11.2 6.6"/></symbol>
+      <symbol id="i-filter" viewBox="0 0 24 24"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></symbol>
+      <symbol id="i-review" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="m8 12 3 3 5-6"/></symbol>
+      <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+      <symbol id="i-merge" viewBox="0 0 24 24"><circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="19" r="2"/><path d="M6 7v10M6 7c0 6 6 8 10 11"/></symbol>
+      <symbol id="i-branch" viewBox="0 0 24 24"><circle cx="6" cy="18" r="2"/><circle cx="6" cy="6" r="2"/><circle cx="18" cy="8" r="2"/><path d="M6 8v8M18 10c0 4-4 5-10.5 7"/><path d="M15 3.5h6"/></symbol>
+      <symbol id="i-tabs" viewBox="0 0 24 24"><path d="M3 8V6a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M3 8h18"/></symbol>
+      <symbol id="i-ci" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/><path d="m9 12 2 2 4-4"/></symbol>
+      <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 19h16"/></symbol>
+      <symbol id="i-github" viewBox="0 0 24 24"><path d="M9 19c-4 1.3-4-2-6-2.5M15 21v-3.4a3 3 0 0 0-.8-2.3c2.7-.3 5.6-1.3 5.6-6a4.6 4.6 0 0 0-1.3-3.2 4.3 4.3 0 0 0-.1-3.2s-1-.3-3.3 1.3a11.4 11.4 0 0 0-6 0C6.8 2.6 5.8 2.9 5.8 2.9a4.3 4.3 0 0 0-.1 3.2 4.6 4.6 0 0 0-1.3 3.2c0 4.6 2.8 5.6 5.5 6a3 3 0 0 0-.8 2.3V21"/></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4 10-10"/></symbol>
+    </defs>
+  </svg>
+
+  <header class="top">
+    <div class="wrap bar">
+      <a class="brand" href="/"><img src="/img/mark.png" alt="" width="34" height="34"><span>Total Git</span></a>
+      <nav>
+        <a href="#features">Features</a>
+        <a href="#tour">Tour</a>
+        <a href="#download">Download</a>
+        <a class="pill" href="https://github.com/paulepath/total-git"><svg><use href="#i-github"/></svg>GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="wrap hero-copy">
+        <h1 class="visually-hidden">Total Git</h1>
+        <img class="wordmark" src="/img/logo.webp" alt="Total Git" width="1000" height="268">
+        <p class="headline">See every branch. Review every change. <span class="grad">Merge with confidence.</span></p>
+        <p class="lead">A fast, free git client for Windows, with a commit graph you can read at a glance, pull
+          request reviews in their own window, and a built-in merge tool for when things get tangled.</p>
+        <div class="cta">
+          <a class="btn primary" href="https://github.com/paulepath/total-git/releases/latest/download/TotalGitApp-win-Setup.exe"><svg><use href="#i-download"/></svg>Download for Windows</a>
+          <a class="btn ghost" href="#tour">Take the tour</a>
+        </div>
+        <ul class="chips" aria-label="At a glance">
+          <li>Windows 10 and 11</li><li>Free</li><li>Updates itself</li><li>GitHub pull requests and Actions</li>
+        </ul>
+      </div>
+      <div class="wrap">
+        <figure class="window hero-shot">
+          <img src="/img/graph.webp" alt="The commit graph with coloured lanes, author avatars, branch labels and the sidebar of branches" width="1592" height="952">
+        </figure>
+      </div>
+    </section>
+
+    <section id="features">
+      <div class="wrap">
+        <p class="kicker">Features</p>
+        <h2>Everything a day of git needs</h2>
+        <p class="sub">From a quick look at what changed to an interactive rebase across twenty commits, without dropping to the command line.</p>
+        <div class="grid">
+          <article class="card">
+            <svg class="ico c-blue"><use href="#i-graph"/></svg>
+            <h3>A graph you can read</h3>
+            <p>Coloured lanes, avatars, every branch and tag on its own line, thicker main lines, and runs of commits folded into one row.</p>
+          </article>
+          <article class="card">
+            <svg class="ico c-violet"><use href="#i-filter"/></svg>
+            <h3>Filter the noise</h3>
+            <p>Show one developer's work, or only the current branch's path back to main.</p>
+          </article>
+          <article class="card highlight">
+            <svg class="ico c-green"><use href="#i-review"/></svg>
+            <h3>Pull request reviews</h3>
+            <p>A window just for reviewing: tick files off, kept in sync with GitHub's Viewed, comment on lines and submit your review.</p>
+          </article>
+          <article class="card highlight">
+            <svg class="ico c-orange"><use href="#i-eye"/></svg>
+            <h3>Review before a PR</h3>
+            <p>Review a branch against the branch it came off, or a run of commits, in the same window, before anyone opens a pull request.</p>
+          </article>
+          <article class="card">
+            <svg class="ico c-orange"><use href="#i-merge"/></svg>
+            <h3>Merge, rebase, squash</h3>
+            <p>Interactive rebase, rebase picked commits onto another branch, squash a selection, and a 3-pane merge tool for conflicts.</p>
+          </article>
+          <article class="card">
+            <svg class="ico c-blue"><use href="#i-branch"/></svg>
+            <h3>Branches that explain themselves</h3>
+            <p>Icons and grouping by your naming rules, the owner's avatar on remote branches, and Jira keys that open the ticket.</p>
+          </article>
+          <article class="card">
+            <svg class="ico c-violet"><use href="#i-tabs"/></svg>
+            <h3>Tabs and worktrees</h3>
+            <p>Every repository and worktree in a tab, each with its own colour, icon and name, and tiles for the ones you opened before.</p>
+          </article>
+          <article class="card">
+            <svg class="ico c-green"><use href="#i-ci"/></svg>
+            <h3>CI at a glance</h3>
+            <p>GitHub Actions runs in the sidebar, as they happen, with re-run and cancel a right-click away.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="tour" class="tour">
+      <div class="wrap">
+        <p class="kicker">Tour</p>
+        <h2>A closer look</h2>
+        <p class="sub">Shown with a made-up demo repository and people.</p>
+
+        <div class="spot">
+          <div class="spot-copy">
+            <h3>Review it properly</h3>
+            <p>Pull requests open in their own window: the files in a tree, one file at a time, and a box to tick on each. When someone pushes again, the files you'd already reviewed show only what changed since.</p>
+            <ul class="ticks">
+              <li><svg><use href="#i-check"/></svg>Keys for the whole flow: next file, next change, mark reviewed</li>
+              <li><svg><use href="#i-check"/></svg>Hide tests and generated files to review later</li>
+              <li><svg><use href="#i-check"/></svg>Local reviews for branches and commits that aren't in a PR yet</li>
+            </ul>
+          </div>
+          <figure class="window">
+            <img src="/img/local-review.webp" alt="The review window with a file tree, review boxes and a diff" width="1484" height="893" loading="lazy"></figure>
+        </div>
+
+        <div class="spot flip">
+          <div class="spot-copy">
+            <h3>Untangle conflicts</h3>
+            <p>The built-in merge tool shows yours, theirs and the base side by side, with the result underneath. Pick a side per change or edit the result, then continue, skip or abort the merge or rebase.</p>
+          </div>
+          <figure class="window">
+            <img src="/img/merge-tool.webp" alt="The 3-pane merge tool resolving a conflict" width="1600" height="960" loading="lazy"></figure>
+        </div>
+
+        <div class="spot">
+          <div class="spot-copy">
+            <h3>Every repository, one window</h3>
+            <p>Give each repository a colour, an icon and a name for its tab. A new tab offers the ones you've opened before, with their current branch, and flags any that have moved.</p>
+          </div>
+          <figure class="window">
+            <img src="/img/recent-tiles.webp" alt="Coloured tabs and tiles of recently opened repositories" width="1170" height="620" loading="lazy"></figure>
+        </div>
+
+        <div class="gallery">
+          <figure><img src="/img/side-by-side-diff.webp" alt="A side-by-side diff of a commit" loading="lazy"><figcaption>Diffs, inline or side by side</figcaption></figure>
+          <figure><img src="/img/staging.webp" alt="Staging changes with an inline diff" loading="lazy"><figcaption>Stage and commit</figcaption></figure>
+          <figure><img src="/img/interactive-rebase.webp" alt="Interactive rebase: pick, squash and reword" loading="lazy"><figcaption>Interactive rebase</figcaption></figure>
+          <figure><img src="/img/gitignore.webp" alt="Add to .gitignore with the files the rule matches" loading="lazy"><figcaption>Add to .gitignore, with a live preview</figcaption></figure>
+        </div>
+      </div>
+    </section>
+
+    <section id="download">
+      <div class="wrap two">
+        <div>
+          <p class="kicker">Download</p>
+          <h2>Get Total Git</h2>
+          <p class="sub">It installs for you alone (no admin needed) and keeps itself up to date: new versions download in the background and apply when you restart.</p>
+          <div class="cta">
+            <a class="btn primary" href="https://github.com/paulepath/total-git/releases/latest/download/TotalGitApp-win-Setup.exe"><svg><use href="#i-download"/></svg>Download for Windows</a>
+            <a class="btn ghost" href="https://github.com/paulepath/total-git/releases"><svg><use href="#i-github"/></svg>All releases</a>
+          </div>
+        </div>
+        <ul class="ticks panel">
+          <li><svg><use href="#i-check"/></svg>Needs <a href="https://git-scm.com/">git</a> installed and on your PATH</li>
+          <li><svg><use href="#i-check"/></svg>The installer isn't code-signed yet, so Windows SmartScreen may warn you: choose More info, then Run anyway</li>
+          <li><svg><use href="#i-check"/></svg>Pull requests and Actions work with repositories on GitHub; everything else works with any git remote</li>
+          <li><svg><use href="#i-check"/></svg>Found a bug or want a feature? <a href="https://github.com/paulepath/total-git/issues">Open an issue</a></li>
+        </ul>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap foot">
+      <a class="brand" href="/"><img src="/img/mark.png" alt="" width="26" height="26"><span>Total Git</span></a>
+      <span class="legal">© 2026 E-Path Digital · Git is a trademark of Software Freedom Conservancy; Total Git is not affiliated with it or with GitHub.</span>
+      <span><a href="https://github.com/paulepath/total-git">GitHub</a> · <a href="https://github.com/paulepath/total-git/issues">Issues</a></span>
+    </div>
+  </footer>
+</body>
+</html>

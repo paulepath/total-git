@@ -1,0 +1,13 @@
+{
+  "globalHeaders": {
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Content-Security-Policy": "default-src 'self'; img-src 'self' data:; style-src 'self'; frame-ancestors 'none'"
+  },
+  "routes": [
+    { "route": "/download", "redirect": "https://github.com/paulepath/total-git/releases/latest/download/TotalGitApp-win-Setup.exe", "statusCode": 302 }
+  ],
+  "responseOverrides": {
+    "404": { "rewrite": "/index.html", "statusCode": 404 }
+  }
+}

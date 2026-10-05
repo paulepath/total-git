@@ -1,0 +1,6 @@
+name: totalgit-infra
+runtime:
+  name: nodejs
+  options:
+    typescript: true
+description: Total Git website hosting (Azure Static Web App) and DNS (Cloudflare)

@@ -1,0 +1,3 @@
+config:
+  azure-native:location: westeurope
+  totalgit-infra:cloudflareZoneId: f68d13529416055f52ba43b18c3364bd

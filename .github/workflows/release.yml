@@ -5,7 +5,8 @@ name: Release
 on:
   push:
     branches: [master]
-    paths-ignore: ['**.md']
+    # The website and its infrastructure have their own workflows (site.yml, infra.yml).
+    paths-ignore: ['**.md', 'docs/**', 'site/**', 'infra/**', '.github/workflows/site.yml', '.github/workflows/infra.yml']
   workflow_dispatch:
 
 permissions:
