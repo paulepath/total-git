@@ -128,6 +128,10 @@ public sealed class MergePaneView : Control
     private MergeScroll? _scroll;
     private MergeLayout? _layout;
     private double _charWidth = 7.5;
+    // Syntax colours for this pane's lines (whole file), worked out off the UI thread; empty until they're ready.
+    private IReadOnlyList<SyntaxSpan>[] _syntax = [];
+    private IReadOnlyList<string> _syntaxLines = [];
+    private CancellationTokenSource? _syntaxCts;
 
     static MergePaneView()
     {
@@ -186,7 +190,47 @@ public sealed class MergePaneView : Control
     {
         _layout = layout;
         _wordDiffs.Clear();
+        UpdateSyntax(layout);
         InvalidateVisual();
+    }
+
+    private void UpdateSyntax(MergeLayout? layout)
+    {
+        var lines = layout?.Lines(Pane) ?? [];
+        // Picking a side rebuilds the layout, but only the result's lines change.
+        if (lines.SequenceEqual(_syntaxLines)) return;
+        _syntaxCts?.Cancel();
+        _syntaxCts = null;
+        _syntax = [];
+        _syntaxLines = lines;
+        if (lines.Count == 0 || Model?.Path is not { } path || SyntaxHighlighter.ForPath(path) is not { } highlighter) return;
+
+        var cts = _syntaxCts = new CancellationTokenSource();
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                var syntax = highlighter.Highlight(lines, null, cts.Token);
+                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                {
+                    if (cts.IsCancellationRequested || !ReferenceEquals(_syntaxLines, lines)) return;
+                    _syntax = syntax;
+                    InvalidateVisual();
+                });
+            }
+            catch (OperationCanceledException)
+            {
+            }
+        });
+    }
+
+    private IReadOnlyList<SyntaxSpan>? SyntaxAt(int line) => line >= 0 && line < _syntax.Length ? _syntax[line] : null;
+
+    private FormattedText CodeText(string raw, IReadOnlyList<SyntaxSpan>? syntax)
+    {
+        var text = Text(Expand(raw), TextBrush);
+        SyntaxBrushes.Apply(text, raw, syntax);
+        return text;
     }
 
     private double Offset => _scroll?.Offset ?? 0;
@@ -344,7 +388,9 @@ public sealed class MergePaneView : Control
                     // Lines of a resolved conflict that aren't in the result are drawn dim.
                     var dim = resolution is { IsResolved: true } && !picked;
                     DrawWordHighlights(ctx, layout, r, row, lines![line], new Point(textLeft, y));
-                    ctx.DrawText(Text(Expand(lines[line]), dim ? DimTextBrush : TextBrush), new Point(textLeft, y + 2));
+                    // Dim lines stay plain grey, so "not in the result" still reads at a glance.
+                    ctx.DrawText(dim ? Text(Expand(lines[line]), DimTextBrush) : CodeText(lines[line], SyntaxAt(line)),
+                        new Point(textLeft, y + 2));
                 }
             }
 
@@ -386,7 +432,7 @@ public sealed class MergePaneView : Control
         }
         DrawNumber(ctx, r.Result + 1, y);
         using (ctx.PushClip(rowRect))
-            ctx.DrawText(Text(Expand(line.Text), TextBrush), new Point(textLeft, y + 2));
+            ctx.DrawText(CodeText(line.Text, SyntaxAt(r.Result)), new Point(textLeft, y + 2));
     }
 
     /// <summary>A line across the top and bottom of each conflict; the current one is drawn brighter.</summary>

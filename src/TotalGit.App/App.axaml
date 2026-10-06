@@ -95,5 +95,13 @@
     <Style Selector="GridSplitter">
       <Setter Property="Background" Value="#2B2F36" />
     </Style>
+    <!-- Scroll bars keep a column of their own instead of floating over the content: an auto-hiding one widens
+         on hover and covers the buttons and counts at the right of each row, which then can't be clicked. -->
+    <Style Selector="TreeView, ListBox">
+      <Setter Property="ScrollViewer.AllowAutoHide" Value="False" />
+    </Style>
+    <Style Selector="ScrollViewer">
+      <Setter Property="AllowAutoHide" Value="False" />
+    </Style>
   </Application.Styles>
 </Application>

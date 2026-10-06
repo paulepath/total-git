@@ -47,7 +47,15 @@ public sealed class RepositorySession : IDisposable
             : CommonGitDirectory;
 
         var sharedConfig = Path.Combine(CommonGitDirectory, "config");
-        if (IsLinkedWorktree && File.Exists(sharedConfig)) _sharedConfig = Configuration.BuildFrom(sharedConfig);
+        if (IsLinkedWorktree && File.Exists(sharedConfig))
+        {
+            _sharedConfig = Configuration.BuildFrom(sharedConfig);
+            // Status, diffs and remotes need the repository's settings too (core.filemode, autocrlf, remotes…).
+            // LibGit2Sharp swaps its own config into the repository the first time Config is read, so make that
+            // happen now and add the file to the config that stays.
+            _ = repo.Config;
+            LinkedWorktreeConfig.Add(repo, sharedConfig);
+        }
     }
 
     public string WorkingDirectory { get; }
@@ -403,8 +411,11 @@ public sealed class RepositorySession : IDisposable
 
     private IEnumerator<Commit> StartHistory()
     {
+        // Only refs the graph labels: branches, remote branches and tags. Others (Total Git's own refs/totalgit/
+        // for pull requests and reviews, refs/original, notes, stashes) would keep old commits in the graph, such
+        // as a branch's commits from before a rebase, with nothing at their head to say why they're there.
         var tips = _repo.Refs
-            .Where(r => !r.CanonicalName.StartsWith("refs/stash", StringComparison.Ordinal))
+            .Where(r => IsGraphTip(r.CanonicalName))
             .Select(r => r.ResolveToDirectReference()?.Target)
             .OfType<Commit>()
             .Cast<object>()
@@ -418,6 +429,11 @@ public sealed class RepositorySession : IDisposable
             SortBy = CommitSortStrategies.Topological | CommitSortStrategies.Time,
         }).GetEnumerator();
     }
+
+    private static bool IsGraphTip(string refName) =>
+        refName.StartsWith("refs/heads/", StringComparison.Ordinal)
+        || refName.StartsWith("refs/remotes/", StringComparison.Ordinal)
+        || refName.StartsWith("refs/tags/", StringComparison.Ordinal);
 
     private static CommitInfo ToInfo(Commit c) => new(
         c.Sha,

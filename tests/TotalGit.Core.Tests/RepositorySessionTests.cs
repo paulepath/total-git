@@ -54,6 +54,23 @@ public sealed class RepositorySessionTests : IDisposable
     }
 
     [Fact]
+    public void History_leaves_out_commits_only_hidden_refs_keep()
+    {
+        // A PR head fetched for review, then the branch rebased: the old commit is only on refs/totalgit/pr/1.
+        _repo.Commit("base");
+        var old = _repo.Commit("before rebase");
+        _repo.Git("update-ref", "refs/totalgit/pr/1", old);
+        _repo.Git("reset", "-q", "--hard", "HEAD~1");
+        _repo.Commit("after rebase");
+        _repo.Git("tag", "v1");
+
+        using var session = RepositorySession.Open(_repo.Root);
+        var messages = session.ReadHistory().Select(c => c.MessageShort).ToList();
+
+        Assert.Equal(["after rebase", "base"], messages);
+    }
+
+    [Fact]
     public void Reset_history_restarts_from_newest()
     {
         _repo.Commit("one");
@@ -269,6 +286,29 @@ public sealed class RepositorySessionTests : IDisposable
         Assert.Equal(Path.GetFullPath(_repo.Root), state.MainWorkingDirectory, ignoreCase: true);
         Assert.Equal(Path.GetFullPath(wtPath), state.WorkingDirectory, ignoreCase: true);
         Assert.Single(session.ReadHistory());
+        Assert.False(session.GetStatus().IsDirty);
+    }
+
+    [Fact]
+    public void Linked_worktree_uses_the_repository_config()
+    {
+        // An executable script, checked out on Windows (no executable bit) with core.filemode = false:
+        // git sees no change, so neither should the worktree's status.
+        _repo.Git("config", "core.filemode", "false");
+        _repo.Git("remote", "add", "origin", "https://example.com/widgets.git");
+        _repo.Write("build.sh", "echo hi\n");
+        _repo.Git("add", "build.sh");
+        _repo.Git("update-index", "--chmod=+x", "build.sh");
+        _repo.Git("commit", "-q", "-m", "script");
+        var wtPath = Path.Combine(_repo.Root, ".worktrees", "feat");
+        _repo.Git("worktree", "add", "-q", "-b", "feature/feat", wtPath);
+        Assert.Equal("", TestRepo.RunGit(wtPath, "status", "--porcelain"));
+
+        using var session = RepositorySession.Open(wtPath);
+        // Loading the state reads the config, which is when LibGit2Sharp swaps in its own (without the shared file).
+        var state = session.LoadState();
+
+        Assert.Equal("https://example.com/widgets.git", state.OriginUrl);
         Assert.False(session.GetStatus().IsDirty);
     }
 }

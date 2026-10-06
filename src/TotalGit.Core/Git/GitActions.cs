@@ -49,6 +49,45 @@ public static class GitActions
             await RunWithPathsAsync(worktree, ["rm", "--cached", "-r", "-q"], list);
     }
 
+    /// <summary>
+    /// Throws away unstaged changes: tracked files go back to their staged version (what's staged is kept) and
+    /// untracked files are deleted. Conflicted files are left alone.
+    /// </summary>
+    public static async Task DiscardUnstagedAsync(string worktree, IReadOnlyList<FileChange> files)
+    {
+        var tracked = files.Where(f => f.Kind is not (ChangeKind.Untracked or ChangeKind.Conflicted)).Select(f => f.Path).ToArray();
+        var untracked = files.Where(f => f.Kind == ChangeKind.Untracked).Select(f => f.Path).ToArray();
+        if (tracked.Length > 0) await RunWithPathsAsync(worktree, ["restore", "--worktree"], tracked);
+        // clean has no --pathspec-from-file, so long lists go in batches.
+        foreach (var batch in untracked.Chunk(50)) await GitCli.RunAsync(worktree, ["clean", "-f", "-q", "--", .. batch]);
+    }
+
+    /// <summary>
+    /// Throws away every change to staged files, in the index and the working copy: they go back to HEAD (a file
+    /// HEAD doesn't have is removed, and a rename brings the old name back).
+    /// </summary>
+    public static async Task DiscardStagedAsync(string worktree, IReadOnlyList<FileChange> files)
+    {
+        var paths = files.Where(f => f.Kind != ChangeKind.Conflicted)
+            .SelectMany(f => f.OldPath is { } old && old != f.Path ? new[] { f.Path, old } : [f.Path])
+            .Distinct().ToArray();
+        if (paths.Length == 0) return;
+        if (await HasHeadAsync(worktree))
+            await RunWithPathsAsync(worktree, ["restore", "--source=HEAD", "--staged", "--worktree"], paths);
+        else
+            await RunWithPathsAsync(worktree, ["rm", "-r", "-f", "-q"], paths);
+    }
+
+    /// <summary>Throws away all uncommitted changes to tracked files and, if asked, deletes untracked files too.</summary>
+    public static async Task DiscardAllAsync(string worktree, bool includeUntracked)
+    {
+        if (await HasHeadAsync(worktree))
+            await GitCli.RunAsync(worktree, "reset", "--hard", "-q");
+        else
+            await GitCli.RunAsync(worktree, "rm", "-r", "-f", "-q", "--cached", "--ignore-unmatch", ".");
+        if (includeUntracked) await GitCli.RunAsync(worktree, "clean", "-f", "-d", "-q");
+    }
+
     /// <summary>Runs a command on paths; long lists go through stdin so they can't exceed the command-line limit.</summary>
     private static Task RunWithPathsAsync(string worktree, string[] command, string[] paths) => paths.Length <= 50
         ? GitCli.RunAsync(worktree, [.. command, "--", .. paths])

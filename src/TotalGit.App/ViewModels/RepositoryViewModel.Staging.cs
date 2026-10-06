@@ -18,6 +18,11 @@ public sealed partial class RepositoryViewModel
             actions.Add(MenuAction.Separator);
         }
         actions.Add(new MenuAction(node.IsFolder ? $"{node.ActionText} folder" : node.ActionText, staging.StageNodeCommand, node));
+        var discardable = node.Files().Any(f => f.Change.Kind != ChangeKind.Conflicted);
+        var discardText = node.IsStaged ? "Discard all changes to " + (node.IsFolder ? "folder…" : "file…")
+            : node.IsFolder ? "Discard changes in folder…" : "Discard changes…";
+        actions.Add(new MenuAction(discardable ? discardText : "Discard changes (resolve the conflict instead)", DiscardNodeCommand, node,
+            IsEnabled: discardable && !IsBusy, Icon: MenuIcons.Reset));
 
         // Ignore rules only matter for files git doesn't track yet, which are all in the unstaged list.
         if (!node.IsStaged)
@@ -79,6 +84,67 @@ public sealed partial class RepositoryViewModel
         var exists = folder is not null && File.Exists(Path.Combine(folder, path));
         return new MenuAction(exists ? "Open in VS Code" : "Open in VS Code (file no longer exists)",
             OpenFileInVsCodeCommand, new FileTarget(path, Folder: folder), IsEnabled: exists, Icon: MenuIcons.Code);
+    }
+
+    /// <summary>Right-click Discard on a file or folder in the staging lists, after a confirmation.</summary>
+    [RelayCommand]
+    private async Task DiscardNodeAsync(StagingNode node)
+    {
+        if (Dialogs is null || _state is not { } state) return;
+        // The files themselves, not the folder path: a filtered list only shows (and discards) some of a folder.
+        var files = node.Files().Select(f => f.Change).Where(f => f.Kind != ChangeKind.Conflicted).ToList();
+        if (files.Count == 0) return;
+
+        var untracked = files.Where(f => f.Kind == ChangeKind.Untracked).Select(f => f.Path).ToList();
+        var restored = files.Where(f => f.Kind != ChangeKind.Untracked).Select(f => f.Path).ToList();
+        var details = new List<string>();
+        if (restored.Count > 0)
+        {
+            details.Add(node.IsStaged ? "Back to the last commit (staged and unstaged changes):" : "Back to the staged version:");
+            details.AddRange(restored.Select(p => "  " + p));
+        }
+        if (untracked.Count > 0)
+        {
+            details.Add("Deleted (never committed):");
+            details.AddRange(untracked.Select(p => "  " + p));
+        }
+        var what = files.Count == 1 ? files[0].Path : $"{files.Count} files";
+        var message = node.IsStaged
+            ? $"Throw away all your changes to {what}, staged and unstaged? This can't be undone."
+            : restored.Count == 0
+                ? $"Delete {what}? {(files.Count == 1 ? "It has" : "They have")} never been committed, so this can't be undone."
+                : $"Throw away the unstaged changes to {what}? Anything already staged is kept. This can't be undone.";
+        if (!await Dialogs.ConfirmAsync("Discard changes", message, details, "Discard")) return;
+
+        var wt = state.WorkingDirectory;
+        await RunGitAsync("Discarding…",
+            () => node.IsStaged ? GitActions.DiscardStagedAsync(wt, files) : GitActions.DiscardUnstagedAsync(wt, files),
+            files.Count == 1 ? $"Discarded the changes to {files[0].Path}." : $"Discarded the changes to {files.Count} files.",
+            Refresh.Status);
+    }
+
+    /// <summary>WIP row: throw away every uncommitted change (untracked files only if asked).</summary>
+    [RelayCommand]
+    private async Task DiscardAllAsync()
+    {
+        if (Dialogs is null || _state is not { } state || !_status.IsDirty || IsOperationInProgress) return;
+        var tracked = _status.Staged.Select(f => f.Path)
+            .Concat(_status.Unstaged.Where(f => f.Kind != ChangeKind.Untracked).Select(f => f.Path)).Distinct().ToList();
+        var untrackedCount = _status.Unstaged.Count(f => f.Kind == ChangeKind.Untracked);
+        var fields = new List<FormField>();
+        var untracked = FormField.CheckBox($"Also delete {untrackedCount} untracked file{(untrackedCount == 1 ? "" : "s")} (never committed)");
+        if (untrackedCount > 0) fields.Add(untracked);
+        var description = tracked.Count > 0
+            ? $"Throws away all uncommitted changes to {tracked.Count} tracked file{(tracked.Count == 1 ? "" : "s")}, staged and unstaged, " +
+              "putting them back as they were at the last commit. This can't be undone."
+            : "There are only untracked files. Tick the box to delete them. This can't be undone.";
+        string? Validate() => tracked.Count == 0 && !untracked.IsChecked ? "Nothing to discard unless the untracked files are deleted." : null;
+        if (!await Dialogs.ShowFormAsync(new FormSpec("Discard all changes", description, "Discard", fields, Validate))) return;
+
+        var wt = state.WorkingDirectory;
+        var includeUntracked = untracked.IsChecked;
+        await RunGitAsync("Discarding…", () => GitActions.DiscardAllAsync(wt, includeUntracked),
+            includeUntracked ? "Discarded all changes and deleted the untracked files." : "Discarded all changes.", Refresh.Status);
     }
 
     [RelayCommand]

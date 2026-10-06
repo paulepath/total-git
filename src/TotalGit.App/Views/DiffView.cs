@@ -68,6 +68,9 @@ public sealed partial class DiffView : Control
     private int[] _splitRowOf = [];
     private DiffRowLayout _layout = new(0, LineHeight);
     private IntraLineHighlights _highlights = IntraLineHighlights.None;
+    // Syntax colours per diff line, worked out off the UI thread; empty until they're ready.
+    private IReadOnlyList<SyntaxSpan>[] _syntax = [];
+    private CancellationTokenSource? _syntaxCts;
 
     static DiffView()
     {
@@ -164,6 +167,7 @@ public sealed partial class DiffView : Control
             }
             ResetLayout();
             _highlights = diff is not null ? IntraLineDiff.Compute(diff.Lines) : IntraLineHighlights.None;
+            UpdateSyntax(change.GetOldValue<FileDiff?>(), diff);
             _longestLine = diff?.Lines.Select(l => l.Text.Length + l.Text.Count(c => c == '\t') * 3).DefaultIfEmpty(0).Max() ?? 0;
             var oldPath = change.GetOldValue<FileDiff?>()?.Path;
             var newPath = change.GetNewValue<FileDiff?>()?.Path;
@@ -575,11 +579,53 @@ public sealed partial class DiffView : Control
         return lines.Right >= 0 ? lines.Right : lines.Left >= 0 ? lines.Left : null;
     }
 
+    private void UpdateSyntax(FileDiff? old, FileDiff? diff)
+    {
+        // A refresh with the same lines keeps its colours (no flash back to plain).
+        if (diff is not null && old is not null && old.Path == diff.Path && old.IsWholeFile == diff.IsWholeFile
+            && old.Lines.SequenceEqual(diff.Lines))
+            return;
+        _syntaxCts?.Cancel();
+        _syntaxCts = null;
+        _syntax = [];
+        if (diff is null || diff.IsBinary || diff.Lines.Count == 0 || SyntaxHighlighter.ForPath(diff.Path) is not { } highlighter)
+            return;
+
+        var cts = _syntaxCts = new CancellationTokenSource();
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                var syntax = highlighter.HighlightDiff(diff.Lines, diff.IsWholeFile, cts.Token);
+                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                {
+                    if (cts.IsCancellationRequested || !ReferenceEquals(Diff, diff)) return;
+                    _syntax = syntax;
+                    InvalidateVisual();
+                });
+            }
+            catch (OperationCanceledException)
+            {
+            }
+        });
+    }
+
+    /// <summary>The colours for the line on a display row (and side, in a side-by-side diff).</summary>
+    private IReadOnlyList<SyntaxSpan>? SyntaxFor(int row, int side)
+    {
+        var index = Mode != DiffViewMode.Split ? row
+            : row >= 0 && row < _splitLines.Length ? side == 0 ? _splitLines[row].Left : _splitLines[row].Right
+            : -1;
+        return index >= 0 && index < _syntax.Length ? _syntax[index] : null;
+    }
+
     /// <summary>Draws a line's text, over a stronger highlight on the words that changed.</summary>
     private void DrawLineText(DrawingContext ctx, DiffLine line, IBrush brush, Point origin, int row, int side)
     {
         DrawSelection(ctx, line, row, side, origin);
         var text = Text(line.Text.Replace("\t", "    "), brush);
+        if (line.Kind is not (DiffLineKind.Hunk or DiffLineKind.NoNewline))
+            SyntaxBrushes.Apply(text, line.Text, SyntaxFor(row, side));
         var ranges = _highlights.For(line);
         if (ranges.Count > 0)
         {

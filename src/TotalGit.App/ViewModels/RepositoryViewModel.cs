@@ -1282,6 +1282,9 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
             [
                 new MenuAction("Open in VS Code", OpenInVsCodeCommand, _state?.WorkingDirectory, Icon: MenuIcons.Code),
                 new MenuAction("Open in Visual Studio", OpenInVisualStudioCommand, _state?.WorkingDirectory, Icon: MenuIcons.VisualStudio),
+                MenuAction.Separator,
+                new MenuAction(IsOperationInProgress ? "Discard all changes… (finish or abort first)" : "Discard all changes…",
+                    DiscardAllCommand, IsEnabled: _status.IsDirty && !IsOperationInProgress && !IsBusy, Icon: MenuIcons.Reset),
             ];
 
         var actions = new List<MenuAction>();
