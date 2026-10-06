@@ -180,6 +180,78 @@ public partial class RepositoryViewModel
 
     private void UpdateOperationBanner()
     {
+        RenderOperationBanner();
+        _ = CheckRebaseBlockAsync();
+    }
+
+    // A rebase step git keeps failing to start because untracked files are in its way (see RebaseBlock).
+    private BlockedPick? _blockedPick;
+    private bool _checkingRebaseBlock;
+
+    /// <summary>
+    /// Looks for a rebase stuck on untracked files (to say so in the banner) and, once no rebase is running, puts
+    /// back files moved aside for one.
+    /// </summary>
+    private async Task CheckRebaseBlockAsync()
+    {
+        if (_state is not { } state || _checkingRebaseBlock) return;
+        var wt = state.WorkingDirectory;
+        _checkingRebaseBlock = true;
+        try
+        {
+            if (state.Operation == RepoOperation.Rebase && !_status.Unstaged.Any(f => f.Kind == ChangeKind.Conflicted))
+            {
+                var blocked = await RebaseBlock.FindAsync(wt);
+                if (_state?.WorkingDirectory != wt || SameBlock(blocked, _blockedPick)) return;
+                _blockedPick = blocked;
+                RenderOperationBanner();
+                return;
+            }
+            if (_blockedPick is not null)
+            {
+                _blockedPick = null;
+                RenderOperationBanner();
+            }
+            if (state.Operation == RepoOperation.None && await RebaseBlock.RestoreAsync(wt) is { } restored)
+                ReportRestored(restored);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or GitCommandException)
+        {
+            // The rebase moved on (or a file is locked) mid-check; the next refresh looks again.
+        }
+        finally
+        {
+            _checkingRebaseBlock = false;
+        }
+    }
+
+    private static bool SameBlock(BlockedPick? a, BlockedPick? b) =>
+        a is null ? b is null : b is not null && a.Sha == b.Sha && a.UntrackedInTheWay.SequenceEqual(b.UntrackedInTheWay);
+
+    private void ReportRestored(RestoreResult result)
+    {
+        if (result.LeftAside.Count == 0)
+        {
+            ShowInfo($"Put back {Files(result.Restored)} moved aside for the rebase.");
+            return;
+        }
+        Banner = new Banner(
+            $"{Files(result.LeftAside)} moved aside for the rebase couldn't be put back, as something is at {(result.LeftAside.Count == 1 ? "its path" : "their paths")} now: " +
+            $"{List(result.LeftAside)}. {(result.LeftAside.Count == 1 ? "It's" : "They're")} kept in {result.Folder}.",
+            true, [new MenuAction("Open folder", RevealCommand, result.Folder)]);
+    }
+
+    private static string Files(IReadOnlyCollection<string> paths) => paths.Count == 1 ? "1 file" : $"{paths.Count} files";
+
+    /// <summary>The first few file names, then how many more.</summary>
+    private static string List(IReadOnlyList<string> paths)
+    {
+        var names = string.Join(", ", paths.Take(3).Select(Path.GetFileName));
+        return paths.Count > 3 ? $"{names} and {paths.Count - 3} more" : names;
+    }
+
+    private void RenderOperationBanner()
+    {
         var state = _state;
         if (state is null || state.Operation == RepoOperation.None)
         {
@@ -201,6 +273,22 @@ public partial class RepositoryViewModel
             [
                 new MenuAction("Continue merge", ContinueOperationCommand, IsEnabled: resolved),
                 new MenuAction("Abort merge", AbortOperationCommand),
+            ]),
+            RepoOperation.Rebase when resolved && _blockedPick is { UntrackedInTheWay.Count: > 0 } blocked => new Banner(
+                $"Rebase stuck{(state.OperationProgress is { } at ? $" at commit {at}" : "")}: “{blocked.Subject}” adds " +
+                $"{Files(blocked.UntrackedInTheWay)} that already exist here untracked ({List(blocked.UntrackedInTheWay)}), and git won't " +
+                "overwrite them. Continuing only tries again.", true,
+            [
+                new MenuAction("Move them aside and continue…", MoveAsideAndContinueCommand),
+                new MenuAction("Abort rebase", AbortOperationCommand),
+            ]),
+            RepoOperation.Rebase when resolved && _blockedPick is not null => new Banner(
+                $"Rebase stuck{(state.OperationProgress is { } at ? $" at commit {at}" : "")}: git can't start “{_blockedPick.Subject}” " +
+                "and keeps putting it back, so Continue only tries again. Run 'git rebase --continue' in a terminal to see git's reason.", true,
+            [
+                new MenuAction("Continue rebase", ContinueOperationCommand),
+                new MenuAction("Skip this commit", SkipRebaseCommitCommand),
+                new MenuAction("Abort rebase", AbortOperationCommand),
             ]),
             RepoOperation.Rebase => new Banner(
                 $"Rebase paused{(state.OperationProgress is { } p ? $" at commit {p}" : "")}. {conflictText}", false,
@@ -363,6 +451,32 @@ public partial class RepositoryViewModel
             else outcome = await GitActions.RebaseContinueAsync(wt);
         });
         if (ok && outcome == OperationOutcome.Completed) ShowInfo(op == RepoOperation.Merge ? "Merge completed." : "Rebase completed.");
+        OnStopped(outcome);
+    }
+
+    /// <summary>
+    /// A rebase stuck on untracked files: moves them into the worktree's git folder and continues. They're put back
+    /// once no rebase is running (finished or aborted).
+    /// </summary>
+    [RelayCommand]
+    private async Task MoveAsideAndContinueAsync()
+    {
+        if (_state is null || Dialogs is null || _blockedPick is not { UntrackedInTheWay.Count: > 0 } blocked) return;
+        if (!await Dialogs.ConfirmAsync("Move files aside",
+                $"“{blocked.Subject}” adds these files, but they already exist here untracked. They're moved into the worktree's " +
+                "git folder so the rebase can carry on, and put back where they were when the rebase is over (finished or aborted). " +
+                "If something is at a path by then, that file stays aside and you're told where.",
+                blocked.UntrackedInTheWay, "Move aside and continue"))
+            return;
+        var wt = _state.WorkingDirectory;
+        var files = blocked.UntrackedInTheWay;
+        var outcome = OperationOutcome.Completed;
+        var ok = await RunGitAsync("Continuing…", async () =>
+        {
+            await RebaseBlock.MoveAsideAsync(wt, files);
+            outcome = await GitActions.RebaseContinueAsync(wt);
+        });
+        if (ok && outcome == OperationOutcome.Completed) ShowInfo("Rebase completed.");
         OnStopped(outcome);
     }
 
