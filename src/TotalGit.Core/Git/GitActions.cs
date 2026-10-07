@@ -518,6 +518,10 @@ public static class GitActions
     public static Task FastForwardBranchAsync(string worktree, string remote, string remoteBranch, string localBranch) =>
         GitCli.RunAsync(worktree, "fetch", "--no-tags", remote, $"refs/heads/{remoteBranch}:refs/heads/{localBranch}");
 
+    /// <summary>Pushes a local branch (checked out or not) to its branch on <paramref name="remote"/>.</summary>
+    public static Task PushBranchAsync(string worktree, string remote, string localBranch, string remoteBranch) =>
+        GitCli.RunAsync(worktree, "push", remote, $"refs/heads/{localBranch}:refs/heads/{remoteBranch}");
+
     /// <summary>
     /// Pushes the current branch, setting the upstream to <paramref name="remote"/> when it has none.
     /// <paramref name="force"/> replaces the remote branch (after a rebase or amend), but only if it is still where

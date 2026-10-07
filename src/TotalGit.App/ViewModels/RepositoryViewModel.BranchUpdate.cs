@@ -46,4 +46,58 @@ public partial class RepositoryViewModel
             : await RunGitAsync($"Updating {name}…", () => GitActions.FastForwardBranchAsync(here, remote, upstream.ShortName, name));
         if (ok) ShowInfo($"Updated {name} with {commits} from {upstream.Name}.");
     }
+
+    /// <summary>
+    /// The branch this worktree already has checked out, or a remote branch it tracks: checking it out again
+    /// would do nothing, so double-clicking it doesn't try.
+    /// </summary>
+    public bool IsCheckedOutHere(BranchTarget target) =>
+        _state?.Refs.FirstOrDefault(r => r is { Kind: RefKind.LocalBranch, IsCurrent: true }) is { } current
+        && (target.Kind == RefKind.LocalBranch ? target.Name == current.Name : target.Name == current.Upstream);
+
+    /// <summary>Double-clicking a branch's ↑N: push its new commits to the remote branch it tracks.</summary>
+    [RelayCommand]
+    private async Task PushBranchToRemoteAsync(BranchTarget target)
+    {
+        if (_state is null || target.Kind != RefKind.LocalBranch) return;
+        var branch = _state.Refs.FirstOrDefault(r => r.Kind == RefKind.LocalBranch && r.Name == target.Name);
+        var upstream = branch?.Upstream is { } u ? _state.Refs.FirstOrDefault(r => r.Kind == RefKind.RemoteBranch && r.Name == u) : null;
+        if (branch is null || upstream?.RemoteName is not { } remote)
+        {
+            ShowError($"{target.Name} doesn't track a remote branch. Check it out and push to create one.");
+            return;
+        }
+
+        // The branch checked out here: the same as the toolbar's Push (which also handles a rejected push).
+        if (branch.IsCurrent)
+        {
+            await PushAsync();
+            return;
+        }
+
+        var name = branch.Name;
+        if (branch.Behind > 0)
+        {
+            var theirs = branch.Behind == 1 ? "1 commit" : $"{branch.Behind} commits";
+            Banner = new Banner($"{upstream.Name} has {theirs} that {name} doesn't, so pushing would be refused. Bring them in first " +
+                                "(double-click the ↓), or check the branch out to force push.", false, [new MenuAction("Check out", CheckoutCommand, target)]);
+            return;
+        }
+
+        var commits = branch.Ahead == 1 ? "1 commit" : $"{branch.Ahead} commits";
+        var here = _state.WorkingDirectory;
+        if (await RunGitAsync($"Pushing {name}…", async () =>
+            {
+                try
+                {
+                    await GitActions.PushBranchAsync(here, remote, name, upstream.ShortName);
+                }
+                catch (GitCommandException ex) when (GitActions.ClassifyPushError(ex.Message) is not null)
+                {
+                    // Not the current branch, so the usual pull-or-force-push choice doesn't apply.
+                    throw new InvalidOperationException($"{upstream.Name} has commits {name} doesn't (pushed since the last fetch). Fetch, bring them in, then push.");
+                }
+            }, $"Pushed {commits} from {name} to {upstream.Name}."))
+            CheckWorkflowsSoon();
+    }
 }

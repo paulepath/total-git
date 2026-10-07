@@ -47,13 +47,17 @@ public partial class RepositoryView : UserControl
         {
             if (node.Target is { Kind: RefKind.LocalBranch } t) _vm?.UpdateBranchFromRemoteCommand.Execute(t);
         };
+        Sidebar.AheadDoubleTapped += node =>
+        {
+            if (node.Target is { Kind: RefKind.LocalBranch } t) _vm?.PushBranchToRemoteCommand.Execute(t);
+        };
         Sidebar.GoneDoubleTapped += _ => _vm?.CleanUpBranchesCommand.Execute(null);
         Sidebar.NodeDoubleTapped += node =>
         {
             if (_vm is null) return;
             if (node.IsWorktree && node.Worktree is { } wt) _vm.OpenWorktreeCommand.Execute(wt);
             else if (node.Run is { } run) _vm.OpenUrlCommand.Execute(run.Url);
-            else if (node.Target is { Kind: RefKind.LocalBranch or RefKind.RemoteBranch } t) _vm.CheckoutCommand.Execute(t);
+            else if (node.Target is { Kind: RefKind.LocalBranch or RefKind.RemoteBranch } t && !_vm.IsCheckedOutHere(t)) _vm.CheckoutCommand.Execute(t);
         };
         // Anchored to the sidebar, not the row: right-clicking also selects the row, which can refresh the sidebar
         // (opening a pull request fetches its refs) and replace the row, and a menu closes when its row goes.

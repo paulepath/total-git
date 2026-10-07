@@ -170,7 +170,8 @@
                         IsVisible="{Binding HasActiveRun}" ToolTip.Tip="{Binding ActiveRunsTip}" Background="Transparent" />
               <TextBlock Text="{Binding ElapsedText}" FontSize="10.5" Foreground="#8A9099" IsVisible="{Binding HasElapsed}"
                          FontFamily="Cascadia Mono, Consolas, monospace" />
-              <TextBlock Text="{Binding Ahead}" FontSize="11" Foreground="#4CC38A" IsVisible="{Binding HasAhead}" />
+              <TextBlock Classes="ahead" Text="{Binding Ahead}" FontSize="11" Foreground="#4CC38A" IsVisible="{Binding HasAhead}"
+                         Background="Transparent" ToolTip.Tip="Commits not on the remote branch yet. Double-click to push them." />
               <TextBlock Classes="behind" Text="{Binding Behind}" FontSize="11" Foreground="#E8B339" IsVisible="{Binding HasBehind}"
                          Background="Transparent" ToolTip.Tip="New commits on the remote branch. Double-click to bring them into this branch." />
               <PathIcon Classes="gone" Data="{StaticResource CloseIcon}" Width="9" Height="9" Foreground="#E5484D" VerticalAlignment="Center"

@@ -26,8 +26,9 @@ public partial class SidebarView : UserControl
                 if (!node.IsBranch || node.Children.Count == 0) return;
                 node.IsExpanded = !node.IsExpanded;
             }
-            // The ↓N and ✕ markers have their own double-click actions instead of checking the branch out.
-            if (MarkerAt(e.Source, "behind")) BehindDoubleTapped?.Invoke(node);
+            // The ↑N, ↓N and ✕ markers have their own double-click actions instead of checking the branch out.
+            if (MarkerAt(e.Source, "ahead")) AheadDoubleTapped?.Invoke(node);
+            else if (MarkerAt(e.Source, "behind")) BehindDoubleTapped?.Invoke(node);
             else if (MarkerAt(e.Source, "gone")) GoneDoubleTapped?.Invoke(node);
             else NodeDoubleTapped?.Invoke(node);
             e.Handled = true;
@@ -46,6 +47,9 @@ public partial class SidebarView : UserControl
     public event Action<SidebarNode>? NodeDoubleTapped;
     public event Action<SidebarNode, Control>? NodeContextRequested;
     public event Action? AddWorktreeRequested;
+
+    /// <summary>Double-click on a branch's ↑N: push its new commits to the remote branch.</summary>
+    public event Action<SidebarNode>? AheadDoubleTapped;
 
     /// <summary>Double-click on a branch's ↓N: bring the remote branch's new commits in.</summary>
     public event Action<SidebarNode>? BehindDoubleTapped;

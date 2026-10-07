@@ -131,6 +131,24 @@ public sealed class GitActionsTests : IDisposable
     }
 
     [Fact]
+    public async Task Pushes_a_branch_that_is_not_checked_out()
+    {
+        using var remote = new TestRepo(bare: true);
+        _repo.Commit("base");
+        _repo.Git("remote", "add", "origin", remote.Root);
+        _repo.Git("push", "-q", "-u", "origin", "main", "main:feature/y");
+        _repo.Git("branch", "-q", "--track", "feature/y", "origin/feature/y");
+        _repo.Git("switch", "-q", "feature/y");
+        var tip = _repo.Commit("on y");
+        _repo.Git("switch", "-q", "main");
+
+        await GitActions.PushBranchAsync(_repo.Root, "origin", "feature/y", "feature/y");
+
+        Assert.Equal(tip, TestRepo.RunGit(remote.Root, "rev-parse", "feature/y"));
+        Assert.Equal("main", _repo.Git("branch", "--show-current"));
+    }
+
+    [Fact]
     public async Task Push_sets_upstream_then_pull_and_remote_checkout_work()
     {
         using var remote = new TestRepo(bare: true);
