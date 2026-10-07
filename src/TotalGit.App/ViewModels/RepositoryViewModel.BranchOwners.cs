@@ -21,7 +21,10 @@ public partial class RepositoryViewModel
     {
         // The default branch is everyone's: it gets no owner.
         var remotes = state.Refs.Where(r => r.Kind == RefKind.RemoteBranch && r.ShortName != "HEAD" && r.ShortName != state.DefaultBranch).ToList();
-        var mainLines = state.Refs.Where(r => r.Kind is RefKind.LocalBranch or RefKind.RemoteBranch && BranchCategory.IsMainLine(r.ShortName)).ToList();
+        // The default branch always counts, even when the rules mark no main line (or not it): otherwise a branch's
+        // "own" commits run back to the start of history and its owner is whoever wrote most of the project.
+        bool IsMainLine(RefInfo r) => BranchCategory.IsMainLine(r.ShortName) || r.ShortName == state.DefaultBranch;
+        var mainLines = state.Refs.Where(r => r.Kind is RefKind.LocalBranch or RefKind.RemoteBranch && IsMainLine(r)).ToList();
         var mainTips = mainLines.Select(r => r.TargetSha).Distinct().ToList();
         var signature = $"{_commits.Count}|{(_commits.Count > 0 ? _commits[0].Sha : "")}|"
             + string.Join(",", remotes.Select(r => r.Name + "=" + r.TargetSha)) + "|" + string.Join(",", mainLines.Select(r => r.Name));
@@ -36,13 +39,12 @@ public partial class RepositoryViewModel
         {
             var owners = await Task.Run(async () =>
             {
-                var (found, unresolved) = BranchOwnership.Compute(commits, remotes, mainLines,
-                    r => BranchCategory.IsMainLine(r.ShortName));
+                var (found, unresolved) = BranchOwnership.Compute(commits, remotes, mainLines, IsMainLine);
                 // Beyond the loaded history: git, a few at a time.
                 using var gate = new SemaphoreSlim(4);
                 var extra = await Task.WhenAll(unresolved.Select(async r =>
                 {
-                    var isMain = BranchCategory.IsMainLine(r.ShortName);
+                    var isMain = IsMainLine(r);
                     var exclude = isMain ? BranchOwnership.OtherMainLineTips(mainLines, r) : mainTips;
                     var key = r.TargetSha + "|" + string.Join(",", exclude);
                     lock (_ownerCache)
