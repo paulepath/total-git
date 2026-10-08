@@ -144,7 +144,8 @@ public partial class RepositoryViewModel
         _filteredOut = filtered.Hidden;
 
         // Folding is on: every run folds unless the user opened it. Off: only the runs the user collapsed.
-        _foldableRuns = CommitRuns.Find(filtered.Commits);
+        // A commit with a branch or tag heads its own run, so its label stays on its real row.
+        _foldableRuns = CommitRuns.Find(filtered.Commits, state.Refs.Select(r => r.TargetSha).ToHashSet());
         var folds = _foldableRuns.Where(r => _foldedByUser.Contains(r.Shas[0])
                                              || (FoldRuns && !_unfoldedByUser.Contains(r.Shas[0])))
             .ToList();

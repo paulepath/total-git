@@ -4,7 +4,8 @@ namespace TotalGit.Core.Graph;
 
 /// <summary>
 /// Finds runs of commits that can be folded into one row: consecutive rows of the graph on one line, each the only
-/// parent of the row above, with no merge, no branch forking off, and no other branch's commit between them.
+/// parent of the row above, with no merge, no branch forking off, and no other branch's commit between them. A commit
+/// with a branch or tag on it starts a new run, so a fold never hides where a branch really is.
 /// </summary>
 public static class CommitRuns
 {
@@ -18,8 +19,9 @@ public static class CommitRuns
     private static readonly TimeSpan Rewritten = TimeSpan.FromMinutes(2);
 
     /// <param name="commits">The history in the order the graph shows it, children before parents.</param>
+    /// <param name="labelled">Commits with a branch or tag on them: each can only be the newest commit of its run.</param>
     /// <returns>Every run of at least <see cref="MinLength"/> commits, each newest first.</returns>
-    public static IReadOnlyList<CommitFold> Find(IReadOnlyList<CommitInfo> commits)
+    public static IReadOnlyList<CommitFold> Find(IReadOnlyList<CommitInfo> commits, IReadOnlySet<string>? labelled = null)
     {
         var bySha = new Dictionary<string, CommitInfo>(commits.Count);
         foreach (var c in commits) bySha.TryAdd(c.Sha, c);
@@ -31,10 +33,12 @@ public static class CommitRuns
         bool Plain(CommitInfo c) => !c.IsWorkingTree && c.ParentShas.Count == 1;
 
         // Row i continues into row i + 1 when that row is its parent and nothing else hangs off it: the parent has
-        // no other child (no branch forks there). Another branch's commit in between breaks the run.
+        // no other child (no branch forks there). Another branch's commit in between breaks the run, and so does a
+        // branch or tag on the parent (it heads a run of its own).
         bool Continues(int i) =>
             i + 1 < commits.Count && Plain(commits[i]) && Plain(commits[i + 1])
-            && commits[i].ParentShas[0] == commits[i + 1].Sha && children.GetValueOrDefault(commits[i + 1].Sha) == 1;
+            && commits[i].ParentShas[0] == commits[i + 1].Sha && children.GetValueOrDefault(commits[i + 1].Sha) == 1
+            && labelled?.Contains(commits[i + 1].Sha) != true;
 
         var runs = new List<CommitFold>();
         for (var i = 0; i < commits.Count; i++)

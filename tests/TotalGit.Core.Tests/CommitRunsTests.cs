@@ -28,6 +28,29 @@ public class CommitRunsTests
         Assert.Empty(CommitRuns.Find([C("b", "a"), C("a", "z")]));
     }
 
+    private static readonly CommitInfo[] Line = [C("e", "d"), C("d", "c"), C("c", "b"), C("b", "a"), C("a", "z")];
+
+    [Fact]
+    public void A_branch_part_way_down_a_run_starts_its_own_run()
+    {
+        // e and d are too few to fold, so c's branch heads the only run, and its label stays on its own row.
+        var runs = CommitRuns.Find(Line, new HashSet<string> { "e", "c" });
+
+        Assert.Equal(["c", "b", "a"], Assert.Single(runs).Shas);
+    }
+
+    [Fact]
+    public void A_branch_on_the_newest_commit_keeps_the_run_whole()
+    {
+        Assert.Equal(["e", "d", "c", "b", "a"], Assert.Single(CommitRuns.Find(Line, new HashSet<string> { "e" })).Shas);
+    }
+
+    [Fact]
+    public void Branches_on_neighbouring_commits_leave_the_top_one_unfolded()
+    {
+        Assert.Equal(["d", "c", "b", "a"], Assert.Single(CommitRuns.Find(Line, new HashSet<string> { "e", "d" })).Shas);
+    }
+
     [Fact]
     public void Another_branch_commit_between_rows_ends_the_run()
     {
