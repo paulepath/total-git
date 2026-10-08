@@ -22,6 +22,9 @@ public sealed record CommitInfo(
     /// <summary>When the commit was written (a rebase rewrites this but keeps the author date); null when unknown.</summary>
     public DateTimeOffset? CommitDate { get; init; }
 
+    /// <summary>The full message retained with loaded history for searching commit bodies.</summary>
+    public string? FullMessage { get; init; }
+
     public string ShortSha => Sha.Length > 7 ? Sha[..7] : Sha;
     public bool IsMerge => ParentShas.Count > 1;
 }

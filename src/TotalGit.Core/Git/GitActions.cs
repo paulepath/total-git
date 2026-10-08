@@ -53,45 +53,63 @@ public static class GitActions
     /// Throws away unstaged changes: tracked files go back to their staged version (what's staged is kept) and
     /// untracked files are deleted. Conflicted files are left alone.
     /// </summary>
-    public static async Task DiscardUnstagedAsync(string worktree, IReadOnlyList<FileChange> files)
+    public static async Task<DiscardBackup?> DiscardUnstagedAsync(string worktree, IReadOnlyList<FileChange> files)
     {
         var tracked = files.Where(f => f.Kind is not (ChangeKind.Untracked or ChangeKind.Conflicted)).Select(f => f.Path).ToArray();
         var untracked = files.Where(f => f.Kind == ChangeKind.Untracked).Select(f => f.Path).ToArray();
-        if (tracked.Length > 0) await RunWithPathsAsync(worktree, ["restore", "--worktree"], tracked);
-        // clean has no --pathspec-from-file, so long lists go in batches.
-        foreach (var batch in untracked.Chunk(50)) await GitCli.RunAsync(worktree, ["clean", "-f", "-q", "--", .. batch]);
+        var backup = await DiscardBackup.CreateAsync(worktree, [.. tracked, .. untracked]);
+        try
+        {
+            if (tracked.Length > 0) await RunWithPathsAsync(worktree, ["restore", "--worktree"], tracked);
+            // clean has no --pathspec-from-file, so long lists go in batches.
+            foreach (var batch in untracked.Chunk(50)) await GitCli.RunAsync(worktree, ["clean", "-f", "-q", "--", .. batch.Select(p => ":(literal)" + p)]);
+        }
+        finally { if (backup is not null) await backup.CompleteAsync(worktree); }
+        return backup;
     }
 
     /// <summary>
     /// Throws away every change to staged files, in the index and the working copy: they go back to HEAD (a file
     /// HEAD doesn't have is removed, and a rename brings the old name back).
     /// </summary>
-    public static async Task DiscardStagedAsync(string worktree, IReadOnlyList<FileChange> files)
+    public static async Task<DiscardBackup?> DiscardStagedAsync(string worktree, IReadOnlyList<FileChange> files)
     {
         var paths = files.Where(f => f.Kind != ChangeKind.Conflicted)
             .SelectMany(f => f.OldPath is { } old && old != f.Path ? new[] { f.Path, old } : [f.Path])
             .Distinct().ToArray();
-        if (paths.Length == 0) return;
-        if (await HasHeadAsync(worktree))
-            await RunWithPathsAsync(worktree, ["restore", "--source=HEAD", "--staged", "--worktree"], paths);
-        else
-            await RunWithPathsAsync(worktree, ["rm", "-r", "-f", "-q"], paths);
+        if (paths.Length == 0) return null;
+        var backup = await DiscardBackup.CreateAsync(worktree, paths);
+        try
+        {
+            if (await HasHeadAsync(worktree))
+                await RunWithPathsAsync(worktree, ["restore", "--source=HEAD", "--staged", "--worktree"], paths);
+            else
+                await RunWithPathsAsync(worktree, ["rm", "-r", "-f", "-q"], paths);
+        }
+        finally { if (backup is not null) await backup.CompleteAsync(worktree); }
+        return backup;
     }
 
     /// <summary>Throws away all uncommitted changes to tracked files and, if asked, deletes untracked files too.</summary>
-    public static async Task DiscardAllAsync(string worktree, bool includeUntracked)
+    public static async Task<DiscardBackup?> DiscardAllAsync(string worktree, bool includeUntracked)
     {
-        if (await HasHeadAsync(worktree))
-            await GitCli.RunAsync(worktree, "reset", "--hard", "-q");
-        else
-            await GitCli.RunAsync(worktree, "rm", "-r", "-f", "-q", "--cached", "--ignore-unmatch", ".");
-        if (includeUntracked) await GitCli.RunAsync(worktree, "clean", "-f", "-d", "-q");
+        var backup = await DiscardBackup.CreateAsync(worktree, null, includeUntracked);
+        try
+        {
+            if (await HasHeadAsync(worktree))
+                await GitCli.RunAsync(worktree, "reset", "--hard", "-q");
+            else
+                await GitCli.RunAsync(worktree, "rm", "-r", "-f", "-q", "--cached", "--ignore-unmatch", ".");
+            if (includeUntracked) await GitCli.RunAsync(worktree, "clean", "-f", "-d", "-q");
+        }
+        finally { if (backup is not null) await backup.CompleteAsync(worktree); }
+        return backup;
     }
 
     /// <summary>Runs a command on paths; long lists go through stdin so they can't exceed the command-line limit.</summary>
     private static Task RunWithPathsAsync(string worktree, string[] command, string[] paths) => paths.Length <= 50
-        ? GitCli.RunAsync(worktree, [.. command, "--", .. paths])
-        : GitCli.RunAsync(worktree, [.. command, "--pathspec-from-file=-", "--pathspec-file-nul"], stdin: string.Join('\0', paths));
+        ? GitCli.RunAsync(worktree, [.. command, "--", .. paths.Select(p => ":(literal)" + p)])
+        : GitCli.RunAsync(worktree, [.. command, "--pathspec-from-file=-", "--pathspec-file-nul"], stdin: string.Join('\0', paths.Select(p => ":(literal)" + p)));
 
     public static async Task UnstageAllAsync(string worktree)
     {
@@ -104,9 +122,36 @@ public static class GitActions
     public static Task CommitAsync(string worktree, string message) =>
         GitCli.RunAsync(worktree, ["commit", "--cleanup=strip", "-F", "-"], stdin: message);
 
+    public static async Task<string?> HeadMessageAsync(string worktree)
+    {
+        if (!await HasHeadAsync(worktree)) return null;
+        return (await GitCli.RunAsync(worktree, "log", "-1", "--format=%B")).StdOut.TrimEnd();
+    }
+
+    public static async Task<bool> HeadIsPushedAsync(string worktree)
+    {
+        if (!await HasHeadAsync(worktree)) return false;
+        return (await GitCli.RunAsync(worktree, "for-each-ref", "--contains=HEAD", "--format=%(refname)", "refs/remotes/")).StdOut.Trim().Length > 0;
+    }
+
+    public static async Task AmendAsync(string worktree, string message)
+    {
+        if (!await HasHeadAsync(worktree) || await IsOperationInProgressAsync(worktree))
+            throw new InvalidOperationException("Amend needs a HEAD commit and no operation in progress.");
+        await GitCli.RunAsync(worktree, ["commit", "--amend", "--cleanup=strip", "-F", "-"], stdin: message);
+    }
+
     /// <summary>Checks out a local branch. Throws <see cref="BranchInUseException"/> if another worktree has it.</summary>
     public static Task CheckoutAsync(string worktree, string branch, LocalChanges changes = LocalChanges.Keep) =>
-        GitCli.RunAsync(worktree, ["switch", .. SwitchFlags(changes), branch]);
+        WithDiscardBackupAsync(worktree, changes == LocalChanges.Discard,
+            () => GitCli.RunAsync(worktree, ["switch", .. SwitchFlags(changes), branch]));
+
+    private static async Task WithDiscardBackupAsync(string worktree, bool discard, Func<Task> action)
+    {
+        var backup = discard ? await DiscardBackup.CreateAsync(worktree, null, includeUntracked: false) : null;
+        try { await action(); }
+        finally { if (backup is not null) await backup.CompleteAsync(worktree); }
+    }
 
     /// <summary>
     /// What <c>git switch</c> does with uncommitted changes. <see cref="LocalChanges.Stash"/> is done by the caller
@@ -127,9 +172,10 @@ public static class GitActions
     {
         var exists = await GitCli.RunAsync(worktree, ["rev-parse", "--verify", "--quiet", $"refs/heads/{branch}"], throwOnError: false);
         if (exists.ExitCode == 0)
-            await GitCli.RunAsync(worktree, ["switch", .. SwitchFlags(changes), branch]);
+            await CheckoutAsync(worktree, branch, changes);
         else
-            await GitCli.RunAsync(worktree, ["switch", .. SwitchFlags(changes), "--track", "-c", branch, $"{remoteName}/{branch}"]);
+            await WithDiscardBackupAsync(worktree, changes == LocalChanges.Discard,
+                () => GitCli.RunAsync(worktree, ["switch", .. SwitchFlags(changes), "--track", "-c", branch, $"{remoteName}/{branch}"]));
         return branch;
     }
 
@@ -167,7 +213,8 @@ public static class GitActions
 
     /// <summary>Checks out a commit without a branch (detached HEAD). Uncommitted changes come along, as with a branch switch.</summary>
     public static Task CheckoutDetachedAsync(string worktree, string sha, LocalChanges changes = LocalChanges.Keep) =>
-        GitCli.RunAsync(worktree, ["switch", .. SwitchFlags(changes), "--detach", sha]);
+        WithDiscardBackupAsync(worktree, changes == LocalChanges.Discard,
+            () => GitCli.RunAsync(worktree, ["switch", .. SwitchFlags(changes), "--detach", sha]));
 
     /// <summary>Creates a branch at a commit, optionally switching to it.</summary>
     public static Task CreateBranchAsync(string worktree, string name, string sha, bool checkout) => checkout
@@ -429,7 +476,8 @@ public static class GitActions
 
     /// <summary>Moves the current branch (or detached HEAD) to <paramref name="sha"/>.</summary>
     public static Task ResetAsync(string worktree, string sha, ResetMode mode) =>
-        GitCli.RunAsync(worktree, "reset", "--" + mode.ToString().ToLowerInvariant(), sha);
+        WithDiscardBackupAsync(worktree, mode == ResetMode.Hard,
+            () => GitCli.RunAsync(worktree, "reset", "--" + mode.ToString().ToLowerInvariant(), sha));
 
     /// <summary>
     /// What resetting to <paramref name="sha"/> takes off the branch: commits after it on the current branch, and how

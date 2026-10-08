@@ -80,6 +80,9 @@ public sealed class AppSettings
     /// <summary>Diffs show the whole file (changes marked in place), not just the changes and a few lines round them.</summary>
     public bool DiffWholeFile { get; set; }
 
+    /// <summary>Display diffs ignoring all whitespace changes (git diff -w).</summary>
+    public bool DiffIgnoreWhitespace { get; set; }
+
     /// <summary>The pull request review window's last size (and whether it was maximised).</summary>
     public double ReviewWindowWidth { get; set; } = 1500;
     public double ReviewWindowHeight { get; set; } = 950;

@@ -414,6 +414,7 @@
                   </Border>
                 </Grid>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+                  <ToggleButton Classes="small" IsChecked="{Binding IgnoreWhitespace}" Content="Ignore whitespace" ToolTip.Tip="Hide whitespace-only changes (git diff -w)" />
                   <ToggleButton Classes="small" IsChecked="{Binding WholeFileDiff}" ToolTip.Tip="Show the whole file with the changes marked">
                     <TextBlock Text="Whole file" />
                   </ToggleButton>

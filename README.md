@@ -18,6 +18,8 @@
 - **Main lines drawn thicker**: whichever branches your branch rules mark as main lines (main, features, bugs…).
 - **Fold commit runs**: consecutive commits on one line fold into a single "N commits" row; expand it with a click.
 - **Filters**: show one developer's commits, or only the current branch's path back to main.
+- **History search**: find loaded commits by message, SHA prefix or author, with previous/next matches. Search
+  includes message bodies and says when more history remains to load.
 - **Squash** a selection of commits into one, or **rebase** just the selected commits onto another branch.
 
 **Branches**
@@ -44,8 +46,14 @@
 
 **Everyday git**
 - **Diffs** inline or side by side, with the whole file when you want it, for commits and uncommitted changes.
+- **Ignore whitespace** in working, staged, commit and review diffs; the preference is remembered.
 - **Staging and commit** with changed files in a collapsible folder tree (or a flat list) and a filter, plus
   fetch, pull and push.
+- **Amend the last commit**, with its message prefilled and a warning if it has already been pushed. Also works
+  without staged changes; unavailable before the first commit or during an operation.
+- **Undo discarded changes**, including untracked files and their staging state. Backups live in the worktree's
+  git directory for up to seven days (last 20 discards), including checkout discards and hard resets. Undo stops
+  if affected paths have newer edits. Only changed files are backed up; a submodule keeps just its recorded commit.
 - **Merge and rebase** from the right-click menu, including **interactive rebase** (reorder, reword, squash,
   fix up or drop commits).
 - **Built-in 3-pane merge tool** for conflicts, with continue / skip / abort for merges and rebases in progress.

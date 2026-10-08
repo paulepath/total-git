@@ -89,6 +89,12 @@
               </StackPanel>
             </StackPanel>
           </Button>
+          <Button Classes="tool" Command="{Binding UndoDiscardCommand}" IsVisible="{Binding CanUndoDiscard}" ToolTip.Tip="Undo the latest discard (backups kept for seven days, up to 20)">
+            <StackPanel>
+              <PathIcon Data="{StaticResource ResetIcon}" />
+              <TextBlock Classes="label" Text="Undo discard" />
+            </StackPanel>
+          </Button>
           <Button Classes="tool" Command="{Binding StashCommand}" ToolTip.Tip="Stash uncommitted changes">
             <StackPanel>
               <PathIcon Data="{StaticResource StashIcon}" />
@@ -231,6 +237,19 @@
               </Style>
             </Border.Styles>
             <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="4">
+              <StackPanel Orientation="Horizontal" Spacing="4">
+                <TextBox Text="{Binding HistoryQuery}" PlaceholderText="Search message, SHA or author" Width="220"
+                         FontSize="12" MinHeight="26" Padding="8,2" ToolTip.Tip="{Binding HistorySearchDetail}">
+                  <TextBox.KeyBindings>
+                    <KeyBinding Gesture="Enter" Command="{Binding NextHistoryMatchCommand}" />
+                    <KeyBinding Gesture="Shift+Enter" Command="{Binding PreviousHistoryMatchCommand}" />
+                  </TextBox.KeyBindings>
+                </TextBox>
+                <Button Content="&#x2191;" Command="{Binding PreviousHistoryMatchCommand}" FontSize="12" Padding="7,2" MinHeight="26" ToolTip.Tip="Previous match (Shift+Enter)" />
+                <Button Content="&#x2193;" Command="{Binding NextHistoryMatchCommand}" FontSize="12" Padding="7,2" MinHeight="26" ToolTip.Tip="Next match (Enter)" />
+                <TextBlock Text="{Binding HistorySearchSummary}" ToolTip.Tip="{Binding HistorySearchDetail}" Foreground="#8A9099" FontSize="12"
+                           VerticalAlignment="Center" Width="74" TextTrimming="CharacterEllipsis" />
+              </StackPanel>
               <ComboBox ItemsSource="{Binding Authors}" SelectedItem="{Binding SelectedAuthor}" MinWidth="190" MaxDropDownHeight="420"
                         FontSize="12" MinHeight="26" Padding="8,2" ToolTip.Tip="Show only one developer's commits">
                 <ComboBox.ItemTemplate>
@@ -285,7 +304,7 @@
         <!-- Diff replaces the graph while a file is open, like GitKraken. -->
         <DockPanel IsVisible="{Binding HasDiff}" Background="#1C1F24">
           <Border DockPanel.Dock="Top" Background="#23272D" Padding="12,6" BorderBrush="#30353C" BorderThickness="0,0,0,1">
-            <Grid ColumnDefinitions="*,Auto,Auto,Auto">
+            <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto">
               <TextBlock Text="{Binding DiffTitle}" VerticalAlignment="Center" FontFamily="Cascadia Mono, Consolas, monospace" FontSize="12"
                          Foreground="#E6E8EB" TextTrimming="CharacterEllipsis" />
               <!-- Changes only | whole file -->
@@ -320,7 +339,16 @@
                   </StackPanel>
                 </Button>
               </StackPanel>
-              <Button Grid.Column="3" Command="{Binding CloseDiffCommand}" Padding="10,3" ToolTip.Tip="Close (Esc)">
+              <ToggleButton Grid.Column="3" IsChecked="{Binding IgnoreWhitespace}" Padding="10,3" Margin="0,0,10,0" CornerRadius="4"
+                            ToolTip.Tip="Hide whitespace-only changes (git diff -w). Files and staging are unchanged.">
+                <ToggleButton.Styles>
+                  <Style Selector="ToggleButton:checked /template/ ContentPresenter#PART_ContentPresenter">
+                    <Setter Property="Background" Value="#1F4E7A" />
+                  </Style>
+                </ToggleButton.Styles>
+                <TextBlock Text="Ignore whitespace" FontSize="12" />
+              </ToggleButton>
+              <Button Grid.Column="4" Command="{Binding CloseDiffCommand}" Padding="10,3" ToolTip.Tip="Close (Esc)">
                 <StackPanel Orientation="Horizontal" Spacing="6">
                   <PathIcon Data="{StaticResource CloseIcon}" Width="10" Height="10" />
                   <TextBlock Text="Close" FontSize="12" />

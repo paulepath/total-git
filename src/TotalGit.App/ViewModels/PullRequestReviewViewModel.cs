@@ -49,6 +49,7 @@ public sealed partial class PullRequestReviewViewModel : ObservableObject
         _marksKey = source.MarksKey;
         DiffMode = Enum.TryParse<DiffViewMode>(ctx.Settings.DiffMode, out var mode) ? mode : DiffViewMode.Inline;
         WholeFileDiff = ctx.Settings.DiffWholeFile;
+        IgnoreWhitespace = ctx.Settings.DiffIgnoreWhitespace;
         ShowAsTree = ctx.Settings.ChangedFilesTree;
         HideTests = ctx.Settings.ReviewHideTests;
         Pr = source is PullRequestSource pr ? NewPullRequest(pr.Summary, pr.Provider) : new PullRequestViewModel(LocalSummary(source), false, null);
@@ -685,6 +686,19 @@ public sealed partial class PullRequestReviewViewModel : ObservableObject
     [ObservableProperty]
     public partial bool WholeFileDiff { get; set; }
 
+    [ObservableProperty]
+    public partial bool IgnoreWhitespace { get; set; }
+
+    partial void OnIgnoreWhitespaceChanged(bool value)
+    {
+        if (_ctx.Settings.DiffIgnoreWhitespace != value)
+        {
+            _ctx.Settings.DiffIgnoreWhitespace = value;
+            _ctx.Settings.Save();
+        }
+        if (SelectedFile is { } file) _ = ReloadDiffAsync(file);
+    }
+
     partial void OnWholeFileDiffChanged(bool value)
     {
         _ctx.Settings.DiffWholeFile = value;
@@ -716,17 +730,18 @@ public sealed partial class PullRequestReviewViewModel : ObservableObject
         var from = SinceLastReview && LastReviewSha is { } since ? since : mergeBase;
         if (_commitRange is { } range) (from, head) = range;
         var whole = WholeFileDiff;
+        var ignore = IgnoreWhitespace;
         var session = _ctx.Session;
         try
         {
             var mark = _ctx.Marks.Get(_marksKey, file.Path);
             var (diff, delta) = await Task.Run(() =>
             {
-                var d = session.GetRangeFileDiff(from, head, file.Path, whole);
+                var d = session.GetRangeFileDiff(from, head, file.Path, whole, ignore);
                 // The lines changed since the file was reviewed, when the reviewed commit is here to compare with.
                 ReviewDelta? changed = null;
                 if (file.IsChanged && mark is not null && mark.HeadSha != head && !IsCommitView && session.ResolveCommit(mark.HeadSha) is not null)
-                    changed = ReviewDelta.From(session.GetRangeFileDiff(mark.HeadSha, head, file.Path));
+                    changed = ReviewDelta.From(session.GetRangeFileDiff(mark.HeadSha, head, file.Path, ignoreWhitespace: ignore));
                 return (d, changed);
             });
             if (request != _diffRequest) return;
@@ -735,7 +750,7 @@ public sealed partial class PullRequestReviewViewModel : ObservableObject
             UpdateFileHeader();
             RebuildDiffThreads();
         }
-        catch (Exception ex) when (ex is LibGit2Sharp.LibGit2SharpException or ArgumentException or IOException)
+        catch (Exception ex) when (ex is LibGit2Sharp.LibGit2SharpException or ArgumentException or IOException or GitCommandException)
         {
             if (request == _diffRequest) ShowError($"Couldn't show {file.FileName}: {ex.Message}");
         }

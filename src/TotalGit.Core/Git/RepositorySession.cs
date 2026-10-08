@@ -224,12 +224,20 @@ public sealed class RepositorySession : IDisposable
     }
 
     /// <param name="wholeFile">Include every line of the file, not just the changes and the lines around them.</param>
-    public FileDiff GetCommitFileDiff(string sha, string path, bool wholeFile = false)
+    public FileDiff GetCommitFileDiff(string sha, string path, bool wholeFile = false, bool ignoreWhitespace = false)
     {
         lock (_lock)
         {
             var c = _repo.Lookup<Commit>(sha) ?? throw new ArgumentException($"Commit {sha} not found.", nameof(sha));
             var entry = CommitPatch(c)[path];
+            if (ignoreWhitespace)
+            {
+                var parent = c.Parents.FirstOrDefault();
+                var command = parent is null
+                    ? new[] { "diff-tree", "--root", "--no-commit-id", "-p", c.Sha }
+                    : new[] { "diff", parent.Sha, c.Sha };
+                return CliFileDiff(command, path, entry?.OldPath, wholeFile, ignoreWhitespace: true);
+            }
             return wholeFile && entry is not null
                 ? WholeFile(path, WholeFilePatch(c.Parents.FirstOrDefault()?.Tree, c.Tree, entry)[path])
                 : ToFileDiff(path, entry);
@@ -271,11 +279,13 @@ public sealed class RepositorySession : IDisposable
     }
 
     /// <summary>One file's diff between two commits' trees. For a renamed file <paramref name="path"/> is the new path.</summary>
-    public FileDiff GetRangeFileDiff(string baseSha, string headSha, string path, bool wholeFile = false)
+    public FileDiff GetRangeFileDiff(string baseSha, string headSha, string path, bool wholeFile = false, bool ignoreWhitespace = false)
     {
         lock (_lock)
         {
             var entry = RangePatch(baseSha, headSha)[path];
+            if (ignoreWhitespace)
+                return CliFileDiff(["diff", _repo.Lookup<Commit>(baseSha)!.Sha, _repo.Lookup<Commit>(headSha)!.Sha], path, entry?.OldPath, wholeFile, ignoreWhitespace: true);
             if (!wholeFile || entry is null) return ToFileDiff(path, entry);
             var from = _repo.Lookup<Commit>(baseSha)!.Tree;
             var to = _repo.Lookup<Commit>(headSha)!.Tree;
@@ -284,23 +294,42 @@ public sealed class RepositorySession : IDisposable
     }
 
     /// <summary>Diff of a working-tree file: index vs HEAD when <paramref name="staged"/>, else working tree vs index.</summary>
-    public FileDiff GetWorkingFileDiff(string path, bool staged, bool wholeFile = false)
+    public FileDiff GetWorkingFileDiff(string path, bool staged, bool wholeFile = false, bool ignoreWhitespace = false)
     {
         lock (_lock)
         {
-            var options = wholeFile ? WholeFileOptions : new CompareOptions();
-            var patch = staged
-                ? _repo.Diff.Compare<Patch>(_repo.Head.Tip?.Tree, DiffTargets.Index, [path], null, options)
-                : _repo.Diff.Compare<Patch>([path], true, null, options);
-            var entry = patch[path];
-            if (entry is not null && !string.IsNullOrEmpty(entry.Patch) && entry.Patch.Contains("@@"))
-                return ToFileDiff(path, entry.IsBinaryComparison, entry.Patch) with { IsWholeFile = wholeFile };
-
-            // Untracked files: libgit2 may omit the content, so show the file as all-added.
+            // Git writes the index outside this long-lived libgit2 session. Read the live index for both modes.
+            var tracked = GitCli.RunAsync(WorkingDirectory, "ls-files", "--cached", "-z", "--", ":(literal)" + path).GetAwaiter().GetResult().StdOut.Length > 0;
             var full = Path.Combine(WorkingDirectory, path);
-            if (!staged && File.Exists(full)) return UntrackedFileDiff(path, full) with { IsWholeFile = wholeFile };
-            return new FileDiff(path, entry?.IsBinaryComparison ?? false, [], false);
+            if (!staged && !tracked && File.Exists(full)) return UntrackedFileDiff(path, full) with { IsWholeFile = wholeFile };
+            string? oldPath = null;
+            if (staged)
+            {
+                var changes = GitCli.RunAsync(WorkingDirectory, "diff", "--cached", "--name-status", "-z", "-M").GetAwaiter().GetResult().StdOut.Split('\0');
+                for (var i = 0; i < changes.Length && changes[i].Length > 0;)
+                {
+                    var kind = changes[i++];
+                    var old = changes[i++];
+                    if (kind.StartsWith('R') || kind.StartsWith('C'))
+                    {
+                        var name = changes[i++];
+                        if (name == path) { oldPath = old; break; }
+                    }
+                }
+            }
+            return CliFileDiff(staged ? ["diff", "--cached"] : ["diff"], path, oldPath, wholeFile, ignoreWhitespace);
         }
+    }
+
+    /// <summary>The public libgit2 comparison options do not expose -w; use git for this display preference.</summary>
+    private FileDiff CliFileDiff(string[] command, string path, string? oldPath, bool wholeFile, bool ignoreWhitespace)
+    {
+        var paths = oldPath is not null && oldPath != path ? new[] { oldPath, path } : [path];
+        var result = GitCli.RunAsync(WorkingDirectory,
+            [.. command, .. ignoreWhitespace ? new[] { "-w" } : [], "-M", "--no-ext-diff", "--no-textconv", $"--unified={(wholeFile ? 10_000_000 : 3)}", "--", .. paths.Select(p => ":(literal)" + p)])
+            .GetAwaiter().GetResult();
+        var binary = result.StdOut.Contains("Binary files ", StringComparison.Ordinal) || result.StdOut.Contains("GIT binary patch", StringComparison.Ordinal);
+        return ToFileDiff(path, binary, result.StdOut) with { IsWholeFile = wholeFile };
     }
 
     private static FileDiff UntrackedFileDiff(string path, string fullPath)
@@ -441,7 +470,7 @@ public sealed class RepositorySession : IDisposable
         c.Author.Name,
         c.Author.Email,
         c.Author.When,
-        c.MessageShort) { CommitDate = c.Committer.When };
+        c.MessageShort) { CommitDate = c.Committer.When, FullMessage = c.Message };
 
     private static RepoOperation ReadOperation(CurrentOperation op) => op switch
     {

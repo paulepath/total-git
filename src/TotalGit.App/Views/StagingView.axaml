@@ -85,10 +85,14 @@
 
     <Border Grid.Row="3" Padding="14,10" BorderBrush="#30353C" BorderThickness="0,1,0,0">
       <StackPanel Spacing="8">
-        <TextBlock Classes="header" Text="Commit" />
+        <Grid ColumnDefinitions="*,Auto">
+          <TextBlock Classes="header" Text="Commit" />
+          <CheckBox Grid.Column="1" Content="Amend" IsChecked="{Binding Amend}" IsEnabled="{Binding CanAmend}"
+                    ToolTip.Tip="Replace the last commit with these changes and message" />
+        </Grid>
         <TextBox Text="{Binding Summary}" PlaceholderText="Summary" MaxLength="200" />
         <TextBox Text="{Binding Description}" PlaceholderText="Description" AcceptsReturn="True" TextWrapping="Wrap" Height="80" />
-        <Button Content="Commit staged changes" Command="{Binding CommitCommand}" HorizontalAlignment="Stretch"
+        <Button Content="{Binding CommitText}" Command="{Binding CommitCommand}" HorizontalAlignment="Stretch"
                 HorizontalContentAlignment="Center" Classes="accent" />
       </StackPanel>
     </Border>

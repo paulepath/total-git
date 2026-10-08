@@ -85,6 +85,7 @@ public partial class RepositoryViewModel
     /// <summary>Another repository opened in this tab: its own saved filters, no developer picked, nothing folded by hand.</summary>
     private void ResetGraphFilters()
     {
+        HistoryQuery = "";
         _foldedByUser.Clear();
         _unfoldedByUser.Clear();
         _loadingFilterSettings = true;

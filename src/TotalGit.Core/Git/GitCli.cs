@@ -31,6 +31,23 @@ public static class GitCli
 {
     public static string Executable { get; set; } = "git";
 
+    /// <summary>Copies a blob without decoding it as text (discard backups include binary index contents).</summary>
+    public static async Task SaveBlobAsync(string worktree, string sha, string destination)
+    {
+        var psi = new ProcessStartInfo(Executable)
+        {
+            WorkingDirectory = worktree, RedirectStandardOutput = true, RedirectStandardError = true,
+            UseShellExecute = false, CreateNoWindow = true,
+        };
+        foreach (var arg in (string[])["cat-file", "blob", sha]) psi.ArgumentList.Add(arg);
+        using var process = Process.Start(psi) ?? throw new InvalidOperationException("Unable to start git.");
+        var error = process.StandardError.ReadToEndAsync();
+        await using (var output = File.Create(destination))
+            await process.StandardOutput.BaseStream.CopyToAsync(output);
+        await process.WaitForExitAsync();
+        if (process.ExitCode != 0) throw new GitCommandException("cat-file blob", new(process.ExitCode, "", await error));
+    }
+
     public static async Task<GitResult> RunAsync(
         string workingDirectory,
         IEnumerable<string> args,

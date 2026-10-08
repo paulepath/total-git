@@ -65,6 +65,7 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
         if (path is not null) RepositoryName = Path.GetFileName(Path.TrimEndingDirectorySeparator(path));
         DiffMode = Enum.TryParse<DiffViewMode>(settings.DiffMode, out var mode) ? mode : DiffViewMode.Inline;
         WholeFileDiff = settings.DiffWholeFile;
+        IgnoreWhitespace = settings.DiffIgnoreWhitespace;
     }
 
     /// <summary>Path to load when the tab is first selected; null once loaded or for an empty tab.</summary>
@@ -202,6 +203,19 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     public partial bool WholeFileDiff { get; set; }
 
+    [ObservableProperty]
+    public partial bool IgnoreWhitespace { get; set; }
+
+    partial void OnIgnoreWhitespaceChanged(bool value)
+    {
+        if (_settings.DiffIgnoreWhitespace != value)
+        {
+            _settings.DiffIgnoreWhitespace = value;
+            _settings.Save();
+        }
+        _ = ReloadDiffAsync();
+    }
+
     partial void OnWholeFileDiffChanged(bool value)
     {
         if (_settings.DiffWholeFile != value)
@@ -298,6 +312,7 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
             UpdateWorkflowHost();
             if (sameRepo) await ReloadSelectionAsync();
             _ = RefreshOtherWorktreesAsync();
+            if (!sameRepo) _ = UpdateCanUndoDiscardAsync();
 
             PendingPath = null;
             OnPropertyChanged(nameof(TabPath));
@@ -456,6 +471,8 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
             : "Push the current branch";
 
         HasStashes = state.Stashes.Count > 0;
+        OnPropertyChanged(nameof(CanAmendHead));
+        if (Staging is { } staging) staging.CanAmend = CanAmendHead;
         UpdateOperationBanner();
         LoadJiraProjects(state);
         Sidebar.Update(state.Refs, state.Stashes, _worktrees, WorktreeService.FindLeftovers(state.MainWorkingDirectory, _worktrees), state.WorkingDirectory);
@@ -493,6 +510,7 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
         UpdateFilterSummary(projected.Commits.Count);
         UpdateCommitCount();
         UpdateBranchOwners(state);
+        RefreshHistorySearch();
     }
 
     private void UpdateCommitCount()
@@ -542,6 +560,7 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
                 Staging.PropertyChanged += OnChildPropertyChanged;
             }
             Staging.Update(_status);
+            Staging.CanAmend = CanAmendHead;
             return;
         }
 
@@ -581,6 +600,9 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
         StageAll = () => RunGitAsync("Staging…", () => GitActions.StageAllAsync(_state!.WorkingDirectory), refresh: Refresh.Status),
         UnstageAll = () => RunGitAsync("Unstaging…", () => GitActions.UnstageAllAsync(_state!.WorkingDirectory), refresh: Refresh.Status),
         Commit = message => RunGitAsync("Committing…", () => GitActions.CommitAsync(_state!.WorkingDirectory, message)),
+        LoadHeadMessage = LoadAmendHeadAsync,
+        AmendCommit = AmendHeadAsync,
+        CanAmend = CanAmendHead,
     };
 
     private void OnChildPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -597,6 +619,7 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
         Func<FileDiff> load;
         string title;
         var whole = WholeFileDiff;
+        var ignore = IgnoreWhitespace;
         if (Staging is { SelectedFile: { Change.Kind: ChangeKind.Conflicted } conflicted } && SelectedSha == CommitInfo.WorkingTreeSha)
         {
             Diff = null;
@@ -609,19 +632,19 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
         if (Staging is { SelectedFile: { } sf } && SelectedSha == CommitInfo.WorkingTreeSha)
         {
             file = sf;
-            load = () => session.GetWorkingFileDiff(sf.Path, sf.IsStaged, whole);
+            load = () => session.GetWorkingFileDiff(sf.Path, sf.IsStaged, whole, ignore);
             title = $"{sf.Path}  ({(sf.IsStaged ? "staged" : "unstaged")})";
         }
         else if (WorktreeChanges is { SelectedFile: { } wf } changes)
         {
             file = wf;
-            load = () => changes.Session.GetWorkingFileDiff(wf.Path, wf.IsStaged, whole);
+            load = () => changes.Session.GetWorkingFileDiff(wf.Path, wf.IsStaged, whole, ignore);
             title = $"{wf.Path}  ({changes.Name}, {(wf.IsStaged ? "staged" : "unstaged")})";
         }
         else if (Details is { SelectedFile: { } df } details)
         {
             file = df;
-            load = () => session.GetCommitFileDiff(details.Sha, df.Path, whole);
+            load = () => session.GetCommitFileDiff(details.Sha, df.Path, whole, ignore);
             title = $"{df.Path}  ({details.ShortSha})";
         }
         else
@@ -637,7 +660,7 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
             DiffTitle = file.Change.OldPath is { } old ? $"{old} → {title}" : title;
             Diff = diff;
         }
-        catch (Exception ex) when (ex is LibGit2Sharp.LibGit2SharpException or IOException)
+        catch (Exception ex) when (ex is LibGit2Sharp.LibGit2SharpException or IOException or GitCommandException)
         {
             if (request == _diffRequest) Diff = null;
         }

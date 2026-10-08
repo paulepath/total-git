@@ -1,3 +1,4 @@
+using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using TotalGit.Core.Git;
 
@@ -110,17 +111,16 @@ public sealed partial class RepositoryViewModel
         }
         var what = files.Count == 1 ? files[0].Path : $"{files.Count} files";
         var message = node.IsStaged
-            ? $"Throw away all your changes to {what}, staged and unstaged? This can't be undone."
+            ? $"Discard all changes to {what}, staged and unstaged? A backup will be kept for Undo for up to seven days."
             : restored.Count == 0
-                ? $"Delete {what}? {(files.Count == 1 ? "It has" : "They have")} never been committed, so this can't be undone."
-                : $"Throw away the unstaged changes to {what}? Anything already staged is kept. This can't be undone.";
+                ? $"Delete {what}? These untracked files will be backed up for Undo for up to seven days."
+                : $"Discard the unstaged changes to {what}? Anything already staged is kept. A backup will be kept for Undo for up to seven days.";
         if (!await Dialogs.ConfirmAsync("Discard changes", message, details, "Discard")) return;
 
         var wt = state.WorkingDirectory;
-        await RunGitAsync("Discarding…",
+        await RunDiscardAsync(
             () => node.IsStaged ? GitActions.DiscardStagedAsync(wt, files) : GitActions.DiscardUnstagedAsync(wt, files),
-            files.Count == 1 ? $"Discarded the changes to {files[0].Path}." : $"Discarded the changes to {files.Count} files.",
-            Refresh.Status);
+            files.Count == 1 ? $"Discarded the changes to {files[0].Path}." : $"Discarded the changes to {files.Count} files.");
     }
 
     /// <summary>WIP row: throw away every uncommitted change (untracked files only if asked).</summary>
@@ -136,15 +136,61 @@ public sealed partial class RepositoryViewModel
         if (untrackedCount > 0) fields.Add(untracked);
         var description = tracked.Count > 0
             ? $"Throws away all uncommitted changes to {tracked.Count} tracked file{(tracked.Count == 1 ? "" : "s")}, staged and unstaged, " +
-              "putting them back as they were at the last commit. This can't be undone."
-            : "There are only untracked files. Tick the box to delete them. This can't be undone.";
+              "putting them back as they were at the last commit. A backup will be kept for Undo for up to seven days."
+            : "There are only untracked files. Tick the box to delete them. A backup will be kept for Undo for up to seven days.";
         string? Validate() => tracked.Count == 0 && !untracked.IsChecked ? "Nothing to discard unless the untracked files are deleted." : null;
         if (!await Dialogs.ShowFormAsync(new FormSpec("Discard all changes", description, "Discard", fields, Validate))) return;
 
         var wt = state.WorkingDirectory;
         var includeUntracked = untracked.IsChecked;
-        await RunGitAsync("Discarding…", () => GitActions.DiscardAllAsync(wt, includeUntracked),
-            includeUntracked ? "Discarded all changes and deleted the untracked files." : "Discarded all changes.", Refresh.Status);
+        await RunDiscardAsync(() => GitActions.DiscardAllAsync(wt, includeUntracked),
+            includeUntracked ? "Discarded all changes and deleted the untracked files." : "Discarded all changes.");
+    }
+
+    private async Task RunDiscardAsync(Func<Task<DiscardBackup?>> discard, string success)
+    {
+        DiscardBackup? backup = null;
+        var ok = await RunGitAsync("Discarding…", async () => backup = await discard(), refresh: Refresh.Status);
+        if (ok && backup is not null)
+            Banner = new Banner(success + " Backup kept for up to seven days (last 20 discards).", false,
+                [new MenuAction("Undo", UndoDiscardCommand, backup)]);
+        await UpdateCanUndoDiscardAsync();
+    }
+
+    /// <summary>Whether there's a discard backup to restore (the toolbar's Undo discard button).</summary>
+    [ObservableProperty]
+    public partial bool CanUndoDiscard { get; private set; }
+
+    private async Task UpdateCanUndoDiscardAsync()
+    {
+        var wt = _state?.WorkingDirectory;
+        try { CanUndoDiscard = wt is not null && await DiscardBackup.LatestAsync(wt) is not null; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or GitCommandException) { CanUndoDiscard = false; }
+    }
+
+    [RelayCommand]
+    private async Task UndoDiscardAsync(DiscardBackup? backup)
+    {
+        if (_state is null || IsBusy || IsOperationInProgress) return;
+        var wt = _state.WorkingDirectory;
+        await RunGitAsync("Restoring discarded changes…", async () =>
+        {
+            backup ??= await DiscardBackup.LatestAsync(wt);
+            if (backup is null) throw new InvalidOperationException("No discard backup is available (backups last seven days, up to 20 discards).");
+            await backup.UndoAsync(wt);
+        }, "Restored discarded changes and their staging state.", Refresh.Status);
+        await UpdateCanUndoDiscardAsync();
+    }
+
+    /// <summary>Offers Undo for what a checkout or hard reset just discarded (only a backup it made, not an older one).</summary>
+    private async Task OfferDiscardUndoAsync(string message, DateTimeOffset since)
+    {
+        if (_state is null) return;
+        await UpdateCanUndoDiscardAsync();
+        var backup = await DiscardBackup.LatestAsync(_state.WorkingDirectory);
+        if (backup is not null && backup.Created >= since)
+            Banner = new Banner(message + " Discarded files are backed up for up to seven days.", false,
+                [new MenuAction("Undo discarded files", UndoDiscardCommand, backup)]);
     }
 
     [RelayCommand]

@@ -119,6 +119,52 @@ public sealed partial class StagingViewModel : ObservableObject
     [NotifyCanExecuteChangedFor(nameof(CommitCommand))]
     public partial bool IsBusy { get; set; }
 
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(CommitCommand))]
+    public partial bool CanAmend { get; set; }
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(CommitCommand))]
+    [NotifyPropertyChangedFor(nameof(CommitText))]
+    public partial bool Amend { get; set; }
+
+    public string CommitText => Amend ? "Amend last commit" : "Commit staged changes";
+    public Func<Task<string?>>? LoadHeadMessage { get; init; }
+    public Func<string, Task<bool>>? AmendCommit { get; init; }
+    private string _draftSummary = "", _draftDescription = "";
+    private int _amendRequest;
+
+    partial void OnCanAmendChanged(bool value)
+    {
+        if (!value) Amend = false;
+    }
+
+    partial void OnAmendChanged(bool value) => _ = LoadAmendMessageAsync(value);
+
+    private async Task LoadAmendMessageAsync(bool amend)
+    {
+        var request = ++_amendRequest;
+        if (!amend)
+        {
+            Summary = _draftSummary;
+            Description = _draftDescription;
+            return;
+        }
+        _draftSummary = Summary;
+        _draftDescription = Description;
+        IsBusy = true;
+        try
+        {
+            var message = LoadHeadMessage is null ? null : await LoadHeadMessage();
+            if (request != _amendRequest) return;
+            if (message is null) { Amend = false; return; }
+            var parts = message.Split('\n', 2);
+            Summary = parts[0];
+            Description = parts.Length > 1 ? parts[1].TrimStart('\r', '\n') : "";
+        }
+        finally { IsBusy = false; }
+    }
+
     /// <summary>Case-insensitive text matched against file paths, in both lists.</summary>
     [ObservableProperty]
     public partial string Filter { get; set; } = "";
@@ -238,16 +284,17 @@ public sealed partial class StagingViewModel : ObservableObject
     [RelayCommand]
     private Task UnstageAllFilesAsync() => Run(UnstageAll);
 
-    private bool CanCommit() => !IsBusy && HasStaged && !string.IsNullOrWhiteSpace(Summary);
+    private bool CanCommit() => !IsBusy && (Amend ? CanAmend : HasStaged) && !string.IsNullOrWhiteSpace(Summary);
 
     [RelayCommand(CanExecute = nameof(CanCommit))]
     private async Task CommitAsync()
     {
         var message = string.IsNullOrWhiteSpace(Description) ? Summary.Trim() : $"{Summary.Trim()}\n\n{Description.Trim()}";
         var ok = false;
-        await Run(async () => ok = await Commit(message));
+        await Run(async () => ok = await (Amend && AmendCommit is not null ? AmendCommit(message) : Commit(message)));
         if (ok)
         {
+            Amend = false;
             Summary = "";
             Description = "";
         }
