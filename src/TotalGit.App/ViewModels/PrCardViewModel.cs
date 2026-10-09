@@ -24,7 +24,7 @@ public sealed class PrCardViewModel
         IsDraft = pr.IsDraft;
         Author = author;
         Ticket = ticket;
-        var opened = pr.CreatedAt is { } created ? $"{pr.Author.Login} opened {DateText.Relative(created)}" : $"Opened by {pr.Author.Login}";
+        var opened = pr.CreatedAt is { } created ? $"{pr.Author.DisplayName} opened {DateText.Relative(created)}" : $"Opened by {pr.Author.DisplayName}";
         AuthorLine = $"{opened} · updated {DateText.Relative(pr.UpdatedAt)}";
         HeadRef = pr.IsCrossRepository ? $"{pr.HeadRef} (fork)" : pr.HeadRef;
         BaseRef = pr.BaseRef;

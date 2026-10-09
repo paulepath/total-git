@@ -85,6 +85,39 @@ public partial class RepositoryViewModel
         OpenReview(new PullRequestSource(provider, summary), ticket);
     }
 
+    /// <summary>
+    /// Selects a pull request's newest commit in the graph. When that commit isn't on a branch here yet (not fetched,
+    /// or from a fork), shows its branch's tip instead if there is one, else says why it can't.
+    /// </summary>
+    private async Task RevealPullRequestAsync(PullRequestSummary pr)
+    {
+        if (_state is not { } state) return;
+        var worktree = state.WorkingDirectory;
+        bool onGraph;
+        try { onGraph = pr.HeadSha.Length > 0 && await GitActions.IsOnGraphRefAsync(worktree, pr.HeadSha); }
+        catch (GitCommandException) { onGraph = false; }
+        if (_state != state) return;
+        if (onGraph)
+        {
+            await SelectShaAsync(pr.HeadSha);
+            return;
+        }
+
+        var review = new MenuAction("Review it", OpenPullRequestCommand, pr, Icon: MenuIcons.Open);
+        var fetch = new MenuAction("Fetch", FetchCommand);
+        var remote = _prHost?.RemoteName ?? "origin";
+        if (!pr.IsCrossRepository && state.Refs.FirstOrDefault(r => r.Kind == RefKind.RemoteBranch && r.Name == $"{remote}/{pr.HeadRef}") is { } branch)
+        {
+            await SelectShaAsync(branch.TargetSha);
+            Banner = new Banner($"#{pr.Number}'s newest commit hasn't been fetched yet: showing {branch.Name} as it was at the last fetch.", false, [fetch, review]);
+            return;
+        }
+        Banner = new Banner(pr.IsCrossRepository
+            ? $"#{pr.Number} comes from a fork, so its commits aren't on any branch here. Double-click it to review it."
+            : $"#{pr.Number}'s branch {pr.HeadRef} isn't here yet. Fetch to see it in the graph, or double-click it to review it.",
+            false, pr.IsCrossRepository ? [review] : [fetch, review]);
+    }
+
     /// <summary>Shows a review in its own window, or brings its window to the front when it's already open.</summary>
     private void OpenReview(ReviewSource source, string? ticket = null)
     {
@@ -281,7 +314,7 @@ public partial class RepositoryViewModel
 
     private IReadOnlyList<MenuAction> ActionsForPullRequest(PullRequestSummary pr) =>
     [
-        new MenuAction("Open", OpenPullRequestCommand, pr, Icon: MenuIcons.Open),
+        new MenuAction("Open pull request", OpenPullRequestCommand, pr, Icon: MenuIcons.Open),
         new MenuAction("Check out in new worktree…", CheckoutPullRequestCommand, pr, Icon: MenuIcons.Worktree),
         new MenuAction("Open on " + (_prHost?.Kind == HostKind.GitHub ? "GitHub" : "the web"), OpenUrlCommand, pr.Url, Icon: MenuIcons.Browser),
         MenuAction.Separator,

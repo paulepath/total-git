@@ -206,11 +206,11 @@ public sealed partial class PrPerson : ObservableObject
 
     public static string Describe(Reviewer r) => r.State switch
     {
-        ReviewState.Approved => $"{r.Name} approved",
-        ReviewState.ChangesRequested => $"{r.Name} requested changes",
-        ReviewState.Commented => r.IsRequested ? $"{r.Name} commented (review still requested)" : $"{r.Name} commented",
-        ReviewState.Dismissed => $"{r.Name}'s review was dismissed",
-        _ => $"{r.Name}: review requested",
+        ReviewState.Approved => $"{r.DisplayName} approved",
+        ReviewState.ChangesRequested => $"{r.DisplayName} requested changes",
+        ReviewState.Commented => r.IsRequested ? $"{r.DisplayName} commented (review still requested)" : $"{r.DisplayName} commented",
+        ReviewState.Dismissed => $"{r.DisplayName}'s review was dismissed",
+        _ => $"{r.DisplayName}: review requested",
     };
 }
 
@@ -382,8 +382,8 @@ public partial class SidebarViewModel : ObservableObject
     {
         BranchOwnerBadge? badge = null;
         if (prs.TryGetValue(target.ShortName, out var pr))
-            badge = new BranchOwnerBadge(pr.Author.Login, null, pr.Author.AvatarUrl, null, false,
-                $"Owner: {pr.Author.Login}, who opened pull request #{pr.Number}");
+            badge = new BranchOwnerBadge(pr.Author.DisplayName, null, pr.Author.AvatarUrl, null, false,
+                $"Owner: {pr.Author.NameAndLogin}, who opened pull request #{pr.Number}");
         else if (_owners.TryGetValue(target.Name, out var owner))
             badge = BranchOwnerBadge.From(owner);
         if (badge is not null) badge.Avatar = AvatarOf(badge);
@@ -588,7 +588,7 @@ public partial class SidebarViewModel : ObservableObject
             AddWorkflowsSection(Match, filter);
             return;
         }
-        var prs = _pullRequests.Where(p => Match($"#{p.Number} {p.Title}") || Match(p.Author.Login) || Match(p.HeadRef)).ToList();
+        var prs = _pullRequests.Where(p => Match($"#{p.Number} {p.Title}") || Match(p.Author.Login) || Match(p.Author.Name ?? "") || Match(p.HeadRef)).ToList();
         // Within each group, the most recently updated first (the order GitHub lists them in).
         var prSection = new SidebarNode(SidebarNodeKind.Section, "PULL REQUESTS")
         {
@@ -620,8 +620,8 @@ public partial class SidebarViewModel : ObservableObject
             {
                 var (ticket, title) = titled[p.Number];
                 ticket ??= PullRequestTriage.TicketFromBranch(p.HeadRef, projects);
-                var author = Person(p.Author.Login, p.Author.AvatarUrl, $"Opened by {p.Author.Login}");
-                var reviewers = p.Reviewers.Select(r => Person(r.Name, r.AvatarUrl, PrPerson.Describe(r), r.State)).ToList();
+                var author = Person(p.Author.DisplayName, p.Author.AvatarUrl, $"Opened by {p.Author.NameAndLogin}");
+                var reviewers = p.Reviewers.Select(r => Person(r.DisplayName, r.AvatarUrl, PrPerson.Describe(r), r.State)).ToList();
                 heading.Children.Add(new SidebarNode(SidebarNodeKind.PullRequest, title)
                 {
                     PullRequest = p,

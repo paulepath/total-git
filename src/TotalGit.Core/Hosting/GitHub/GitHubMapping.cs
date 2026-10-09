@@ -118,24 +118,25 @@ internal static class GitHubMapping
             .Select(r => (User: User(r.Obj("author")), State: ReviewState(r.Str("state"))))
             .ToList();
         var reviewers = new List<Reviewer>();
-        foreach (var (login, name, avatar) in RequestedReviewers(pr))
+        foreach (var (login, name, avatar, fullName) in RequestedReviewers(pr))
         {
             var earlier = login is null ? default : latest.FirstOrDefault(r => r.User.Login == login);
-            reviewers.Add(new(name, avatar, earlier.User is null ? Hosting.ReviewState.None : earlier.State, IsRequested: true));
+            reviewers.Add(new(name, avatar, earlier.User is null ? Hosting.ReviewState.None : earlier.State, IsRequested: true) { FullName = fullName });
         }
         foreach (var (user, state) in latest)
-            if (!reviewers.Any(r => r.Name == user.Login)) reviewers.Add(new(user.Login, user.AvatarUrl, state, IsRequested: false));
+            if (!reviewers.Any(r => r.Name == user.Login))
+                reviewers.Add(new(user.Login, user.AvatarUrl, state, IsRequested: false) { FullName = user.Name });
         return reviewers;
     }
 
     /// <summary>Requested users (with a login) and teams (without); requests the token can't see come back null and are skipped.</summary>
-    private static IEnumerable<(string? Login, string Name, string? AvatarUrl)> RequestedReviewers(JsonElement pr) =>
+    private static IEnumerable<(string? Login, string Name, string? AvatarUrl, string? FullName)> RequestedReviewers(JsonElement pr) =>
         Nodes(pr.Obj("reviewRequests"))
             .Select(n => n.Obj("requestedReviewer"))
             .OfType<JsonElement>()
             .Select(r => r.Str("__typename") == "Team"
-                ? ((string?)null, r.Str("name") ?? "", r.Str("avatarUrl"))
-                : (r.Str("login"), r.Str("login") ?? "", r.Str("avatarUrl")))
+                ? ((string?)null, r.Str("name") ?? "", r.Str("avatarUrl"), (string?)null)
+                : (r.Str("login"), r.Str("login") ?? "", r.Str("avatarUrl"), r.Str("name")))
             .Where(r => r.Item2.Length > 0);
 
     /// <summary>
@@ -239,7 +240,7 @@ internal static class GitHubMapping
 
     /// <summary>Deleted accounts come back as a null author; GitHub shows them as "ghost".</summary>
     private static PrUser User(JsonElement? user) =>
-        user is { } u ? new(u.Str("login") ?? "ghost", u.Str("avatarUrl")) : new("ghost", null);
+        user is { } u ? new(u.Str("login") ?? "ghost", u.Str("avatarUrl"), u.Str("name")) : new("ghost", null);
 
     private static IEnumerable<JsonElement> Nodes(JsonElement? connection) =>
         connection?.Obj("nodes") is { ValueKind: JsonValueKind.Array } nodes

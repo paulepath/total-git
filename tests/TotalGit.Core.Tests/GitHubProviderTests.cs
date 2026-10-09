@@ -44,9 +44,9 @@ public class GitHubProviderTests
         {"data":{"viewer":{"login":"Me"},"repository":{"pullRequests":{"nodes":[
           {"number":7,"title":"Draft work","isDraft":true,"state":"OPEN","baseRefName":"main","headRefName":"feature/x",
            "headRefOid":"aaa111","isCrossRepository":false,"updatedAt":"2026-09-30T10:00:00Z","url":"https://github.com/octo/widgets/pull/7",
-           "reviewDecision":"CHANGES_REQUESTED","author":{"login":"alice","avatarUrl":"https://a/alice"},
+           "reviewDecision":"CHANGES_REQUESTED","author":{"login":"alice","avatarUrl":"https://a/alice","name":"Alice Archer"},
            "reviewRequests":{"nodes":[{"requestedReviewer":null},{"requestedReviewer":{"__typename":"Team","name":"core","avatarUrl":null}},
-                                      {"requestedReviewer":{"__typename":"User","login":"me","avatarUrl":"https://a/me"}}]},
+                                      {"requestedReviewer":{"__typename":"User","login":"me","avatarUrl":"https://a/me","name":"Me Myself"}}]},
            "commits":{"nodes":[{"commit":{"statusCheckRollup":{"state":"FAILURE","contexts":{"nodes":[
              {"__typename":"CheckRun","name":"build","status":"COMPLETED","conclusion":"SUCCESS","detailsUrl":null,"title":null},
              {"__typename":"CheckRun","name":"api-tests","status":"COMPLETED","conclusion":"FAILURE","detailsUrl":null,"title":null}]}}}}]}},
@@ -59,7 +59,7 @@ public class GitHubProviderTests
            "isCrossRepository":false,"updatedAt":"2026-09-28T09:00:00Z","url":"u","reviewDecision":"APPROVED",
            "author":{"login":"bob","avatarUrl":null},"reviewRequests":{"nodes":[]},
            "createdAt":"2026-09-20T09:00:00Z","additions":10,"deletions":2,"changedFiles":3,"mergeable":"CONFLICTING","mergeStateStatus":"DIRTY",
-           "latestReviews":{"nodes":[{"state":"APPROVED","author":{"login":"carol","avatarUrl":"https://a/carol"}}]},
+           "latestReviews":{"nodes":[{"state":"APPROVED","author":{"login":"carol","avatarUrl":"https://a/carol","name":"Carol Cole"}}]},
            "commits":{"nodes":[{"commit":{"statusCheckRollup":{"state":"EXPECTED"}}}]}}
         ]}}}}
         """;
@@ -92,7 +92,8 @@ public class GitHubProviderTests
         Assert.Equal([7, 5, 3], list.Select(p => p.Number));
         var draft = list[0];
         Assert.True(draft.IsDraft);
-        Assert.Equal(new PrUser("alice", "https://a/alice"), draft.Author);
+        Assert.Equal(new PrUser("alice", "https://a/alice", "Alice Archer"), draft.Author);
+        Assert.Equal(("Alice Archer", "Alice Archer (alice)"), (draft.Author.DisplayName, draft.Author.NameAndLogin));
         Assert.Equal(("main", "feature/x", "aaa111"), (draft.BaseRef, draft.HeadRef, draft.HeadSha));
         Assert.Equal(ChecksState.Failure, draft.Checks);
         Assert.Equal(ReviewDecision.ChangesRequested, draft.ReviewDecision);
@@ -105,6 +106,7 @@ public class GitHubProviderTests
         Assert.Equal(ReviewDecision.None, fork.ReviewDecision);
         Assert.False(fork.ViewerReviewRequested); // a team with the viewer's name isn't the viewer
         Assert.Equal("ghost", fork.Author.Login);
+        Assert.Equal(("bob", "bob"), (list[2].Author.DisplayName, list[2].Author.NameAndLogin)); // no name set: the login
 
         Assert.Equal(ReviewDecision.Approved, list[2].ReviewDecision);
         Assert.Equal(ChecksState.Pending, list[2].Checks);
@@ -112,7 +114,8 @@ public class GitHubProviderTests
         // Who it's for: requested users and teams, then people who reviewed without being asked.
         Assert.Equal(["core", "me"], draft.Reviewers.Select(r => r.Name));
         Assert.All(draft.Reviewers, r => Assert.True(r.IsRequested));
-        Assert.Equal([new Reviewer("carol", "https://a/carol", ReviewState.Approved, IsRequested: false)], list[2].Reviewers);
+        Assert.Equal([new Reviewer("carol", "https://a/carol", ReviewState.Approved, IsRequested: false) { FullName = "Carol Cole" }], list[2].Reviewers);
+        Assert.Equal(["core", "Me Myself"], draft.Reviewers.Select(r => r.DisplayName)); // a team has no person's name
 
         // Extra detail for the hover card.
         Assert.Equal(["build", "api-tests"], draft.CheckRuns.Select(c => c.Name));

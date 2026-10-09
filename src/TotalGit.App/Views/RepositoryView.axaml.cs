@@ -57,10 +57,11 @@ public partial class RepositoryView : UserControl
             if (_vm is null) return;
             if (node.IsWorktree && node.Worktree is { } wt) _vm.OpenWorktreeCommand.Execute(wt);
             else if (node.Run is { } run) _vm.OpenUrlCommand.Execute(run.Url);
+            else if (node.PullRequest is { } pr) _vm.OpenPullRequestCommand.Execute(pr);
             else if (node.Target is { Kind: RefKind.LocalBranch or RefKind.RemoteBranch } t && !_vm.IsCheckedOutHere(t)) _vm.CheckoutCommand.Execute(t);
         };
         // Anchored to the sidebar, not the row: right-clicking also selects the row, which can refresh the sidebar
-        // (opening a pull request fetches its refs) and replace the row, and a menu closes when its row goes.
+        // and replace the row, and a menu closes when its row goes.
         Sidebar.NodeContextRequested += (node, _) =>
         {
             if (_vm is null || ShowMenu(Sidebar, _vm.ActionsForSidebar(node)) is not { } menu) return;

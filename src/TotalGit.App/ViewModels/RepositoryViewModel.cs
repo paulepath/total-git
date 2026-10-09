@@ -707,7 +707,7 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
     {
         // Stash commits aren't in the graph; just show their changes in the details pane.
         if (node.Stash is { } stash) SelectedSha = stash.Sha;
-        else if (node.PullRequest is { } pr) OpenPullRequestCommand.Execute(pr);
+        else if (node.PullRequest is { } pr) _ = RevealPullRequestAsync(pr); // a double-click opens it
         else if (node.Target?.Sha is { } sha) _ = SelectShaAsync(sha);
     }
 

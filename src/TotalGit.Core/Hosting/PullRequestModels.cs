@@ -24,7 +24,15 @@ public enum ReviewVerdict { Comment, Approve, RequestChanges }
 /// <summary>Which side of the diff a line comment is on: the base (old) or the pull request (new) version.</summary>
 public enum DiffSide { Left, Right }
 
-public sealed record PrUser(string Login, string? AvatarUrl);
+/// <param name="Name">The name on their profile, when they've set one (bots and organisations have none).</param>
+public sealed record PrUser(string Login, string? AvatarUrl, string? Name = null)
+{
+    /// <summary>Their name, or their login when they haven't set one.</summary>
+    public string DisplayName => string.IsNullOrWhiteSpace(Name) ? Login : Name;
+
+    /// <summary>"Name (login)", or just the login when they haven't set a name.</summary>
+    public string NameAndLogin => DisplayName == Login ? Login : $"{DisplayName} ({Login})";
+}
 
 public sealed record PullRequestSummary(
     int Number,
@@ -65,7 +73,15 @@ public sealed record PullRequestSummary(
 }
 
 /// <summary>A requested or actual reviewer: a person or a team.</summary>
-public sealed record Reviewer(string Name, string? AvatarUrl, ReviewState State, bool IsRequested);
+/// <param name="Name">A person's login or a team's name.</param>
+public sealed record Reviewer(string Name, string? AvatarUrl, ReviewState State, bool IsRequested)
+{
+    /// <summary>A person's profile name, when they've set one.</summary>
+    public string? FullName { get; init; }
+
+    /// <summary>Their name, or <see cref="Name"/> when there isn't one.</summary>
+    public string DisplayName => string.IsNullOrWhiteSpace(FullName) ? Name : FullName;
+}
 
 /// <summary>Where a line comment is anchored.</summary>
 /// <param name="Line">The line on <paramref name="Side"/> in the current diff; null when the comment is outdated.</param>

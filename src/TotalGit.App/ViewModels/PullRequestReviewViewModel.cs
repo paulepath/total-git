@@ -96,7 +96,7 @@ public sealed partial class PullRequestReviewViewModel : ObservableObject
         _ => $"{Summary.HeadRef} → {Summary.BaseRef}",
     };
     public string AuthorText => IsPullRequest
-        ? $"{Summary.Author.Login} wants to merge into {Summary.BaseRef}"
+        ? $"{Summary.Author.DisplayName} wants to merge into {Summary.BaseRef}"
         : CommitItems.Count == 0 ? "" : "By " + string.Join(", ", CommitItems.GroupBy(c => c.Author).OrderByDescending(g => g.Count()).Select(g => g.Key));
     public string? Ticket { get; init; }
     public bool HasTicket => Ticket is not null;

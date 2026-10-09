@@ -11,7 +11,7 @@ public sealed record DiffThreadItem(int LineIndex, object ViewModel);
 
 public sealed class CommentViewModel(PrComment comment)
 {
-    public string Author => comment.Author.Login;
+    public string Author => comment.Author.DisplayName;
     public string Body => comment.Body.Trim();
     public string When => comment.CreatedAt.LocalDateTime.ToString("g");
 }

@@ -134,6 +134,20 @@ public static class GitActions
         return (await GitCli.RunAsync(worktree, "for-each-ref", "--contains=HEAD", "--format=%(refname)", "refs/remotes/")).StdOut.Trim().Length > 0;
     }
 
+    /// <summary>
+    /// Whether <paramref name="sha"/> is a commit the history graph can reach: from a branch, remote branch, tag or HEAD
+    /// (not, say, only from a pull request ref that was fetched to review it).
+    /// </summary>
+    public static async Task<bool> IsOnGraphRefAsync(string worktree, string sha)
+    {
+        if ((await GitCli.RunAsync(worktree, ["cat-file", "-e", sha + "^{commit}"], throwOnError: false)).ExitCode != 0) return false;
+        var refs = await GitCli.RunAsync(worktree,
+            ["for-each-ref", "--count=1", "--contains", sha, "--format=%(refname)", "refs/heads/", "refs/remotes/", "refs/tags/"], throwOnError: false);
+        if (refs.ExitCode == 0 && refs.StdOut.Trim().Length > 0) return true;
+        return await HasHeadAsync(worktree)
+            && (await GitCli.RunAsync(worktree, ["merge-base", "--is-ancestor", sha, "HEAD"], throwOnError: false)).ExitCode == 0;
+    }
+
     public static async Task AmendAsync(string worktree, string message)
     {
         if (!await HasHeadAsync(worktree) || await IsOperationInProgressAsync(worktree))

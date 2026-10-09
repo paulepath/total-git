@@ -524,6 +524,14 @@ public sealed class CommitGraphView : Control
             return;
         }
 
+        // Double-clicking a commit's only label belongs to that ref too (the first click selected the commit).
+        if (e.ClickCount == 2 && point.Properties.IsLeftButtonPressed && SoleRefAt(point.Position) is { } sole)
+        {
+            RefActivated?.Invoke(sole);
+            e.Handled = true;
+            return;
+        }
+
         var row = RowAt(point.Position.Y);
         if (row >= 0 && point.Properties.IsLeftButtonPressed && Data?.Folds.ContainsKey(Rows[row].Commit.Sha) == true
             && (e.ClickCount == 2 || (point.Position.X >= MessageLeft - 4 && point.Position.X <= MessageLeft + FoldChevronWidth)))
@@ -639,6 +647,16 @@ public sealed class CommitGraphView : Control
         var k = (int)((p.Y - RowTop(row)) / RowHeight);
         if (k < 0 || k >= badges.Count) return (-1, -1);
         return p.X <= PillLeft + LayoutPill(badges[k], PillMaxWidth).Width ? (row, k) : (-1, -1);
+    }
+
+    /// <summary>The ref whose label is under <paramref name="p"/> on a commit with just one label.</summary>
+    private RefInfo? SoleRefAt(Point p)
+    {
+        var row = RowAt(p.Y);
+        if (row < 0 || p.X < PillLeft || p.X > RefColumnWidth
+            || !_badgesBySha.TryGetValue(Rows[row].Commit.Sha, out var badges) || badges.Count != 1)
+            return null;
+        return p.X <= PillLeft + LayoutPill(badges[0], PillMaxWidth).Width ? badges[0].Ref : null;
     }
 
     private void UpdateHover(Point p)

@@ -38,7 +38,7 @@ public sealed partial class PullRequestViewModel : ObservableObject
     public int Number => Summary.Number;
     public string NumberText => $"#{Summary.Number}";
     public string Title => Summary.Title;
-    public string AuthorText => $"{Summary.Author.Login} wants to merge {Summary.HeadRef} into {Summary.BaseRef}";
+    public string AuthorText => $"{Summary.Author.DisplayName} wants to merge {Summary.HeadRef} into {Summary.BaseRef}";
     public bool IsDraft => Summary.IsDraft;
 
     public ICommand? OpenInBrowserCommand { get; init; }
@@ -290,7 +290,7 @@ public sealed partial class PullRequestViewModel : ObservableObject
 
 public sealed class ReviewerItem(Reviewer reviewer)
 {
-    public string Name => reviewer.Name;
+    public string Name => reviewer.DisplayName;
 
     public string StateText => reviewer.State switch
     {
@@ -340,7 +340,7 @@ public sealed class CheckItemViewModel(CheckItem check)
 
 public sealed class ConversationItem(TimelineItem item)
 {
-    public string Author => item.Author.Login;
+    public string Author => item.Author.DisplayName;
     public string Body => item.Body.Trim();
     public bool HasBody => Body.Length > 0;
     public string When => item.CreatedAt.LocalDateTime.ToString("g");

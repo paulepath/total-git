@@ -31,7 +31,10 @@ public partial class StagingView : UserControl
             };
             tree.DoubleTapped += (_, e) =>
             {
-                if (NodeAt(e.Source) is { IsFolder: true } folder) folder.IsExpanded = !folder.IsExpanded;
+                if (NodeAt(e.Source) is not { } node) return;
+                if (node.IsFolder) node.IsExpanded = !node.IsExpanded;
+                // A file moves to the other list: staged if it was unstaged, and back.
+                else _vm?.StageNodeCommand.Execute(node);
             };
         }
     }

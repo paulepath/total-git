@@ -8,10 +8,13 @@ internal static class GitHubQueries
 {
     public const string Viewer = "query { viewer { login } }";
 
-    private const string SummaryFields = """
+    /// <summary>An author's fields: only a user has a name (bots, apps and organisations don't).</summary>
+    private const string Actor = "login avatarUrl ... on User { name }";
+
+    private const string SummaryFields = $$"""
         number title isDraft state baseRefName headRefName headRefOid isCrossRepository updatedAt url reviewDecision
-        author { login avatarUrl }
-        reviewRequests(first: 20) { nodes { requestedReviewer { __typename ... on User { login avatarUrl } ... on Team { name avatarUrl } } } }
+        author { {{Actor}} }
+        reviewRequests(first: 20) { nodes { requestedReviewer { __typename ... on User { login avatarUrl name } ... on Team { name avatarUrl } } } }
         """;
 
     public const string ListOpen = $$"""
@@ -27,7 +30,7 @@ internal static class GitHubQueries
                   ... on CheckRun { name status conclusion detailsUrl title startedAt checkSuite { workflowRun { databaseId workflow { name } } } }
                   ... on StatusContext { context state targetUrl description }
                 } } } } } }
-                latestReviews(first: 20) { nodes { state author { login avatarUrl } } }
+                latestReviews(first: 20) { nodes { state author { {{Actor}} } } }
               }
             }
           }
@@ -50,13 +53,13 @@ internal static class GitHubQueries
                   ... on StatusContext { context state targetUrl description isRequired(pullRequestNumber: $n) }
                 } } } } }
               }
-              latestReviews(first: 50) { nodes { state author { login avatarUrl } } }
+              latestReviews(first: 50) { nodes { state author { {{Actor}} } } }
               reviewThreads(first: 100) { nodes {
                 id isResolved isOutdated path line startLine originalLine originalStartLine diffSide viewerCanReply viewerCanResolve viewerCanUnresolve
-                comments(first: 100) { nodes { id body createdAt author { login avatarUrl } commit { oid } originalCommit { oid } } }
+                comments(first: 100) { nodes { id body createdAt author { {{Actor}} } commit { oid } originalCommit { oid } } }
               } }
-              comments(first: 100) { nodes { id body createdAt author { login avatarUrl } } }
-              reviews(first: 100) { nodes { id body state submittedAt createdAt author { login avatarUrl } commit { oid } } }
+              comments(first: 100) { nodes { id body createdAt author { {{Actor}} } } }
+              reviews(first: 100) { nodes { id body state submittedAt createdAt author { {{Actor}} } commit { oid } } }
               id
               files(first: 100) { nodes { path viewerViewedState } pageInfo { hasNextPage endCursor } }
             }
