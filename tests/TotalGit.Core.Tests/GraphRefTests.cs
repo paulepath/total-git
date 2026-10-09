@@ -36,6 +36,25 @@ public class GraphRefTests
     }
 
     [Fact]
+    public async Task Rev_list_gives_a_branchs_own_commits_including_a_merge_of_its_base()
+    {
+        using var repo = new TestRepo();
+        repo.Commit("base", "a.txt", "one");
+        repo.Git("switch", "-q", "-c", "feature");
+        var first = repo.Commit("feature one", "b.txt", "b");
+        repo.Git("switch", "-q", "main");
+        repo.Commit("main moves on", "c.txt", "c");
+        repo.Git("switch", "-q", "feature");
+        repo.Git("merge", "-q", "--no-edit", "main");
+        var merge = repo.Git("rev-parse", "HEAD");
+        var last = repo.Commit("feature two", "b.txt", "bb");
+
+        Assert.Equal([last, merge, first], await GitActions.RevListAsync(repo.Root, "main..feature", 500));
+        Assert.Equal([last], await GitActions.RevListAsync(repo.Root, "main..feature", 1));
+        Assert.Empty(await GitActions.RevListAsync(repo.Root, "no-such-branch..feature", 10));
+    }
+
+    [Fact]
     public async Task A_detached_head_counts()
     {
         using var repo = new TestRepo();

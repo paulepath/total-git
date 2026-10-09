@@ -363,6 +363,13 @@ public static class GitActions
         return result.ExitCode != 0 ? [] : result.StdOut.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
     }
 
+    /// <summary>The full SHAs in a revision range (e.g. <c>main..feature</c>), newest first, at most <paramref name="max"/>.</summary>
+    public static async Task<IReadOnlyList<string>> RevListAsync(string worktree, string range, int max)
+    {
+        var result = await GitCli.RunAsync(worktree, ["rev-list", $"--max-count={max}", range, "--"], throwOnError: false);
+        return result.ExitCode != 0 ? [] : result.StdOut.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    }
+
     /// <summary>The commits in a revision range, newest first: full SHA, "abc1234 subject" and author.</summary>
     public static async Task<IReadOnlyList<(string Sha, string Summary, string Author)>> CommitListAsync(string worktree, string range)
     {

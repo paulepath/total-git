@@ -292,7 +292,14 @@
               </StackPanel>
             </WrapPanel>
           </Border>
-          <views:CommitGraphView Grid.Row="1" Grid.Column="0" x:Name="Graph" Data="{Binding Graph}" SelectedSha="{Binding SelectedSha}" SelectedRange="{Binding SelectedRange}" />
+          <views:CommitGraphView Grid.Row="1" Grid.Column="0" x:Name="Graph" Data="{Binding Graph}" SelectedSha="{Binding SelectedSha}" SelectedRange="{Binding SelectedRange}">
+            <views:CommitGraphView.Styles>
+              <!-- Room for a pull request's hover card. -->
+              <Style Selector="ToolTip">
+                <Setter Property="MaxWidth" Value="420" />
+              </Style>
+            </views:CommitGraphView.Styles>
+          </views:CommitGraphView>
           <ScrollBar Grid.Row="1" Grid.Column="1" x:Name="GraphScrollBar" Orientation="Vertical" AllowAutoHide="False" />
         </Grid>
 

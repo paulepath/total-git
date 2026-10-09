@@ -6,6 +6,7 @@ using TotalGit.App.Services;
 using TotalGit.Core.Avatars;
 using TotalGit.Core.Git;
 using TotalGit.Core.Graph;
+using TotalGit.Core.Hosting;
 using TotalGit.Core.Projects;
 using TotalGit.Core.Worktrees;
 
@@ -33,7 +34,20 @@ public sealed record GraphData(
 
     /// <summary>Commits folded away, mapped to the folded row that stands for them (where their labels go).</summary>
     public IReadOnlyDictionary<string, string> ShownAs { get; init; } = new Dictionary<string, string>();
+
+    /// <summary>The pull request picked in the sidebar: its commits stand out and a row shows where it would merge.</summary>
+    public PullRequestHighlight? PullRequest { get; init; }
+
+    /// <summary>Open pull requests from this repository's branches, by branch name: their labels carry a chip.</summary>
+    public IReadOnlyDictionary<string, PullRequestSummary> PullRequestsByBranch { get; init; } = new Dictionary<string, PullRequestSummary>();
 }
+
+/// <summary>A pull request shown on the graph.</summary>
+/// <param name="HeadSha">Its newest commit here (the remote branch's tip when its head isn't fetched yet).</param>
+/// <param name="BaseSha">The tip of the branch it merges into, when that branch is here.</param>
+/// <param name="Own">Its commits: those on its head and not on its base.</param>
+public sealed record PullRequestHighlight(int Number, string HeadSha, string? BaseSha, string BaseName,
+    IReadOnlySet<string> Own, string AuthorName, PrCardViewModel? Card);
 
 /// <summary>A WIP row's file count, and the worktree name for rows of other worktrees.</summary>
 public sealed record WipInfo(int Count, string? WorktreeName);
@@ -506,7 +520,15 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
             state.MainWorkingDirectory,
             state.WorkingDirectory,
             byBranch,
-            wip) { Folds = projected.Folds, ShownAs = projected.ShownAs };
+            wip)
+        {
+            Folds = projected.Folds,
+            ShownAs = projected.ShownAs,
+            PullRequest = _prHighlight,
+            PullRequestsByBranch = _pullRequests.Where(p => !p.IsCrossRepository)
+                .GroupBy(p => p.HeadRef, StringComparer.Ordinal)
+                .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal),
+        };
         UpdateFilterSummary(projected.Commits.Count);
         UpdateCommitCount();
         UpdateBranchOwners(state);
@@ -521,7 +543,12 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
 
     // ------------------------------------------------------------------ selection, details, diff
 
-    partial void OnSelectedShaChanged(string? value) => _ = LoadSelectionAsync(value);
+    partial void OnSelectedShaChanged(string? value)
+    {
+        // Picking a commit outside the highlighted pull request puts the graph back to normal.
+        if (value is not null && _prHighlight is not null && !IsInPullRequestHighlight(value)) ClearPullRequestHighlight();
+        _ = LoadSelectionAsync(value);
+    }
 
     private Task ReloadSelectionAsync() => SelectedSha == CommitInfo.WorkingTreeSha
         ? Task.CompletedTask // staging already updated with the status
@@ -706,8 +733,13 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
     public void OnSidebarNodeActivated(SidebarNode node)
     {
         // Stash commits aren't in the graph; just show their changes in the details pane.
+        if (node.PullRequest is { } pr)
+        {
+            _ = RevealPullRequestAsync(pr); // a double-click opens it
+            return;
+        }
+        ClearPullRequestHighlight();
         if (node.Stash is { } stash) SelectedSha = stash.Sha;
-        else if (node.PullRequest is { } pr) _ = RevealPullRequestAsync(pr); // a double-click opens it
         else if (node.Target?.Sha is { } sha) _ = SelectShaAsync(sha);
     }
 

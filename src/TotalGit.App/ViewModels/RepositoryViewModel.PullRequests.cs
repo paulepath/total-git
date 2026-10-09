@@ -37,6 +37,7 @@ public partial class RepositoryViewModel
         _prHost = host;
         _prProvider = host is null ? null : PullRequestProviders!.TryCreate(host);
         _pullRequests = [];
+        _prHighlight = null;
         CloseReviewWindows();
         if (_prProvider is null)
         {
@@ -62,6 +63,9 @@ public partial class RepositoryViewModel
             _pullRequests = list;
             LearnJiraProjects(list);
             Sidebar.SetPullRequests(true, list, list.Count == 0 ? "No open pull requests" : null);
+            UpdatePullRequestHighlight();
+            // The branch labels' pull request chips.
+            if (_state is not null) RebuildGraph();
         }
         catch (HostException ex)
         {
@@ -99,6 +103,7 @@ public partial class RepositoryViewModel
         if (_state != state) return;
         if (onGraph)
         {
+            await HighlightPullRequestAsync(pr, pr.HeadSha);
             await SelectShaAsync(pr.HeadSha);
             return;
         }
@@ -108,14 +113,64 @@ public partial class RepositoryViewModel
         var remote = _prHost?.RemoteName ?? "origin";
         if (!pr.IsCrossRepository && state.Refs.FirstOrDefault(r => r.Kind == RefKind.RemoteBranch && r.Name == $"{remote}/{pr.HeadRef}") is { } branch)
         {
+            await HighlightPullRequestAsync(pr, branch.TargetSha);
             await SelectShaAsync(branch.TargetSha);
             Banner = new Banner($"#{pr.Number}'s newest commit hasn't been fetched yet: showing {branch.Name} as it was at the last fetch.", false, [fetch, review]);
             return;
         }
+        ClearPullRequestHighlight();
         Banner = new Banner(pr.IsCrossRepository
             ? $"#{pr.Number} comes from a fork, so its commits aren't on any branch here. Double-click it to review it."
             : $"#{pr.Number}'s branch {pr.HeadRef} isn't here yet. Fetch to see it in the graph, or double-click it to review it.",
             false, pr.IsCrossRepository ? [review] : [fetch, review]);
+    }
+
+    private PullRequestHighlight? _prHighlight;
+
+    /// <summary>
+    /// Makes a pull request stand out in the graph: its commits (those on <paramref name="headSha"/> and not on its
+    /// base branch) and a row showing where it would merge.
+    /// </summary>
+    private async Task HighlightPullRequestAsync(PullRequestSummary pr, string headSha)
+    {
+        if (_state is not { } state) return;
+        var remote = _prHost?.RemoteName ?? "origin";
+        var baseRef = state.Refs.FirstOrDefault(r => r.Kind == RefKind.RemoteBranch && r.Name == $"{remote}/{pr.BaseRef}")
+            ?? state.Refs.FirstOrDefault(r => r.Kind == RefKind.LocalBranch && r.Name == pr.BaseRef);
+        IReadOnlyList<string> own = [headSha];
+        if (baseRef is not null)
+        {
+            try { own = await GitActions.RevListAsync(state.WorkingDirectory, $"{baseRef.TargetSha}..{headSha}", 500); }
+            catch (GitCommandException) { }
+        }
+        if (_state != state) return;
+        _prHighlight = new PullRequestHighlight(pr.Number, headSha, baseRef?.TargetSha, pr.BaseRef, own.ToHashSet(),
+            pr.Author.DisplayName, Sidebar.CardForPullRequest(pr.Number));
+        RebuildGraph();
+    }
+
+    /// <summary>Puts the graph back to normal after a pull request was highlighted.</summary>
+    public void ClearPullRequestHighlight()
+    {
+        if (_prHighlight is null) return;
+        _prHighlight = null;
+        // Deselect its sidebar row too, so clicking the row again highlights it again.
+        if (Sidebar.SelectedNode?.PullRequest is not null) Sidebar.SelectedNode = null;
+        if (_state is not null) RebuildGraph();
+    }
+
+    /// <summary>Whether a graph row is one of the highlighted pull request's commits (or a folded row holding one).</summary>
+    private bool IsInPullRequestHighlight(string sha) =>
+        _prHighlight is { } h && (h.Own.Contains(sha) || h.Own.Any(s => _shownAs.TryGetValue(s, out var row) && row == sha));
+
+    /// <summary>
+    /// After the pull requests are listed again (the graph is rebuilt next): drop the highlight of one that closed,
+    /// refresh its card.
+    /// </summary>
+    private void UpdatePullRequestHighlight()
+    {
+        if (_prHighlight is not { } h) return;
+        _prHighlight = _pullRequests.Any(p => p.Number == h.Number) ? h with { Card = Sidebar.CardForPullRequest(h.Number) } : null;
     }
 
     /// <summary>Shows a review in its own window, or brings its window to the front when it's already open.</summary>

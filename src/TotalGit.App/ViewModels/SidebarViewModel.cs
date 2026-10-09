@@ -377,6 +377,26 @@ public partial class SidebarViewModel : ObservableObject
         .GroupBy(p => p.HeadRef, StringComparer.Ordinal)
         .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
 
+    /// <summary>
+    /// The hover card of open pull request <paramref name="number"/>: its row's, so avatars that load later show up
+    /// (made afresh when the filter hides the row); null when it isn't open.
+    /// </summary>
+    public PrCardViewModel? CardForPullRequest(int number)
+    {
+        if (_pullRequests.FirstOrDefault(p => p.Number == number) is not { } pr) return null;
+        if (Flatten(Nodes.Where(n => n.IsPullRequestsSection)).FirstOrDefault(n => n.PullRequest?.Number == number)?.Card is { } card)
+            return card;
+        var author = Person(pr.Author.DisplayName, pr.Author.AvatarUrl, $"Opened by {pr.Author.NameAndLogin}");
+        var reviewers = pr.Reviewers.Select(r => Person(r.DisplayName, r.AvatarUrl, PrPerson.Describe(r), r.State)).ToList();
+        return new PrCardViewModel(pr, author, reviewers, PullRequestTriage.Ticket(pr.Title).Key);
+    }
+
+    /// <summary>The hover card of the open pull request from branch <paramref name="r"/> (local or remote), if any.</summary>
+    public PrCardViewModel? CardForBranch(RefInfo r) =>
+        r.Kind is RefKind.LocalBranch or RefKind.RemoteBranch && PullRequestsByBranch().TryGetValue(r.ShortName, out var pr)
+            ? CardForPullRequest(pr.Number)
+            : null;
+
     /// <summary>A remote branch's owner: its pull request's author, else from its commits.</summary>
     private BranchOwnerBadge? OwnerBadge(BranchTarget target, Dictionary<string, PullRequestSummary> prs)
     {

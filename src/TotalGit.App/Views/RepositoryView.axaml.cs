@@ -39,6 +39,8 @@ public partial class RepositoryView : UserControl
         Graph.RangeSelectRequested += (anchor, other) => _vm?.SelectRange(anchor, other);
         Graph.RangeDropped += target => _vm?.RebaseRangeCommand.Execute(target);
         Graph.ExpandFoldRequested += sha => _vm?.ExpandFoldCommand.Execute(sha);
+        Graph.ClearHighlightRequested += () => _vm?.ClearPullRequestHighlight();
+        Graph.PullRequestCardFor = r => _vm?.Sidebar.CardForBranch(r);
 
         Sidebar.NodeActivated += node => _vm?.OnSidebarNodeActivated(node);
         BannerBar.PointerEntered += (_, _) => _vm?.PauseBannerTimer(true);

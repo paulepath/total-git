@@ -12,6 +12,7 @@ using TotalGit.App.ViewModels;
 using TotalGit.Core.Avatars;
 using TotalGit.Core.Git;
 using TotalGit.Core.Graph;
+using TotalGit.Core.Hosting;
 
 namespace TotalGit.App.Views;
 
@@ -96,6 +97,19 @@ public sealed class CommitGraphView : Control
     private readonly IBrush[] _pillBrushes = LanePalette.Select(c => (IBrush)new SolidColorBrush(c, 0.35)).ToArray();
 
     private static readonly IPen WipPen = new Pen(new SolidColorBrush(Color.Parse("#A0A7B0")), 1.5, new DashStyle([2, 2], 0));
+
+    // A highlighted pull request: its "would merge" row, the dashed lines from it, and how much the rest fades.
+    private readonly Pen[] _dashedPens = LanePalette.Select(c => new Pen(new SolidColorBrush(c), 2, new DashStyle([3, 2], 0))).ToArray();
+    private static readonly IBrush GhostBrush = new SolidColorBrush(Color.FromArgb(0x1C, 0x3B, 0x82, 0xF6));
+    private static readonly IPen GhostBorderPen = new Pen(new SolidColorBrush(Color.Parse("#3B5E86")), 1, new DashStyle([4, 3], 0));
+    private static readonly IPen GhostNodePen = new Pen(new SolidColorBrush(Color.Parse("#5AA9F2")), 2, new DashStyle([2, 1.5], 0));
+    private static readonly IBrush GhostTextBrush = new SolidColorBrush(Color.Parse("#A9C8E8"));
+    private const double DimOpacity = 0.4;
+    private readonly Typeface _italicTypeface = new("Inter", FontStyle.Italic);
+    private HashSet<int> _prRows = [];
+    private int _prHeadRow = -1;
+    private int _prBaseRow = -1;
+    private PrHoverCard? _cardTip;
 
     private AvatarCache? _avatarCache;
     private Dictionary<string, List<RefBadge>> _badgesBySha = [];
@@ -215,6 +229,12 @@ public sealed class CommitGraphView : Control
     /// <summary>Raised on double-click on one ref in a fanned-out list (check it out, as in the sidebar).</summary>
     public event Action<RefInfo>? RefActivated;
 
+    /// <summary>Escape with a pull request highlighted: put the graph back to normal.</summary>
+    public event Action? ClearHighlightRequested;
+
+    /// <summary>The hover card of the open pull request from a branch, or null; shown over that branch's label.</summary>
+    public Func<RefInfo, object?>? PullRequestCardFor { get; set; }
+
     /// <summary>Raised when the user finishes resizing a column.</summary>
     public event Action? ColumnsChanged;
 
@@ -318,6 +338,18 @@ public sealed class CommitGraphView : Control
         _badgesBySha = RefBadge.Build(data);
         _headSha = data.Refs.FirstOrDefault(r => r.IsCurrent)?.TargetSha;
 
+        _prRows = [];
+        _prHeadRow = _prBaseRow = -1;
+        if (data.PullRequest is { } pr)
+        {
+            // Commits the filters hide or a fold holds count as the row standing for them.
+            int RowOf(string sha) => _rowBySha.TryGetValue(data.ShownAs.GetValueOrDefault(sha, sha), out var r) ? r : -1;
+            foreach (var sha in pr.Own)
+                if (RowOf(sha) is >= 0 and var r) _prRows.Add(r);
+            _prHeadRow = RowOf(pr.HeadSha);
+            _prBaseRow = pr.BaseSha is null ? -1 : RowOf(pr.BaseSha);
+        }
+
         _rowTops = new double[rows.Count + 1];
         for (var i = 0; i < rows.Count; i++)
         {
@@ -326,9 +358,23 @@ public sealed class CommitGraphView : Control
         }
     }
 
-    /// <summary>Where a row starts in the scrolled content (row == Rows.Count gives the total height).</summary>
-    private double ContentTop(int row) =>
-        _rowTops.Length == Rows.Count + 1 ? _rowTops[Math.Clamp(row, 0, Rows.Count)] : Math.Clamp(row, 0, Rows.Count) * RowHeight;
+    /// <summary>
+    /// Where a row starts in the scrolled content (row == Rows.Count gives the total height). A highlighted pull
+    /// request's "would merge" row comes first, above them all.
+    /// </summary>
+    private double ContentTop(int row) => GhostHeight +
+        (_rowTops.Length == Rows.Count + 1 ? _rowTops[Math.Clamp(row, 0, Rows.Count)] : Math.Clamp(row, 0, Rows.Count) * RowHeight);
+
+    /// <summary>The height of the "would merge" row: one line when a pull request is highlighted.</summary>
+    private double GhostHeight => Data?.PullRequest is null ? 0 : RowHeight;
+
+    /// <summary>Whether <paramref name="y"/> is on the "would merge" row.</summary>
+    private bool GhostAt(double y) => GhostHeight > 0 && y >= HeaderHeight && y - HeaderHeight + _offset < GhostHeight;
+
+    /// <summary>Whether row <paramref name="i"/> fades because a pull request is highlighted and it isn't part of it.</summary>
+    private bool Dimmed(int i) => Data?.PullRequest is not null && i != _prBaseRow && !_prRows.Contains(i);
+
+    private IDisposable? Dim(DrawingContext ctx, int i) => Dimmed(i) ? ctx.PushOpacity(DimOpacity) : null;
 
     /// <summary>A row's height: one line, or one line per ref on a commit with several.</summary>
     private double RowSpan(int row) => ContentTop(row + 1) - ContentTop(row);
@@ -512,6 +558,18 @@ public sealed class CommitGraphView : Control
         ToolTip.SetIsOpen(this, false);
         _tipSuppressed = true;
 
+        // The "would merge" row stands for the pull request: a click there selects its newest commit.
+        if (GhostAt(point.Position.Y))
+        {
+            if (point.Properties.IsLeftButtonPressed && _prHeadRow >= 0)
+            {
+                SelectedRange = null;
+                SelectedSha = Rows[_prHeadRow].Commit.Sha;
+            }
+            e.Handled = true;
+            return;
+        }
+
         // On a commit with several refs, a click on one of its labels belongs to that ref.
         if (PillAt(point.Position) is ( >= 0 and var pillRow, var k))
         {
@@ -586,6 +644,12 @@ public sealed class CommitGraphView : Control
             e.Handled = true;
             return;
         }
+        if (e.Key == Key.Escape && Data?.PullRequest is not null)
+        {
+            ClearHighlightRequested?.Invoke();
+            e.Handled = true;
+            return;
+        }
 
         // Shift+Up/Down moves the far end of the range.
         if (e.KeyModifiers == KeyModifiers.Shift && e.Key is Key.Up or Key.Down && SelectedSha is { } anchor)
@@ -634,7 +698,7 @@ public sealed class CommitGraphView : Control
     {
         if (y < HeaderHeight) return -1;
         var content = y - HeaderHeight + _offset;
-        return content >= 0 && content < ContentTop(Rows.Count) ? RowAtContent(content) : -1;
+        return content >= GhostHeight && content < ContentTop(Rows.Count) ? RowAtContent(content) : -1;
     }
 
     /// <summary>The ref label under <paramref name="p"/> on a commit with several refs, or (-1, -1).</summary>
@@ -675,26 +739,43 @@ public sealed class CommitGraphView : Control
             InvalidateVisual();
         }
 
-        // Tooltip only when the pointer is over the commit's node.
-        var overNode = row >= 0 && Math.Abs(p.X - LaneX(Rows[row].Lane)) <= NodeRadius
-                                && Math.Abs(p.Y - (RowTop(row) + RowHeight / 2)) <= NodeRadius;
-        if (!overNode) _tipSuppressed = false;
-        if (overNode && !_tipSuppressed)
+        // A pull request's card over its branch's label (or the "would merge" row); else the commit's details over
+        // its node. Nothing elsewhere.
+        var card = GhostAt(p.Y) ? Data?.PullRequest?.Card
+            : RefAt(p) is { } r ? PullRequestCardFor?.Invoke(r)
+            : null;
+        var overNode = card is null && row >= 0 && Math.Abs(p.X - LaneX(Rows[row].Lane)) <= NodeRadius
+                                    && Math.Abs(p.Y - (RowTop(row) + RowHeight / 2)) <= NodeRadius;
+        if (card is null && !overNode) _tipSuppressed = false;
+        if (card is not null && !_tipSuppressed)
+        {
+            if (!ReferenceEquals(_cardTip?.DataContext, card)) _cardTip = new PrHoverCard { DataContext = card };
+            ShowTip(_cardTip);
+        }
+        else if (overNode && !_tipSuppressed)
         {
             var c = Rows[row].Commit;
-            var tip = $"{c.Sha}\n{c.AuthorName} <{c.AuthorEmail}>\n{c.AuthorDate.LocalDateTime:f}\n\n{c.MessageShort}";
-            if (!Equals(ToolTip.GetTip(this), tip))
-            {
-                ToolTip.SetIsOpen(this, false);
-                ToolTip.SetTip(this, tip);
-            }
-            ToolTip.SetIsOpen(this, true);
+            ShowTip($"{c.Sha}\n{c.AuthorName} <{c.AuthorEmail}>\n{c.AuthorDate.LocalDateTime:f}\n\n{c.MessageShort}");
         }
         else
         {
             ToolTip.SetIsOpen(this, false);
         }
     }
+
+    private void ShowTip(object tip)
+    {
+        if (!Equals(ToolTip.GetTip(this), tip))
+        {
+            ToolTip.SetIsOpen(this, false);
+            ToolTip.SetTip(this, tip);
+        }
+        ToolTip.SetIsOpen(this, true);
+    }
+
+    /// <summary>The ref whose label is under <paramref name="p"/>, on any commit.</summary>
+    private RefInfo? RefAt(Point p) =>
+        PillAt(p) is ( >= 0 and var row, var k) ? _badgesBySha[Rows[row].Commit.Sha][k].Ref : SoleRefAt(p);
 
     // ---------------------------------------------------------------- rendering
 
@@ -714,22 +795,25 @@ public sealed class CommitGraphView : Control
 
             using (ctx.PushClip(new Rect(0, HeaderHeight, width, BodyHeight)))
             {
-                for (var i = first; i <= last; i++) DrawRowBackground(ctx, i, width);
-                for (var i = first; i <= last; i++) DrawConnector(ctx, i);
+                for (var i = first; i <= last; i++) using (Dim(ctx, i)) DrawRowBackground(ctx, i, width);
+                DrawGhostRow(ctx, width);
+                for (var i = first; i <= last; i++) using (Dim(ctx, i)) DrawConnector(ctx, i);
                 using (ctx.PushClip(new Rect(GraphLeft, HeaderHeight, GraphColumnWidth, BodyHeight)))
                 {
-                    for (var i = first; i <= last; i++) DrawSegments(ctx, i);
-                    for (var i = first; i <= last; i++) DrawNode(ctx, i);
+                    for (var i = first; i <= last; i++) using (Dim(ctx, i)) DrawSegments(ctx, i);
+                    DrawGhostLines(ctx);
+                    for (var i = first; i <= last; i++) using (Dim(ctx, i)) DrawNode(ctx, i);
                     for (var i = first; i <= last; i++)
                     {
                         if (InRange(rows[i].Commit.Sha))
                             ctx.DrawEllipse(null, RangeNodePen, new Point(LaneX(rows[i].Lane), RowTop(i) + RowHeight / 2), NodeRadius + 2, NodeRadius + 2);
                     }
+                    DrawGhostNode(ctx);
                 }
-                for (var i = first; i <= last; i++) DrawRowText(ctx, i, width);
+                for (var i = first; i <= last; i++) using (Dim(ctx, i)) DrawRowText(ctx, i, width);
                 using (ctx.PushClip(new Rect(0, HeaderHeight, RefColumnWidth, BodyHeight)))
                 {
-                    for (var i = first; i <= last; i++) DrawBadges(ctx, i);
+                    for (var i = first; i <= last; i++) using (Dim(ctx, i)) DrawBadges(ctx, i);
                 }
                 DrawRangeDrag(ctx, width);
             }
@@ -788,7 +872,7 @@ public sealed class CommitGraphView : Control
             ctx.FillRectangle(RangeAccentBrush, new Rect(MessageLeft - 8, top + 3, 3, height - 6));
         }
 
-        var strong = sha == SelectedSha || sha == _headSha || inRange;
+        var strong = sha == SelectedSha || sha == _headSha || inRange || _prRows.Contains(i);
         // The band starts with a rounded end centred on the node, so it wraps around the circle. It covers the
         // commit's line only; the extra lines of a commit with several refs hold just their labels.
         var bandTop = top + 1;
@@ -808,6 +892,91 @@ public sealed class CommitGraphView : Control
 
         // Right-edge accent stripe, as in GitKraken.
         ctx.FillRectangle(_laneBrushes[color], new Rect(width - 3, top + 1, 3, height - 2));
+    }
+
+    /// <summary>The lane of the "would merge" row's node: the base branch's, else the pull request head's.</summary>
+    private int GhostLane => _prBaseRow >= 0 ? Rows[_prBaseRow].Lane : _prHeadRow >= 0 ? Rows[_prHeadRow].Lane : 0;
+
+    private double GhostCenterY => HeaderHeight - _offset + RowHeight / 2;
+
+    /// <summary>
+    /// A highlighted pull request's "would merge" row, above all the others: where it would land, its status, who
+    /// opened it.
+    /// </summary>
+    private void DrawGhostRow(DrawingContext ctx, double width)
+    {
+        if (Data?.PullRequest is not { } pr) return;
+        var top = HeaderHeight - _offset;
+        if (top + RowHeight <= HeaderHeight) return;
+        ctx.DrawRectangle(GhostBrush, GhostBorderPen, new Rect(1.5, top + 1.5, width - 3, RowHeight - 3), 4, 4);
+
+        var cy = top + RowHeight / 2;
+        var messageWidth = Math.Max(0, (ShowMetaColumns ? AuthorLeft : width) - MessageLeft - 12);
+        var label = Text($"Would merge into {pr.BaseName}", 13, GhostTextBrush, _italicTypeface, messageWidth);
+        ctx.DrawText(label, new Point(MessageLeft, cy - label.Height / 2));
+
+        var x = MessageLeft + label.Width + 10;
+        var room = MessageLeft + messageWidth - x;
+        if (room > 40)
+        {
+            var status = pr.Card is { } card ? $"#{pr.Number} · {card.StatusText}" : $"#{pr.Number}";
+            var rail = pr.Card?.RailBrush as ISolidColorBrush;
+            var text = Text(status, 11.5, PrimaryTextBrush, _boldTypeface, room - 16);
+            var chip = new Rect(x, cy - 9, text.Width + 16, 18);
+            ctx.DrawRectangle(rail is null ? FoldChipBrush : new SolidColorBrush(rail.Color, 0.25),
+                rail is null ? null : new Pen(rail, 1), new RoundedRect(chip, 9));
+            ctx.DrawText(text, new Point(x + 8, cy - text.Height / 2));
+        }
+
+        if (!ShowMetaColumns) return;
+        var author = Text(pr.AuthorName, 12, MutedTextBrush, _typeface, AuthorColumnWidth - 12);
+        ctx.DrawText(author, new Point(AuthorLeft, cy - author.Height / 2));
+        var date = Text("not merged yet", 12, MutedTextBrush, _italicTypeface, DateColumnWidth - 12);
+        ctx.DrawText(date, new Point(DateLeft, cy - date.Height / 2));
+    }
+
+    /// <summary>
+    /// Dashed lines from the "would merge" row's node: straight down to the base branch's tip, and across then down
+    /// to the pull request's newest commit. Drawn under the nodes, over the other lines.
+    /// </summary>
+    private void DrawGhostLines(DrawingContext ctx)
+    {
+        if (Data?.PullRequest is null) return;
+        var gx = LaneX(GhostLane);
+        var gy = GhostCenterY;
+        if (_prBaseRow >= 0)
+            ctx.DrawLine(_dashedPens[Rows[_prBaseRow].ColorIndex], new Point(gx, gy + NodeRadius), new Point(gx, RowTop(_prBaseRow) + RowHeight / 2));
+        if (_prHeadRow < 0) return;
+
+        var pen = _dashedPens[Rows[_prHeadRow].ColorIndex];
+        var hx = LaneX(Rows[_prHeadRow].Lane);
+        var hy = RowTop(_prHeadRow) + RowHeight / 2;
+        if (Math.Abs(hx - gx) < 1)
+        {
+            ctx.DrawLine(pen, new Point(gx, gy + NodeRadius), new Point(hx, hy));
+            return;
+        }
+        var dir = Math.Sign(hx - gx);
+        var r = Math.Min(CornerRadius, Math.Min(Math.Abs(hx - gx), Math.Abs(hy - gy)));
+        var geometry = new StreamGeometry();
+        using (var g = geometry.Open())
+        {
+            g.BeginFigure(new Point(gx + dir * NodeRadius, gy), false);
+            g.LineTo(new Point(hx - dir * r, gy));
+            g.QuadraticBezierTo(new Point(hx, gy), new Point(hx, gy + r));
+            g.LineTo(new Point(hx, hy));
+            g.EndFigure(false);
+        }
+        ctx.DrawGeometry(null, pen, geometry);
+    }
+
+    /// <summary>The "would merge" row's node: a dashed circle, as the merge commit isn't there yet.</summary>
+    private void DrawGhostNode(DrawingContext ctx)
+    {
+        if (Data?.PullRequest is null) return;
+        var center = new Point(LaneX(GhostLane), GhostCenterY);
+        ctx.DrawEllipse(BackgroundBrush, GhostNodePen, center, NodeRadius - 1, NodeRadius - 1);
+        ctx.DrawEllipse(GhostNodePen.Brush, null, center, 3, 3);
     }
 
     private void DrawRangeDrag(DrawingContext ctx, double width)
@@ -1004,8 +1173,10 @@ public sealed class CommitGraphView : Control
     private const double BadgeCircle = 22; // icon circle at the left end of a ref label
     private const double PillLeft = 4;
 
-    /// <summary>One pill's icons, (possibly trimmed) name and total width.</summary>
-    private sealed record PillLayout(List<Geometry> Icons, FormattedText Name, double Width);
+    /// <summary>One pill's icons, (possibly trimmed) name, pull request chip text and total width.</summary>
+    private sealed record PillLayout(List<Geometry> Icons, FormattedText Name, FormattedText? Chip, double Width);
+
+    private const double ChipPadding = 5;
 
     private PillLayout LayoutPill(RefBadge badge, double maxWidth)
     {
@@ -1013,13 +1184,15 @@ public sealed class CommitGraphView : Control
         if (badge.HasLocal) icons.Add(LaptopIcon);
         if (badge.HasRemote) icons.Add(Data?.GitHubRepo is not null ? GitHubIcon : CloudIcon);
         if (badge.HasWorktree) icons.Add(WorktreeIcon);
-        // Circle + gap, optional check, name, trailing icons, then padding round the rounded right end.
+        // An open pull request's number goes last, so it's never the part trimmed away.
+        var chip = badge.PullRequest is { } pr ? Text($"#{pr.Number}", 10.5, Brushes.White, _boldTypeface) : null;
+        // Circle + gap, optional check, name, trailing icons and chip, then padding round the rounded right end.
         var leading = BadgeCircle + 5 + (badge.IsCurrent ? PillIconSize + PillGap : 0);
-        var trailing = icons.Count * (PillIconSize + PillGap) + 6;
+        var trailing = icons.Count * (PillIconSize + PillGap) + (chip is null ? 0 : chip.Width + ChipPadding * 2 + PillGap) + 6;
 
         var name = Text(badge.Name, 12, Brushes.White, badge.IsCurrent ? _boldTypeface : _typeface,
             Math.Max(10, maxWidth - leading - trailing));
-        return new PillLayout(icons, name, Math.Max(0, Math.Min(maxWidth, leading + name.Width + trailing)));
+        return new PillLayout(icons, name, chip, Math.Max(0, Math.Min(maxWidth, leading + name.Width + trailing)));
     }
 
     /// <summary>The widest a pill may be: the ref column less a little room before the connector.</summary>
@@ -1084,6 +1257,13 @@ public sealed class CommitGraphView : Control
             DrawIcon(ctx, icon, x, cy - iconSize / 2, iconSize);
             x += iconSize + PillGap;
         }
+
+        if (layout.Chip is { } chip)
+        {
+            var rect = new Rect(x, cy - 7, chip.Width + ChipPadding * 2, 14);
+            ctx.DrawRectangle(badge.PullRequestFill, badge.PullRequestBrush is { } b ? new Pen(b, 1.2) : null, new RoundedRect(rect, 7));
+            ctx.DrawText(chip, new Point(x + ChipPadding, cy - chip.Height / 2));
+        }
     }
 
     private static void DrawIcon(DrawingContext ctx, Geometry icon, double x, double y, double size, IBrush? brush = null)
@@ -1114,6 +1294,21 @@ public sealed class CommitGraphView : Control
         /// <summary>The ref this pill stands for (the local branch when it also has a remote one).</summary>
         public required RefInfo Ref { get; init; }
 
+        /// <summary>The open pull request from this branch, shown as a chip at the label's end.</summary>
+        public PullRequestSummary? PullRequest { get; init; }
+
+        /// <summary>The chip's outline (the pull request's state: ready, blocked, waiting, draft) and fill.</summary>
+        public IBrush? PullRequestBrush { get; init; }
+        public IBrush? PullRequestFill { get; init; }
+
+        private RefBadge WithPullRequest(GraphData data, string branch)
+        {
+            if (!data.PullRequestsByBranch.TryGetValue(branch, out var pr)) return this;
+            var brush = PrRailColors.For(PullRequestTriage.Rail(pr));
+            var fill = brush is ISolidColorBrush solid ? new SolidColorBrush(solid.Color, 0.3) : null;
+            return this with { PullRequest = pr, PullRequestBrush = brush, PullRequestFill = fill };
+        }
+
         private static RefBadge Branch(RefInfo r, string fullName, bool isCurrent, bool hasLocal, bool hasRemote, bool hasWorktree = false)
         {
             var shortName = BranchCategory.Classify(fullName).ShortName;
@@ -1136,9 +1331,11 @@ public sealed class CommitGraphView : Control
                     // Worktree icon: the branch is checked out in a worktree other than the one being viewed.
                     var inOtherWorktree = data.WorktreesByBranch.TryGetValue(local.Name, out var wt)
                         && !string.Equals(wt.Path, data.CurrentWorktreePath, StringComparison.OrdinalIgnoreCase);
-                    badges.Add(Branch(local, local.Name, local.IsCurrent, true, match is not null, inOtherWorktree));
+                    badges.Add(Branch(local, local.Name, local.IsCurrent, true, match is not null, inOtherWorktree)
+                        .WithPullRequest(data, local.Name));
                 }
-                badges.AddRange(remotes.Select(r => Branch(r, ShortRemoteName(r.Name), false, false, true)));
+                badges.AddRange(remotes.Select(r => Branch(r, ShortRemoteName(r.Name), false, false, true)
+                    .WithPullRequest(data, ShortRemoteName(r.Name))));
                 badges.AddRange(group.Where(r => r.Kind == RefKind.Tag).Select(r => new RefBadge(r.Name, false, false, false, true) { Ref = r }));
 
                 result[group.Key] = badges
