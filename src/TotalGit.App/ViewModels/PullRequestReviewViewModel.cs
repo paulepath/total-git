@@ -345,9 +345,13 @@ public sealed partial class PullRequestReviewViewModel : ObservableObject
     /// <summary>Every changed file; <see cref="VisibleFiles"/> is what the file list shows.</summary>
     public ObservableCollection<ReviewFileItem> Files { get; } = [];
 
-    /// <summary>The file list: without reviewed files when hiding them, only files changed since the last review in that mode.</summary>
+    /// <summary>
+    /// The file list: without approved files when hiding them, only rejected ones when asked, only files changed
+    /// since the last review in that mode.
+    /// </summary>
     public IReadOnlyList<ReviewFileItem> VisibleFiles => Files
         .Where(f => !HideReviewed || !f.IsReviewed || f.IsOpen)
+        .Where(f => !OnlyRejected || f.IsRejectedOrChanged || f.IsOpen)
         .Where(f => !HideTests || !f.IsTest || f.IsOpen)
         .Where(f => !SinceLastReview || _sinceChanged.Contains(f.Path))
         .ToList();
@@ -362,6 +366,13 @@ public sealed partial class PullRequestReviewViewModel : ObservableObject
     public partial bool HideReviewed { get; set; }
 
     partial void OnHideReviewedChanged(bool value) => UpdateNodes();
+
+    /// <summary>Show only the files rejected (changed since or not), to follow them up.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(VisibleFiles))]
+    public partial bool OnlyRejected { get; set; }
+
+    partial void OnOnlyRejectedChanged(bool value) => UpdateNodes();
 
     /// <summary>Leave test files out of the list (and out of "next file") to review them later.</summary>
     [ObservableProperty]
@@ -386,7 +397,7 @@ public sealed partial class PullRequestReviewViewModel : ObservableObject
     {
         get
         {
-            var left = Files.Count(f => f.IsTest && !f.IsReviewed);
+            var left = Files.Count(f => f.IsTest && !f.IsDone);
             return HideTests && left > 0 ? $"Hide tests ({TestCount}, {left} to review later)" : $"Hide tests ({TestCount})";
         }
     }
@@ -434,9 +445,19 @@ public sealed partial class PullRequestReviewViewModel : ObservableObject
         SelectedNode = SelectedFile is { } f ? ReviewTreeNode.Find(FileNodes, f) : null;
     }
 
-    public int ReviewedCount => Files.Count(f => f.IsReviewed);
-    public string ProgressText => $"{ReviewedCount}/{Files.Count} reviewed";
-    public double ProgressValue => Files.Count == 0 ? 0 : 100.0 * ReviewedCount / Files.Count;
+    public int ApprovedCount => Files.Count(f => f.IsReviewed);
+    public int RejectedCount => Files.Count(f => f.IsRejected);
+    public int ChangedCount => Files.Count(f => f.IsChanged);
+    public int ToReviewCount => Files.Count(f => f.IsNotReviewed);
+    public string ProgressText => $"{ApprovedCount + RejectedCount} of {Files.Count} marked";
+
+    /// <summary>"1 approved · 1 rejected · 2 changed · 2 to review", leaving out the empty ones.</summary>
+    public string ProgressDetail => string.Join(" · ", new[]
+        {
+            (ApprovedCount, "approved"), (RejectedCount, "rejected"), (ChangedCount, "changed since"), (ToReviewCount, "to review"),
+        }.Where(p => p.Item1 > 0).Select(p => $"{p.Item1} {p.Item2}"));
+
+    public bool HasRejected => Files.Any(f => f.IsRejectedOrChanged);
 
     [ObservableProperty]
     public partial IReadOnlyList<string> Commits { get; private set; } = [];
@@ -468,9 +489,14 @@ public sealed partial class PullRequestReviewViewModel : ObservableObject
         OnPropertyChanged(nameof(GeneratedFiles));
         OnPropertyChanged(nameof(HasGeneratedFiles));
         OnPropertyChanged(nameof(GeneratedHeader));
-        OnPropertyChanged(nameof(ReviewedCount));
+        OnPropertyChanged(nameof(ApprovedCount));
+        OnPropertyChanged(nameof(RejectedCount));
+        OnPropertyChanged(nameof(ChangedCount));
+        OnPropertyChanged(nameof(ToReviewCount));
         OnPropertyChanged(nameof(ProgressText));
-        OnPropertyChanged(nameof(ProgressValue));
+        OnPropertyChanged(nameof(ProgressDetail));
+        OnPropertyChanged(nameof(HasRejected));
+        if (!HasRejected && OnlyRejected) OnlyRejected = false;
         OnPropertyChanged(nameof(TestCount));
         OnPropertyChanged(nameof(HasTests));
         OnPropertyChanged(nameof(HideTestsText));
@@ -508,29 +534,77 @@ public sealed partial class PullRequestReviewViewModel : ObservableObject
         UpdateFileHeader();
     }
 
-    /// <summary>Marks a file reviewed (or not), on the host and locally; puts it back if the host refuses.</summary>
+    /// <summary>
+    /// The review box: each click moves it on, empty → approved → rejected → empty. A file changed since its mark
+    /// gets the same verdict again first.
+    /// </summary>
     [RelayCommand]
     private async Task ToggleReviewedAsync(ReviewFileItem? file)
     {
-        if (file is null || Pr.HeadSha is not { } head) return;
-        if (IsCommitView)
+        if (file is null || !CanMark(out var head)) return;
+        FileVerdict? verdict = file.State switch
         {
-            ShowInfo("Review boxes are for all the changes: choose All changes to tick files.");
-            return;
-        }
-        var reviewed = !file.IsReviewed;
-        await SetReviewedAsync(file, reviewed, head);
+            FileReviewState.Reviewed or FileReviewState.ChangedSinceRejected => FileVerdict.Rejected,
+            FileReviewState.Rejected => null,
+            _ => FileVerdict.Approved,
+        };
+        await SetVerdictAsync(file, verdict, head);
     }
 
-    private async Task<bool> SetReviewedAsync(ReviewFileItem file, bool reviewed, string head)
+    /// <summary>✓ (or A): approves the file (the open one when none is given); an approved file is cleared instead.</summary>
+    [RelayCommand]
+    private async Task ApproveFileAsync(ReviewFileItem? file)
+    {
+        file ??= SelectedFile;
+        if (file is null || !CanMark(out var head)) return;
+        await SetVerdictAsync(file, file.IsReviewed ? null : FileVerdict.Approved, head);
+    }
+
+    /// <summary>✗ (or X): rejects the file (the open one when none is given); a rejected file is cleared instead.</summary>
+    [RelayCommand]
+    private async Task RejectFileAsync(ReviewFileItem? file)
+    {
+        file ??= SelectedFile;
+        if (file is null || !CanMark(out var head)) return;
+        await SetVerdictAsync(file, file.IsRejected ? null : FileVerdict.Rejected, head);
+    }
+
+    [RelayCommand]
+    private async Task ClearFileMarkAsync(ReviewFileItem? file)
+    {
+        file ??= SelectedFile;
+        if (file is null || !CanMark(out var head)) return;
+        await SetVerdictAsync(file, null, head);
+    }
+
+    /// <summary>Whether files can be marked now (not while one commit's changes are shown).</summary>
+    private bool CanMark(out string head)
+    {
+        head = Pr.HeadSha ?? "";
+        if (head.Length == 0) return false;
+        if (!IsCommitView) return true;
+        ShowInfo("Review boxes are for all the changes: choose All changes to mark files.");
+        return false;
+    }
+
+    /// <summary>
+    /// Approves or rejects a file, or clears its mark (null), on the host and locally; puts it back if the host
+    /// refuses. The host only has "viewed", so either verdict is viewed there and the local mark says which.
+    /// </summary>
+    private async Task<bool> SetVerdictAsync(ReviewFileItem file, FileVerdict? verdict, string head)
     {
         var before = (file.State, Viewed: _viewed.GetValueOrDefault(file.Path), Mark: _ctx.Marks.Get(_marksKey, file.Path));
-        file.State = reviewed ? FileReviewState.Reviewed : FileReviewState.NotReviewed;
-        _viewed[file.Path] = reviewed ? FileViewState.Viewed : FileViewState.Unviewed;
-        if (reviewed)
+        file.State = verdict switch
+        {
+            FileVerdict.Approved => FileReviewState.Reviewed,
+            FileVerdict.Rejected => FileReviewState.Rejected,
+            _ => FileReviewState.NotReviewed,
+        };
+        _viewed[file.Path] = verdict is null ? FileViewState.Unviewed : FileViewState.Viewed;
+        if (verdict is { } v)
         {
             var blob = file.Change.Kind == ChangeKind.Deleted ? null : _ctx.Session.BlobAt(head, file.Path);
-            _ctx.Marks.Mark(_marksKey, file.Path, new ReviewMark(head, blob, DateTimeOffset.Now));
+            _ctx.Marks.Mark(_marksKey, file.Path, new ReviewMark(head, blob, DateTimeOffset.Now, v));
             // Keep the reviewed head even after force-pushes, so the changes since can be shown later.
             _ = KeepReviewedHeadAsync(file.Path, head);
         }
@@ -541,10 +615,12 @@ public sealed partial class PullRequestReviewViewModel : ObservableObject
         FilesChanged();
         if (file == SelectedFile) await ReloadDiffAsync(file);
 
-        if (!CanMarkViewed) return true;
+        // Approved and rejected are both "viewed" on the host: only a change to or from no mark goes there.
+        var wasViewed = before.Viewed == FileViewState.Viewed;
+        if (!CanMarkViewed || wasViewed == verdict is not null) return true;
         try
         {
-            await Task.Run(() => Provider!.SetFileViewedAsync(Number, file.Path, reviewed));
+            await Task.Run(() => Provider!.SetFileViewedAsync(Number, file.Path, verdict is not null));
             return true;
         }
         catch (HostException ex)
@@ -554,7 +630,7 @@ public sealed partial class PullRequestReviewViewModel : ObservableObject
             if (before.Mark is { } mark) _ctx.Marks.Mark(_marksKey, file.Path, mark);
             else _ctx.Marks.Unmark(_marksKey, file.Path);
             FilesChanged();
-            ShowError($"Couldn't mark {file.FileName} as {(reviewed ? "viewed" : "not viewed")}: {ex.Message}");
+            ShowError($"Couldn't mark {file.FileName} as {(verdict is null ? "not viewed" : "viewed")}: {ex.Message}");
             return false;
         }
     }
@@ -572,9 +648,15 @@ public sealed partial class PullRequestReviewViewModel : ObservableObject
         }
     }
 
-    /// <summary>R: marks the open file reviewed and opens the next one that isn't.</summary>
+    /// <summary>R: approves the open file and opens the next one still to look at.</summary>
     [RelayCommand]
-    private async Task MarkReviewedAndNextAsync()
+    private Task MarkReviewedAndNextAsync() => MarkAndNextAsync(FileVerdict.Approved);
+
+    /// <summary>Shift+X: rejects the open file and opens the next one still to look at.</summary>
+    [RelayCommand]
+    private Task RejectAndNextAsync() => MarkAndNextAsync(FileVerdict.Rejected);
+
+    private async Task MarkAndNextAsync(FileVerdict verdict)
     {
         if (SelectedFile is not { } file || Pr.HeadSha is not { } head) return;
         if (IsCommitView)
@@ -582,10 +664,11 @@ public sealed partial class PullRequestReviewViewModel : ObservableObject
             StepFile(1);
             return;
         }
-        if (!file.IsReviewed && !await SetReviewedAsync(file, true, head)) return;
+        var already = verdict == FileVerdict.Approved ? file.IsReviewed : file.IsRejected;
+        if (!already && !await SetVerdictAsync(file, verdict, head)) return;
         var list = VisibleFiles.Where(f => !f.IsGenerated).ToList();
         var start = list.IndexOf(file);
-        var next = list.Skip(start + 1).Concat(list.Take(Math.Max(0, start))).FirstOrDefault(f => !f.IsReviewed);
+        var next = list.Skip(start + 1).Concat(list.Take(Math.Max(0, start))).FirstOrDefault(f => !f.IsDone);
         if (next is not null) SelectedFile = next;
         else
         {
@@ -763,15 +846,17 @@ public sealed partial class PullRequestReviewViewModel : ObservableObject
             FileNote = null;
             return;
         }
+        var marked = file.State == FileReviewState.ChangedSinceRejected ? "rejected" : "approved";
         FileNote = file.State switch
         {
-            FileReviewState.ChangedSinceReview when SinceReview is { Count: > 0 } d =>
-                $"Changed since you reviewed it: {d.Count} change{(d.Count == 1 ? "" : "s")} marked in violet.",
+            FileReviewState.ChangedSinceReview or FileReviewState.ChangedSinceRejected when SinceReview is { Count: > 0 } d =>
+                $"Changed since you {marked} it: {d.Count} change{(d.Count == 1 ? "" : "s")} marked in violet.",
             _ when IsCommitView => null,
             FileReviewState.ChangedSinceReview when _ctx.Marks.Get(_marksKey, file.Path) is null =>
                 "Changed since you marked it viewed on GitHub. Total Git can't show which lines, because it was marked elsewhere.",
-            FileReviewState.ChangedSinceReview => "Changed since you reviewed it.",
-            FileReviewState.Reviewed => "Reviewed.",
+            FileReviewState.ChangedSinceReview or FileReviewState.ChangedSinceRejected => $"Changed since you {marked} it.",
+            FileReviewState.Reviewed => "Approved.",
+            FileReviewState.Rejected => "Rejected.",
             _ => null,
         };
     }
@@ -984,13 +1069,18 @@ public sealed partial class PullRequestReviewViewModel : ObservableObject
             ];
         var summary = new FormField(FormFieldKind.MultilineText, "Summary") { Placeholder = "Leave a comment (optional)" };
         var verdict = FormField.Choice("Review", verdicts.Select(v => v.Choice).ToList());
-        var unreviewed = Files.Count(f => !f.IsReviewed && !f.IsGenerated);
+        // Rejected files suggest asking for changes.
+        if (Files.Any(f => f.IsRejectedOrChanged) && Array.FindIndex(verdicts, v => v.Verdict == ReviewVerdict.RequestChanges) is >= 0 and var ask)
+            verdict.SelectedIndex = ask;
+        var unreviewed = Files.Count(f => !f.IsDone && !f.IsGenerated);
+        var rejected = Files.Count(f => f.IsRejectedOrChanged);
         var pendingText = (pr.Pending.Count switch
         {
             0 => "No line comments are waiting.",
             1 => "1 line comment will be sent with the review.",
             var n => $"{n} line comments will be sent with the review.",
-        }) + (unreviewed > 0 ? $" {unreviewed} file{(unreviewed == 1 ? " isn't" : "s aren't")} marked reviewed yet." : "");
+        }) + (unreviewed > 0 ? $" {unreviewed} file{(unreviewed == 1 ? " isn't" : "s aren't")} marked reviewed yet." : "")
+           + (rejected > 0 ? $" You rejected {rejected} file{(rejected == 1 ? "" : "s")}." : "");
         var spec = new FormSpec($"Review #{pr.Number}", pendingText, "Submit review", [summary, verdict], Validate: () =>
             verdicts[verdict.SelectedIndex].Verdict != ReviewVerdict.Approve && summary.Text.Trim().Length == 0 && pr.Pending.Count == 0
                 ? "Write a summary or add line comments."

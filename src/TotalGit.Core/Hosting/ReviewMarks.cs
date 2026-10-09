@@ -2,20 +2,34 @@ using System.Text.Json;
 
 namespace TotalGit.Core.Hosting;
 
+/// <summary>What the signed-in user made of a file they reviewed.</summary>
+public enum FileVerdict
+{
+    Approved,
+    Rejected,
+}
+
 /// <summary>
-/// Where the signed-in user marked a pull request's file as reviewed: the pull request head at the time, and the
-/// file's content then (its blob), so a later change to the file can be told apart from other files' changes.
+/// Where the signed-in user marked a pull request's file as reviewed: the pull request head at the time, the file's
+/// content then (its blob), so a later change to the file can be told apart from other files' changes, and whether
+/// they approved or rejected it (marks from before rejecting existed load as approved).
 /// </summary>
-public sealed record ReviewMark(string HeadSha, string? BlobSha, DateTimeOffset MarkedAt);
+public sealed record ReviewMark(string HeadSha, string? BlobSha, DateTimeOffset MarkedAt, FileVerdict Verdict = FileVerdict.Approved);
 
 /// <summary>How far the signed-in user has reviewed one file of a pull request.</summary>
 public enum FileReviewState
 {
     NotReviewed,
 
-    /// <summary>Reviewed, then the file changed: part reviewed.</summary>
+    /// <summary>Approved, then the file changed: part reviewed.</summary>
     ChangedSinceReview,
+
+    /// <summary>Approved.</summary>
     Reviewed,
+    Rejected,
+
+    /// <summary>Rejected, then the file changed.</summary>
+    ChangedSinceRejected,
 }
 
 /// <summary>
@@ -66,17 +80,19 @@ public sealed class ReviewMarks(string filePath)
     }
 
     /// <summary>
-    /// A file's review state from the host's viewed mark and the local one: reviewed while the file is as it was
-    /// when marked; part reviewed once it has changed (or the host says it changed).
+    /// A file's review state from the host's viewed mark and the local one: approved or rejected (the local mark
+    /// says which; the host only knows "viewed") while the file is as it was when marked; part reviewed once it has
+    /// changed (or the host says it changed).
     /// </summary>
     public static FileReviewState StateOf(FileViewState host, ReviewMark? local, string? currentBlob)
     {
-        if (host == FileViewState.ChangedSinceViewed) return FileReviewState.ChangedSinceReview;
-        if (host == FileViewState.Viewed)
-            return local?.BlobSha is { } blob && currentBlob is not null && blob != currentBlob ? FileReviewState.ChangedSinceReview : FileReviewState.Reviewed;
         // Not viewed on the host: a local mark alone (e.g. a host without viewed marks) still counts.
-        if (local is null) return FileReviewState.NotReviewed;
-        return local.BlobSha is { } b && currentBlob is not null && b != currentBlob ? FileReviewState.ChangedSinceReview : FileReviewState.Reviewed;
+        if (host == FileViewState.Unviewed && local is null) return FileReviewState.NotReviewed;
+        var changed = host == FileViewState.ChangedSinceViewed
+            || (local?.BlobSha is { } blob && currentBlob is not null && blob != currentBlob);
+        return local?.Verdict == FileVerdict.Rejected
+            ? changed ? FileReviewState.ChangedSinceRejected : FileReviewState.Rejected
+            : changed ? FileReviewState.ChangedSinceReview : FileReviewState.Reviewed;
     }
 
     private Dictionary<string, Dictionary<string, ReviewMark>> Marks()

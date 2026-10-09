@@ -60,6 +60,35 @@ public sealed class ReviewMarksTests : IDisposable
         Assert.Equal(expected, ReviewMarks.StateOf(host, local, current));
     }
 
+    [Theory]
+    [InlineData(FileViewState.Viewed, "b1", "b1", FileReviewState.Rejected)]
+    [InlineData(FileViewState.Viewed, "b0", "b1", FileReviewState.ChangedSinceRejected)]
+    [InlineData(FileViewState.ChangedSinceViewed, "b1", "b1", FileReviewState.ChangedSinceRejected)]
+    [InlineData(FileViewState.Unviewed, "b1", "b1", FileReviewState.Rejected)]
+    [InlineData(FileViewState.Unviewed, "b0", "b1", FileReviewState.ChangedSinceRejected)]
+    public void A_rejected_file_stays_rejected_and_shows_when_it_changes(FileViewState host, string markedBlob, string current, FileReviewState expected)
+    {
+        var local = new ReviewMark("h", markedBlob, DateTimeOffset.UnixEpoch, FileVerdict.Rejected);
+
+        Assert.Equal(expected, ReviewMarks.StateOf(host, local, current));
+    }
+
+    [Fact]
+    public void Marks_saved_before_verdicts_load_as_approved_and_rejections_survive_a_reload()
+    {
+        Directory.CreateDirectory(_dir);
+        var file = Path.Combine(_dir, "review-marks.json");
+        File.WriteAllText(file, """
+            { "pr": { "a.py": { "HeadSha": "h", "BlobSha": "b", "MarkedAt": "2026-10-01T09:00:00+00:00" } } }
+            """);
+
+        var marks = new ReviewMarks(file);
+        Assert.Equal(FileVerdict.Approved, marks.Get("pr", "a.py")!.Verdict);
+
+        marks.Mark("pr", "b.py", new ReviewMark("h", "c", DateTimeOffset.UnixEpoch, FileVerdict.Rejected));
+        Assert.Equal(FileVerdict.Rejected, new ReviewMarks(file).Get("pr", "b.py")!.Verdict);
+    }
+
     [Fact]
     public void Delta_lists_lines_added_since_the_review_and_where_lines_went()
     {

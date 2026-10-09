@@ -25,13 +25,13 @@ public sealed partial class ReviewTreeNode : ObservableObject
     [ObservableProperty]
     public partial bool IsExpanded { get; set; } = true;
 
-    /// <summary>"2/3": how many files under a folder are reviewed.</summary>
+    /// <summary>"2/3": how many files under a folder are approved or rejected (and unchanged since).</summary>
     public string ReviewedText
     {
         get
         {
             var files = AllFiles().ToList();
-            return $"{files.Count(f => f.IsReviewed)}/{files.Count}";
+            return $"{files.Count(f => f.IsDone)}/{files.Count}";
         }
     }
 

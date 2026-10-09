@@ -10,6 +10,7 @@ public sealed partial class ReviewFileItem(FileChange change, bool isGenerated) 
 {
     private static readonly IBrush ReviewedBrush = new SolidColorBrush(Color.Parse("#4CC38A"));
     private static readonly IBrush ChangedBrush = new SolidColorBrush(Color.Parse("#E8B339"));
+    private static readonly IBrush RejectedBrush = new SolidColorBrush(Color.Parse("#E5484D"));
     private static readonly IBrush NotReviewedBrush = new SolidColorBrush(Color.Parse("#6B727C"));
 
     public FileChange Change { get; } = change;
@@ -32,25 +33,41 @@ public sealed partial class ReviewFileItem(FileChange change, bool isGenerated) 
     public bool IsTest { get; } = TestFiles.IsTest(change.Path);
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsReviewed), nameof(IsChanged), nameof(IsNotReviewed), nameof(StateBrush), nameof(StateText))]
+    [NotifyPropertyChangedFor(nameof(IsReviewed), nameof(IsRejected), nameof(IsDone), nameof(IsChanged), nameof(IsNotReviewed),
+        nameof(IsRejectedOrChanged), nameof(StateBrush), nameof(StateText))]
     public partial FileReviewState State { get; set; }
 
+    /// <summary>Approved, and unchanged since.</summary>
     public bool IsReviewed => State == FileReviewState.Reviewed;
-    public bool IsChanged => State == FileReviewState.ChangedSinceReview;
+
+    /// <summary>Rejected, and unchanged since.</summary>
+    public bool IsRejected => State == FileReviewState.Rejected;
+
+    /// <summary>Approved or rejected, and unchanged since: nothing new to look at.</summary>
+    public bool IsDone => IsReviewed || IsRejected;
+
+    /// <summary>Approved or rejected, then changed.</summary>
+    public bool IsChanged => State is FileReviewState.ChangedSinceReview or FileReviewState.ChangedSinceRejected;
     public bool IsNotReviewed => State == FileReviewState.NotReviewed;
+
+    /// <summary>Rejected, whether or not it has changed since.</summary>
+    public bool IsRejectedOrChanged => State is FileReviewState.Rejected or FileReviewState.ChangedSinceRejected;
 
     public IBrush StateBrush => State switch
     {
         FileReviewState.Reviewed => ReviewedBrush,
-        FileReviewState.ChangedSinceReview => ChangedBrush,
+        FileReviewState.Rejected => RejectedBrush,
+        FileReviewState.ChangedSinceReview or FileReviewState.ChangedSinceRejected => ChangedBrush,
         _ => NotReviewedBrush,
     };
 
     public string StateText => State switch
     {
-        FileReviewState.Reviewed => "Reviewed. Click to mark as not reviewed.",
-        FileReviewState.ChangedSinceReview => "Changed since you reviewed it. Click to mark it reviewed again.",
-        _ => "Not reviewed yet. Click to mark it reviewed.",
+        FileReviewState.Reviewed => "Approved. Click to reject it.",
+        FileReviewState.Rejected => "Rejected. Click to clear it.",
+        FileReviewState.ChangedSinceReview => "Changed since you approved it. Click to approve it again.",
+        FileReviewState.ChangedSinceRejected => "Changed since you rejected it. Click to reject it again.",
+        _ => "Not reviewed yet. Click to approve it; click again to reject it.",
     };
 
     /// <summary>Open comment threads on the file.</summary>

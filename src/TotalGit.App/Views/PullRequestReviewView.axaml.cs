@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.VisualTree;
 using TotalGit.App.ViewModels;
 
 namespace TotalGit.App.Views;
@@ -25,6 +26,44 @@ public partial class PullRequestReviewView : UserControl
             e.Handled = true;
         };
         AddHandler(KeyDownEvent, OnKey, RoutingStrategies.Tunnel);
+        AddHandler(ContextRequestedEvent, OnFileContextRequested);
+    }
+
+    /// <summary>Right-click on a file row (the file list or the overview's): approve, reject or clear it.</summary>
+    private void OnFileContextRequested(object? sender, ContextRequestedEventArgs e)
+    {
+        if (_vm is null || e.Source is not Control source) return;
+        var row = source.GetSelfAndVisualAncestors().OfType<Control>().FirstOrDefault(c => c.Classes.Contains("fileRow"));
+        var file = row?.DataContext switch
+        {
+            ReviewTreeNode { File: { } f } => f,
+            ReviewFileItem f => f,
+            _ => null,
+        };
+        if (row is null || file is null) return;
+
+        var items = new List<object>
+        {
+            Item(file.IsReviewed ? "Clear approval" : "Approve", "A", _vm.ApproveFileCommand, file),
+            Item(file.IsRejected ? "Clear rejection" : "Reject", "X", _vm.RejectFileCommand, file),
+        };
+        if (!file.IsNotReviewed) items.Add(Item("Clear mark", null, _vm.ClearFileMarkCommand, file));
+        if (file == _vm.SelectedFile)
+        {
+            items.Add(new Separator());
+            items.Add(Item("Approve and open next", "R", _vm.MarkReviewedAndNextCommand, null));
+            items.Add(Item("Reject and open next", "Shift+X", _vm.RejectAndNextCommand, null));
+        }
+        new ContextMenu { ItemsSource = items }.Open(row);
+        e.Handled = true;
+
+        static MenuItem Item(string header, string? gesture, System.Windows.Input.ICommand command, object? parameter) => new()
+        {
+            Header = header,
+            InputGesture = gesture is null ? null : KeyGesture.Parse(gesture),
+            Command = command,
+            CommandParameter = parameter,
+        };
     }
 
     protected override void OnDataContextChanged(EventArgs e)
@@ -60,8 +99,8 @@ public partial class PullRequestReviewView : UserControl
     }
 
     /// <summary>
-    /// N / P next or previous file, J / K next or previous change, R reviewed and next, C comment, O overview,
-    /// F5 reload. Not while typing.
+    /// N / P next or previous file, J / K next or previous change, A approve, X reject, R approve and next,
+    /// Shift+X reject and next, C comment, O overview, F5 reload. Not while typing.
     /// </summary>
     private void OnKey(object? sender, KeyEventArgs e)
     {
@@ -75,6 +114,9 @@ public partial class PullRequestReviewView : UserControl
             case Key.J when _vm.HasOpenFile: DiffView.ScrollToNextChange(1); break;
             case Key.K when _vm.HasOpenFile: DiffView.ScrollToNextChange(-1); break;
             case Key.R when _vm.HasOpenFile: _vm.MarkReviewedAndNextCommand.Execute(null); break;
+            case Key.A when _vm.HasOpenFile: _vm.ApproveFileCommand.Execute(null); break;
+            case Key.X when _vm.HasOpenFile && e.KeyModifiers == KeyModifiers.Shift: _vm.RejectAndNextCommand.Execute(null); break;
+            case Key.X when _vm.HasOpenFile: _vm.RejectFileCommand.Execute(null); break;
             case Key.C when _vm.HasOpenFile && DiffView.LineNearCentre() is { } line: _vm.StartComment(line); break;
             case Key.O: _vm.ShowOverviewCommand.Execute(null); break;
             case Key.F5: _vm.LoadCommand.Execute(null); break;

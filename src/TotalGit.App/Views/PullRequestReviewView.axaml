@@ -31,7 +31,24 @@
     <Style Selector="ToggleButton.small:checked /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="Background" Value="#1F4E7A" />
     </Style>
-    <!-- The review box: ☐ not reviewed, ◩ changed since review (amber), ☑ reviewed (green). -->
+    <!-- The open file's Approve / Reject switch. -->
+    <Style Selector="Button.seg.approvedOn">
+      <Setter Property="Background" Value="#2FA36B" />
+      <Setter Property="Foreground" Value="White" />
+    </Style>
+    <Style Selector="Button.seg.approvedOn:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#38B87A" />
+      <Setter Property="Foreground" Value="White" />
+    </Style>
+    <Style Selector="Button.seg.rejectedOn">
+      <Setter Property="Background" Value="#D9474D" />
+      <Setter Property="Foreground" Value="White" />
+    </Style>
+    <Style Selector="Button.seg.rejectedOn:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#E5585E" />
+      <Setter Property="Foreground" Value="White" />
+    </Style>
+    <!-- The review box: ☐ not reviewed, ☑ approved (green), ☒ rejected (red), ◩ changed since, in the verdict's colour. -->
     <Style Selector="Button.reviewBox">
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="Padding" Value="0" />
@@ -148,7 +165,9 @@
               <PathIcon Data="{StaticResource FolderIcon}" Width="12" Height="12" />
             </ToggleButton>
           </Grid>
-          <ProgressBar Value="{Binding ProgressValue}" Minimum="0" Maximum="100" Height="4" MinHeight="4" Foreground="#4CC38A" Background="#30353C" />
+          <views:ReviewProgressBar Approved="{Binding ApprovedCount}" Rejected="{Binding RejectedCount}" Changed="{Binding ChangedCount}"
+                                   Total="{Binding Files.Count}" />
+          <TextBlock Text="{Binding ProgressDetail}" FontSize="11" Foreground="#8A9099" TextWrapping="Wrap" />
           <Border Background="#24303C" BorderBrush="#3B82C4" BorderThickness="3,0,0,0" CornerRadius="2" Padding="8,4" IsVisible="{Binding IsCommitView}">
             <Grid ColumnDefinitions="*,Auto">
               <TextBlock Text="{Binding CommitViewText}" FontSize="11.5" Foreground="#C9D8EA" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
@@ -162,7 +181,8 @@
           </ToggleButton>
         </StackPanel>
         <StackPanel DockPanel.Dock="Bottom" Margin="12,4,12,6">
-          <CheckBox Content="Hide reviewed files" IsChecked="{Binding HideReviewed}" FontSize="12" />
+          <CheckBox Content="Hide approved files" IsChecked="{Binding HideReviewed}" FontSize="12" />
+          <CheckBox Content="Show only rejected files" IsChecked="{Binding OnlyRejected}" FontSize="12" IsVisible="{Binding HasRejected}" />
           <CheckBox Content="{Binding HideTestsText}" IsChecked="{Binding HideTests}" FontSize="12" IsVisible="{Binding HasTests}"
                     ToolTip.Tip="Leave test files out of the list and out of Next, to review them later" />
         </StackPanel>
@@ -185,7 +205,7 @@
                   <TextBlock Grid.Column="2" Text="{Binding ReviewedText}" FontSize="10.5" Foreground="#6B727C" Margin="6,0,4,0" VerticalAlignment="Center" />
                 </Grid>
                 <!-- File: review box, status, name, comments, size -->
-                <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto" IsVisible="{Binding IsFile}" ToolTip.Tip="{Binding File.ToolTip}" Background="Transparent"
+                <Grid Classes="fileRow" ColumnDefinitions="Auto,Auto,*,Auto,Auto" IsVisible="{Binding IsFile}" ToolTip.Tip="{Binding File.ToolTip}" Background="Transparent"
                       Opacity="{Binding File.IsGenerated, FallbackValue=1, Converter={x:Static views:ReviewConverters.GeneratedOpacity}}">
                   <Button Classes="reviewBox" ToolTip.Tip="{Binding File.StateText}"
                           Command="{Binding $parent[views:PullRequestReviewView].((vm:PullRequestReviewViewModel)DataContext).ToggleReviewedCommand}"
@@ -315,7 +335,7 @@
                 <ItemsControl ItemsSource="{Binding SourceFiles}">
                   <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="vm:ReviewFileItem">
-                      <Grid ColumnDefinitions="Auto,*,130,Auto,Auto" Margin="0,1">
+                      <Grid Classes="fileRow" ColumnDefinitions="Auto,*,130,Auto,Auto" Margin="0,1" Background="Transparent">
                         <Button Classes="reviewBox" ToolTip.Tip="{Binding StateText}"
                                 Command="{Binding $parent[views:PullRequestReviewView].((vm:PullRequestReviewViewModel)DataContext).ToggleReviewedCommand}"
                                 CommandParameter="{Binding}">
@@ -393,7 +413,7 @@
               </StackPanel>
 
               <TextBlock Classes="muted" TextWrapping="Wrap"
-                         Text="Keys: N / P next or previous file · J / K next or previous change · R mark reviewed and go to the next file · C comment · O overview · F5 reload" />
+                         Text="Keys: N / P next or previous file · J / K next or previous change · A approve · X reject · R approve and go to the next file · Shift+X reject and go to the next file · C comment · O overview · F5 reload" />
             </StackPanel>
           </ScrollViewer>
 
@@ -424,10 +444,26 @@
                     <Button Classes="seg small" Classes.active="{Binding IsSplitDiff}" Command="{Binding SetDiffModeCommand}"
                             CommandParameter="{x:Static vm:DiffViewMode.Split}" CornerRadius="0,4,4,0" Content="Side by side" />
                   </StackPanel>
-                  <Button Classes="accent small" Command="{Binding MarkReviewedAndNextCommand}" ToolTip.Tip="Mark this file reviewed and open the next one (R)">
+                  <StackPanel Orientation="Horizontal">
+                    <Button Classes="seg small" Classes.approvedOn="{Binding SelectedFile.IsReviewed, FallbackValue=False}" Command="{Binding ApproveFileCommand}"
+                            CornerRadius="4,0,0,4" ToolTip.Tip="Approve this file (A); again to clear">
+                      <StackPanel Orientation="Horizontal" Spacing="5">
+                        <PathIcon Data="{StaticResource CheckIcon}" Width="11" Height="11" />
+                        <TextBlock Text="Approve" />
+                      </StackPanel>
+                    </Button>
+                    <Button Classes="seg small" Classes.rejectedOn="{Binding SelectedFile.IsRejected, FallbackValue=False}" Command="{Binding RejectFileCommand}"
+                            CornerRadius="0,4,4,0" ToolTip.Tip="Reject this file (X); again to clear. Shift+X rejects it and opens the next one">
+                      <StackPanel Orientation="Horizontal" Spacing="5">
+                        <PathIcon Data="{StaticResource CloseIcon}" Width="11" Height="11" />
+                        <TextBlock Text="Reject" />
+                      </StackPanel>
+                    </Button>
+                  </StackPanel>
+                  <Button Classes="accent small" Command="{Binding MarkReviewedAndNextCommand}" ToolTip.Tip="Approve this file and open the next one (R)">
                     <StackPanel Orientation="Horizontal" Spacing="6">
                       <PathIcon Data="{StaticResource CheckIcon}" Width="11" Height="11" />
-                      <TextBlock Text="Reviewed, next" />
+                      <TextBlock Text="Approve, next" />
                     </StackPanel>
                   </Button>
                   <Button Classes="small" Command="{Binding NextFileCommand}" ToolTip.Tip="Next file (N)">
