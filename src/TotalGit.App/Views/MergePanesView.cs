@@ -377,8 +377,10 @@ public sealed class MergePaneView : Control
                     var inConflict = line - LineIndexAtConflictStart(r.Conflict);
                     picked = !resolution.IsCustom && resolution.Has(side, inConflict);
                     var color = SideColor(side);
-                    ctx.FillRectangle(new SolidColorBrush(color, picked ? 0.30 : isCurrent ? 0.17 : 0.10), rowRect);
-                    ctx.FillRectangle(new SolidColorBrush(color, picked ? 0.9 : 0.25), new Rect(0, y, 4, LineHeight));
+                    // A line every side has unchanged is barely tinted, so the rows that differ stand out.
+                    var same = layout.IsSameOnEverySide(row);
+                    ctx.FillRectangle(new SolidColorBrush(color, picked ? 0.30 : same ? 0.04 : isCurrent ? 0.17 : 0.10), rowRect);
+                    ctx.FillRectangle(new SolidColorBrush(color, picked ? 0.9 : same ? 0.12 : 0.25), new Rect(0, y, 4, LineHeight));
                     // With more than one side picked, the margin shows the order they go into the result.
                     if (picked) DrawPickMark(ctx, y, color, resolution.PickCount > 1 ? resolution.OrderOf(side).ToString(CultureInfo.InvariantCulture) : "✓");
                 }

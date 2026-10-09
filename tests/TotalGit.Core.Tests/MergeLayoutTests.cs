@@ -60,6 +60,86 @@ public sealed class MergeLayoutTests
             block.Select(r => layout.ResultLines[r.Result].Source));
     }
 
+    /// <summary>A table with rows added on each side and rows edited on both: as in an AGENTS.md conflict.</summary>
+    private const string Table =
+        "<<<<<<< HEAD\n" +
+        "| `menu.ps1` | Interactive launcher menu. Entry point: `pwsh infra/local/menu.ps1` (or `pwsh workbench.ps1`) |\n" +
+        "| `workbench.ps1` | Starts the Workbench |\n" +
+        "| `workbench/` | The Insights Workbench: a local Blazor app |\n" +
+        "| `scripts/run-insights.ps1` | Brings up the full dev stack in Windows Terminal panes |\n" +
+        "| `scripts/docker-menu.ps1` | The local Docker stacks menu, start or rebuild the database |\n" +
+        "| `scripts/wsl-startup-menu.ps1` | Controls automatic WSL/Docker startup at the current user |\n" +
+        "| `scripts/Start-WslKeepAlive.ps1` | The watchdog the task runs: keeps the configured WSL distro up |\n" +
+        "=======\n" +
+        "| `menu.ps1` | Interactive launcher menu. Entry point: `pwsh infra/local/menu.ps1`. |\n" +
+        "| `scripts/run-insights.ps1` | Brings up the full dev stack in Windows Terminal panes |\n" +
+        "| `scripts/run-tests-docker.ps1` | Runs the test suites PR CI runs |\n" +
+        "| `scripts/docker-menu.ps1` | The local Docker stacks menu, start or rebuild the database and seed it |\n" +
+        "| `scripts/wsl-startup-menu.ps1` | Controls automatic WSL/Docker startup at the current user's logon |\n" +
+        "| `scripts/Start-WslKeepAlive.ps1` | The watchdog invoked by the scheduled task above: keeps the configured WSL distro up |\n" +
+        ">>>>>>> topic\n";
+
+    [Fact]
+    public void Lines_edited_on_one_side_sit_next_to_their_other_version_and_added_lines_get_rows_of_their_own()
+    {
+        var (_, doc) = Load(Table);
+        var layout = MergeLayout.Build(doc);
+
+        string? Key(IReadOnlyList<string> lines, int i) => i < 0 ? null : lines[i].Split('`')[1];
+        var rows = layout.Rows.Select(r => (Key(layout.OursLines, r.Ours), Key(layout.TheirsLines, r.Theirs))).ToList();
+        Assert.Equal(
+        [
+            ("menu.ps1", "menu.ps1"),
+            ("workbench.ps1", null),
+            ("workbench/", null),
+            ("scripts/run-insights.ps1", "scripts/run-insights.ps1"),
+            (null, "scripts/run-tests-docker.ps1"),
+            ("scripts/docker-menu.ps1", "scripts/docker-menu.ps1"),
+            ("scripts/wsl-startup-menu.ps1", "scripts/wsl-startup-menu.ps1"),
+            ("scripts/Start-WslKeepAlive.ps1", "scripts/Start-WslKeepAlive.ps1"),
+        ], rows);
+        // Only the run-insights row is the same on both sides.
+        Assert.Equal([3], Enumerable.Range(0, layout.Rows.Count).Where(layout.IsSameOnEverySide));
+    }
+
+    [Fact]
+    public void Base_lines_line_up_with_the_lines_they_became()
+    {
+        var (_, doc) = Load(
+            "<<<<<<< HEAD\n" +
+            "ours added\n" +
+            "alpha beta gamma delta\n" +
+            "keep\n" +
+            "||||||| base\n" +
+            "alpha beta gamma\n" +
+            "keep\n" +
+            "removed by both\n" +
+            "=======\n" +
+            "alpha beta gamma epsilon\n" +
+            "keep\n" +
+            ">>>>>>> topic\n");
+        var layout = MergeLayout.Build(doc);
+
+        string? Line(IReadOnlyList<string> lines, int i) => i < 0 ? null : lines[i];
+        var rows = layout.Rows.Select(r => (Line(layout.BaseLines, r.Base), Line(layout.OursLines, r.Ours), Line(layout.TheirsLines, r.Theirs))).ToList();
+        Assert.Equal(
+        [
+            (null, "ours added", null),
+            ("alpha beta gamma", "alpha beta gamma delta", "alpha beta gamma epsilon"),
+            ("keep", "keep", "keep"),
+            ("removed by both", null, null),
+        ], rows);
+    }
+
+    [Theory]
+    [InlineData("a b c d", "a b c d", 1.0)]
+    [InlineData("a b c d", "a b c e", 0.75)]
+    [InlineData("| `x` | y |", "| `z` | w |", 0.0)]
+    public void Similarity_is_the_share_of_words_in_common(string a, string b, double expected)
+    {
+        Assert.Equal(expected, MergeLayout.Similarity(a, b), 3);
+    }
+
     [Fact]
     public void An_empty_side_still_gets_a_row()
     {
