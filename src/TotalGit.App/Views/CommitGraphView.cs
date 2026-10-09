@@ -2,6 +2,7 @@ using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Templates;
 using Avalonia.Data;
 using Avalonia.Input;
 using Avalonia.Media;
@@ -109,7 +110,7 @@ public sealed class CommitGraphView : Control
     private HashSet<int> _prRows = [];
     private int _prHeadRow = -1;
     private int _prBaseRow = -1;
-    private PrHoverCard? _cardTip;
+    private int _ghostLane;
 
     private AvatarCache? _avatarCache;
     private Dictionary<string, List<RefBadge>> _badgesBySha = [];
@@ -144,6 +145,13 @@ public sealed class CommitGraphView : Control
         AffectsRender<CommitGraphView>(DataProperty, SelectedShaProperty, SelectedRangeProperty);
         FocusableProperty.OverrideDefaultValue<CommitGraphView>(true);
         ClipToBoundsProperty.OverrideDefaultValue<CommitGraphView>(true);
+    }
+
+    public CommitGraphView()
+    {
+        // A pull request's card goes in the tooltip as data, so each tooltip makes its own card: a control can only
+        // be in one popup, and the closing one may still hold it when the next opens.
+        DataTemplates.Add(new FuncDataTemplate<PrCardViewModel>((card, _) => new PrHoverCard { DataContext = card }));
     }
 
     public GraphData? Data
@@ -255,7 +263,9 @@ public sealed class CommitGraphView : Control
     private IReadOnlyList<GraphRow> Rows => Data?.Layout.Rows ?? [];
     private double BodyHeight => Math.Max(0, Bounds.Height - HeaderHeight);
     private double MaxOffset => Math.Max(0, ContentTop(Rows.Count) - BodyHeight);
-    private double GraphColumnWidth => _graphWidth ?? Math.Clamp((Data?.Layout.LaneCount ?? 1) * LaneWidth + GraphPadding * 2, 80, 420);
+    // A highlighted pull request's dashed lines need two lanes of their own past the ones in use.
+    private double GraphColumnWidth => _graphWidth ?? Math.Clamp(
+        Math.Max(Data?.Layout.LaneCount ?? 1, Data?.PullRequest is null ? 0 : _ghostLane + 2) * LaneWidth + GraphPadding * 2, 80, 420);
     private double RefColumnWidth => _refWidth;
     private double AuthorColumnWidth => _authorWidth;
     private double DateColumnWidth => _dateWidth;
@@ -340,6 +350,7 @@ public sealed class CommitGraphView : Control
 
         _prRows = [];
         _prHeadRow = _prBaseRow = -1;
+        _ghostLane = 0;
         if (data.PullRequest is { } pr)
         {
             // Commits the filters hide or a fold holds count as the row standing for them.
@@ -348,6 +359,15 @@ public sealed class CommitGraphView : Control
                 if (RowOf(sha) is >= 0 and var r) _prRows.Add(r);
             _prHeadRow = RowOf(pr.HeadSha);
             _prBaseRow = pr.BaseSha is null ? -1 : RowOf(pr.BaseSha);
+
+            // The "would merge" node and its lines go right of every lane in use down to the commits they join.
+            var used = -1;
+            for (var i = 0; i <= Math.Max(_prHeadRow, _prBaseRow); i++)
+            {
+                used = Math.Max(used, rows[i].Lane);
+                foreach (var s in rows[i].Segments) used = Math.Max(used, Math.Max(s.FromLane, s.ToLane));
+            }
+            _ghostLane = used + 1;
         }
 
         _rowTops = new double[rows.Count + 1];
@@ -749,8 +769,7 @@ public sealed class CommitGraphView : Control
         if (card is null && !overNode) _tipSuppressed = false;
         if (card is not null && !_tipSuppressed)
         {
-            if (!ReferenceEquals(_cardTip?.DataContext, card)) _cardTip = new PrHoverCard { DataContext = card };
-            ShowTip(_cardTip);
+            ShowTip(card);
         }
         else if (overNode && !_tipSuppressed)
         {
@@ -895,7 +914,7 @@ public sealed class CommitGraphView : Control
     }
 
     /// <summary>The lane of the "would merge" row's node: the base branch's, else the pull request head's.</summary>
-    private int GhostLane => _prBaseRow >= 0 ? Rows[_prBaseRow].Lane : _prHeadRow >= 0 ? Rows[_prHeadRow].Lane : 0;
+    private int GhostLane => _ghostLane;
 
     private double GhostCenterY => HeaderHeight - _offset + RowHeight / 2;
 
@@ -936,38 +955,44 @@ public sealed class CommitGraphView : Control
     }
 
     /// <summary>
-    /// Dashed lines from the "would merge" row's node: straight down to the base branch's tip, and across then down
-    /// to the pull request's newest commit. Drawn under the nodes, over the other lines.
+    /// Dashed lines from the "would merge" row's node to the pull request's newest commit and its base branch's tip.
+    /// They run down lanes of their own, right of every lane in use up to those commits, then turn in to them, so
+    /// they never hide behind (or hide) the commits and lines in between: the nearer commit's line straight down
+    /// the node's lane, the further one's a lane further out. Drawn under the nodes.
     /// </summary>
     private void DrawGhostLines(DrawingContext ctx)
     {
         if (Data?.PullRequest is null) return;
         var gx = LaneX(GhostLane);
         var gy = GhostCenterY;
-        if (_prBaseRow >= 0)
-            ctx.DrawLine(_dashedPens[Rows[_prBaseRow].ColorIndex], new Point(gx, gy + NodeRadius), new Point(gx, RowTop(_prBaseRow) + RowHeight / 2));
-        if (_prHeadRow < 0) return;
-
-        var pen = _dashedPens[Rows[_prHeadRow].ColorIndex];
-        var hx = LaneX(Rows[_prHeadRow].Lane);
-        var hy = RowTop(_prHeadRow) + RowHeight / 2;
-        if (Math.Abs(hx - gx) < 1)
+        var targets = new[] { _prHeadRow, _prBaseRow }.Where(r => r >= 0).Distinct().Order().ToList();
+        for (var k = 0; k < targets.Count; k++)
         {
-            ctx.DrawLine(pen, new Point(gx, gy + NodeRadius), new Point(hx, hy));
-            return;
+            var row = targets[k];
+            var x = LaneX(GhostLane + k);
+            var tx = LaneX(Rows[row].Lane);
+            var ty = RowTop(row) + RowHeight / 2;
+            var r = Math.Min(CornerRadius, Math.Abs(ty - gy) / 2);
+            var geometry = new StreamGeometry();
+            using (var g = geometry.Open())
+            {
+                if (k == 0)
+                {
+                    g.BeginFigure(new Point(gx, gy + NodeRadius), false);
+                }
+                else
+                {
+                    g.BeginFigure(new Point(gx + NodeRadius, gy), false);
+                    g.LineTo(new Point(x - r, gy));
+                    g.QuadraticBezierTo(new Point(x, gy), new Point(x, gy + r));
+                }
+                g.LineTo(new Point(x, ty - r));
+                g.QuadraticBezierTo(new Point(x, ty), new Point(x - r, ty));
+                g.LineTo(new Point(tx, ty));
+                g.EndFigure(false);
+            }
+            ctx.DrawGeometry(null, _dashedPens[Rows[row].ColorIndex], geometry);
         }
-        var dir = Math.Sign(hx - gx);
-        var r = Math.Min(CornerRadius, Math.Min(Math.Abs(hx - gx), Math.Abs(hy - gy)));
-        var geometry = new StreamGeometry();
-        using (var g = geometry.Open())
-        {
-            g.BeginFigure(new Point(gx + dir * NodeRadius, gy), false);
-            g.LineTo(new Point(hx - dir * r, gy));
-            g.QuadraticBezierTo(new Point(hx, gy), new Point(hx, gy + r));
-            g.LineTo(new Point(hx, hy));
-            g.EndFigure(false);
-        }
-        ctx.DrawGeometry(null, pen, geometry);
     }
 
     /// <summary>The "would merge" row's node: a dashed circle, as the merge commit isn't there yet.</summary>
