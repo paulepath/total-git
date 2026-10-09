@@ -5,7 +5,8 @@ namespace TotalGit.Core.Graph;
 /// <summary>
 /// Finds runs of commits that can be folded into one row: consecutive rows of the graph on one line, each the only
 /// parent of the row above, with no merge, no branch forking off, and no other branch's commit between them. A commit
-/// with a branch or tag on it starts a new run, so a fold never hides where a branch really is.
+/// with a branch or tag on it starts a new run, so a fold never hides where a branch really is, and so does a commit by
+/// someone else: a run is one person's commits.
 /// </summary>
 public static class CommitRuns
 {
@@ -32,13 +33,19 @@ public static class CommitRuns
 
         bool Plain(CommitInfo c) => !c.IsWorkingTree && c.ParentShas.Count == 1;
 
+        // One person: the same email, or the same name (people commit from more than one address).
+        static bool SameAuthor(CommitInfo a, CommitInfo b) =>
+            string.Equals(a.AuthorEmail, b.AuthorEmail, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(a.AuthorName.Trim(), b.AuthorName.Trim(), StringComparison.OrdinalIgnoreCase);
+
         // Row i continues into row i + 1 when that row is its parent and nothing else hangs off it: the parent has
-        // no other child (no branch forks there). Another branch's commit in between breaks the run, and so does a
-        // branch or tag on the parent (it heads a run of its own).
+        // no other child (no branch forks there). Another branch's commit in between breaks the run, and so do a
+        // branch or tag on the parent (it heads a run of its own) and a different author (a run is one person's work).
         bool Continues(int i) =>
             i + 1 < commits.Count && Plain(commits[i]) && Plain(commits[i + 1])
             && commits[i].ParentShas[0] == commits[i + 1].Sha && children.GetValueOrDefault(commits[i + 1].Sha) == 1
-            && labelled?.Contains(commits[i + 1].Sha) != true;
+            && labelled?.Contains(commits[i + 1].Sha) != true
+            && SameAuthor(commits[i], commits[i + 1]);
 
         var runs = new List<CommitFold>();
         for (var i = 0; i < commits.Count; i++)

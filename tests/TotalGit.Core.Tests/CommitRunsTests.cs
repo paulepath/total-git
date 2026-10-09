@@ -30,6 +30,34 @@ public class CommitRunsTests
 
     private static readonly CommitInfo[] Line = [C("e", "d"), C("d", "c"), C("c", "b"), C("b", "a"), C("a", "z")];
 
+    private static CommitInfo By(CommitInfo c, string name, string email) => c with { AuthorName = name, AuthorEmail = email };
+
+    [Fact]
+    public void A_run_is_one_authors_commits()
+    {
+        // Someone else's commit on top stays a row of its own; the three below are one person's and fold.
+        var commits = Line.Select((c, i) => i == 0 ? By(c, "Tim", "tim@example.com") : c).ToArray();
+
+        Assert.Equal(["d", "c", "b", "a"], Assert.Single(CommitRuns.Find(commits)).Shas);
+    }
+
+    [Fact]
+    public void Another_author_part_way_down_splits_the_run()
+    {
+        var commits = Line.Select((c, i) => i == 2 ? By(c, "Tim", "tim@example.com") : c).ToArray();
+
+        // e, d (2) and b, a (2) are each too short to fold.
+        Assert.Empty(CommitRuns.Find(commits));
+    }
+
+    [Fact]
+    public void The_same_person_from_another_address_is_still_one_author()
+    {
+        var commits = Line.Select((c, i) => i % 2 == 0 ? By(c, "A", "a@work.example") : c).ToArray();
+
+        Assert.Equal(["e", "d", "c", "b", "a"], Assert.Single(CommitRuns.Find(commits)).Shas);
+    }
+
     [Fact]
     public void A_branch_part_way_down_a_run_starts_its_own_run()
     {
