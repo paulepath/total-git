@@ -132,9 +132,10 @@
         </DockPanel>
         <GridSplitter Grid.Column="1" x:Name="BaseSplitter" ResizeDirection="Columns" Background="#2B2F36" />
         <DockPanel Grid.Column="2">
-          <Border DockPanel.Dock="Top" Background="#1B2C40" Padding="10,4" Height="26">
+          <Border DockPanel.Dock="Top" Background="#1B2C40" Padding="10,4" Height="26" ToolTip.Tip="{Binding OursRole}">
             <StackPanel Orientation="Horizontal">
               <TextBlock Classes="paneTitle" Foreground="#8CC4FF" Text="{Binding OursLabel, StringFormat='B  {0}'}" TextTrimming="CharacterEllipsis" />
+              <TextBlock Classes="hint" Text="{Binding OursRole}" Foreground="#A9C8E8" IsVisible="{Binding OursRole, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
               <TextBlock Classes="hint" Text="click a line to pick it · click the margin for the whole side" />
             </StackPanel>
           </Border>
@@ -142,8 +143,11 @@
         </DockPanel>
         <GridSplitter Grid.Column="3" ResizeDirection="Columns" Background="#2B2F36" />
         <DockPanel Grid.Column="4">
-          <Border DockPanel.Dock="Top" Background="#1B3329" Padding="10,4" Height="26">
-            <TextBlock Classes="paneTitle" Foreground="#7FE0B2" Text="{Binding TheirsLabel, StringFormat='C  {0}'}" TextTrimming="CharacterEllipsis" />
+          <Border DockPanel.Dock="Top" Background="#1B3329" Padding="10,4" Height="26" ToolTip.Tip="{Binding TheirsRole}">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Classes="paneTitle" Foreground="#7FE0B2" Text="{Binding TheirsLabel, StringFormat='C  {0}'}" TextTrimming="CharacterEllipsis" />
+              <TextBlock Classes="hint" Text="{Binding TheirsRole}" Foreground="#A3DCC2" />
+            </StackPanel>
           </Border>
           <views:MergePaneView x:Name="TheirsPane" Pane="Theirs" />
         </DockPanel>

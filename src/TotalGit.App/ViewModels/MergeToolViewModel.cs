@@ -21,6 +21,7 @@ public sealed partial class MergeToolViewModel : ObservableObject
     private readonly Action _close;
     private readonly ConflictFile? _file;
     private readonly bool _hasBom;
+    private readonly ConflictSides? _sides;
     private bool _settingResult;
 
     /// <summary>Reads the file (and, when git can give it, the common ancestor of each conflict).</summary>
@@ -53,7 +54,13 @@ public sealed partial class MergeToolViewModel : ObservableObject
                 }
             }
         }
-        return new MergeToolViewModel(worktree, path, text, hasBom, settings, markResolved, takeWholeFile, confirm, close);
+        ConflictSides? sides = null;
+        try { sides = await ConflictSides.DescribeAsync(worktree); }
+        catch (Exception ex) when (ex is GitCommandException or IOException or System.ComponentModel.Win32Exception)
+        {
+            // git's own labels, then.
+        }
+        return new MergeToolViewModel(worktree, path, text, hasBom, sides, settings, markResolved, takeWholeFile, confirm, close);
     }
 
     private MergeToolViewModel(
@@ -61,6 +68,7 @@ public sealed partial class MergeToolViewModel : ObservableObject
         string path,
         string? text,
         bool hasBom,
+        ConflictSides? sides,
         AppSettings settings,
         Func<string, Task<bool>> markResolved,
         Func<string, bool, Task> takeWholeFile,
@@ -75,6 +83,7 @@ public sealed partial class MergeToolViewModel : ObservableObject
         _confirm = confirm;
         _close = close;
         _hasBom = hasBom;
+        _sides = sides;
         IsBinary = text is null;
         if (text is null) return;
 
@@ -94,8 +103,13 @@ public sealed partial class MergeToolViewModel : ObservableObject
     [ObservableProperty]
     public partial MergeLayout? Layout { get; private set; }
 
-    public string OursLabel => _file?.OursLabel is { Length: > 0 } l ? l : "ours";
-    public string TheirsLabel => _file?.TheirsLabel is { Length: > 0 } l ? l : "theirs";
+    // git's marker labels ("HEAD", a commit) unless the operation says better what each side is.
+    public string OursLabel => _sides?.Ours ?? (_file?.OursLabel is { Length: > 0 } l ? l : "ours");
+    public string TheirsLabel => _sides?.Theirs ?? (_file?.TheirsLabel is { Length: > 0 } l ? l : "theirs");
+
+    /// <summary>What each side is (e.g. "where you're rebasing to"); empty when there's no operation to say.</summary>
+    public string OursRole => _sides?.OursRole ?? "";
+    public string TheirsRole => _sides?.TheirsRole ?? "";
     public string BaseLabel => "Base (common ancestor)";
 
     public int ConflictCount => _file?.Conflicts.Count ?? 0;
