@@ -59,6 +59,8 @@ public sealed partial class DiffView : Control
     private double _charWidth = 7.5;
     private ScrollBar? _scrollBar;
     private ScrollBar? _hScrollBar;
+    private DiffScrollMarks? _scrollMarks;
+    private IReadOnlyList<DiffMark> _marks = [];
     private bool _syncing;
     // The longest line in characters (tabs drawn as four spaces), for how far the text can scroll sideways.
     private int _longestLine;
@@ -151,6 +153,33 @@ public sealed partial class DiffView : Control
         };
     }
 
+    /// <summary>Draws where the changes are under the scroll bar (call after <see cref="AttachScrollBar"/>).</summary>
+    public void AttachScrollMarks(DiffScrollMarks marks)
+    {
+        _scrollMarks = marks;
+        marks.Attach(this, _scrollBar ?? throw new InvalidOperationException("Attach the scroll bar first."));
+    }
+
+    /// <summary>The runs of changed rows, for the scroll bar's marks.</summary>
+    internal IReadOnlyList<DiffMark> Marks => _marks;
+
+    /// <summary>The rows with comment threads below them.</summary>
+    internal IEnumerable<int> CommentRows =>
+        _annotations.Where(a => a.Content.IsVisible).Select(a => RowOfLine(a.LineIndex)).Where(r => r >= 0).Distinct();
+
+    internal DiffRowLayout RowLayout => _layout;
+
+    /// <summary>Scrolls a row to a few rows below the top.</summary>
+    internal void ScrollToRow(int row) => SetOffset(_layout.TopOf(Math.Max(0, row - 3)));
+
+    private void UpdateMarks()
+    {
+        _marks = Diff is { IsBinary: false } diff
+            ? DiffMarks.Build(diff.Lines, Mode == DiffViewMode.Split ? _splitLines : null, SinceReview)
+            : [];
+        _scrollMarks?.InvalidateVisual();
+    }
+
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
@@ -166,6 +195,7 @@ public sealed partial class DiffView : Control
                 if (_splitLines[row].Right >= 0) _splitRowOf[_splitLines[row].Right] = row;
             }
             ResetLayout();
+            UpdateMarks();
             _highlights = diff is not null ? IntraLineDiff.Compute(diff.Lines) : IntraLineHighlights.None;
             UpdateSyntax(change.GetOldValue<FileDiff?>(), diff);
             _longestLine = diff?.Lines.Select(l => l.Text.Length + l.Text.Count(c => c == '\t') * 3).DefaultIfEmpty(0).Max() ?? 0;
@@ -185,8 +215,13 @@ public sealed partial class DiffView : Control
         {
             ClearSelection();
             ResetLayout();
+            UpdateMarks();
             SetOffset(0);
             SetHOffset(_hOffset);
+        }
+        else if (change.Property == SinceReviewProperty)
+        {
+            UpdateMarks();
         }
         else if (change.Property == AnnotationsProperty)
         {
@@ -213,8 +248,7 @@ public sealed partial class DiffView : Control
             SetOffset(0);
             return;
         }
-        var row = Mode == DiffViewMode.Split ? _splitRowOf[first] : first;
-        SetOffset(_layout.TopOf(Math.Max(0, row - 3)));
+        ScrollToRow(Mode == DiffViewMode.Split ? _splitRowOf[first] : first);
     }
 
     private void SetOffset(double value)
@@ -379,6 +413,7 @@ public sealed partial class DiffView : Control
         _layout = new DiffRowLayout(LineCount, LineHeight);
         UpdateExtras();
         InvalidateMeasure();
+        _scrollMarks?.InvalidateVisual();
     }
 
     /// <summary>1-based column in the raw text for a display position (tabs are drawn as four spaces).</summary>
@@ -564,7 +599,7 @@ public sealed partial class DiffView : Control
             ? starts.Where(r => r > current).Select(r => (int?)r).FirstOrDefault()
             : starts.Where(r => r < current).Select(r => (int?)r).LastOrDefault();
         if (target is not { } row) return false;
-        SetOffset(_layout.TopOf(Math.Max(0, row - 3)));
+        ScrollToRow(row);
         return true;
     }
 

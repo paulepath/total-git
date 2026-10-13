@@ -18,6 +18,7 @@ public partial class PullRequestReviewView : UserControl
     {
         InitializeComponent();
         DiffView.AttachScrollBar(DiffScrollBar);
+        DiffView.AttachScrollMarks(DiffMarks);
         DiffView.AttachHorizontalScrollBar(DiffHScrollBar);
         DiffView.AddCommentRequested += (_, lineIndex) => _vm?.StartComment(lineIndex);
         OverviewTab.PointerPressed += (_, e) =>

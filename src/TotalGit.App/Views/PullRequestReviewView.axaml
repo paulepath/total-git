@@ -475,7 +475,10 @@
             <Panel>
               <Grid ColumnDefinitions="*,Auto" RowDefinitions="*,Auto" IsVisible="{Binding !IsGeneratedHidden}">
                 <views:DiffView x:Name="DiffView" Diff="{Binding Diff}" Mode="{Binding DiffMode}" SinceReview="{Binding SinceReview}" />
-                <ScrollBar Grid.Column="1" x:Name="DiffScrollBar" Orientation="Vertical" AllowAutoHide="False" />
+                <Panel Grid.Column="1">
+                  <views:DiffScrollMarks x:Name="DiffMarks" />
+                  <ScrollBar x:Name="DiffScrollBar" Classes="diffMarks" Orientation="Vertical" AllowAutoHide="False" />
+                </Panel>
                 <ScrollBar Grid.Row="1" x:Name="DiffHScrollBar" Orientation="Horizontal" AllowAutoHide="False" IsVisible="False" />
               </Grid>
               <StackPanel IsVisible="{Binding IsGeneratedHidden}" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10">

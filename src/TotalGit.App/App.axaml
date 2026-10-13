@@ -103,5 +103,9 @@
     <Style Selector="ScrollViewer">
       <Setter Property="AllowAutoHide" Value="False" />
     </Style>
+    <!-- A diff's scroll bar: its track see-through, so the change marks drawn under it show (DiffScrollMarks paints the track) -->
+    <Style Selector="ScrollBar.diffMarks /template/ Rectangle#TrackRect">
+      <Setter Property="Fill" Value="Transparent" />
+    </Style>
   </Application.Styles>
 </Application>

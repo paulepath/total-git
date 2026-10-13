@@ -365,7 +365,11 @@
           </Border>
           <Grid ColumnDefinitions="*,Auto" RowDefinitions="*,Auto">
             <views:DiffView x:Name="DiffView" Diff="{Binding Diff}" Mode="{Binding DiffMode}" />
-            <ScrollBar Grid.Column="1" x:Name="DiffScrollBar" Orientation="Vertical" AllowAutoHide="False" />
+            <!-- Where the changes are, drawn under the (see-through) scroll bar -->
+            <Panel Grid.Column="1">
+              <views:DiffScrollMarks x:Name="DiffMarks" />
+              <ScrollBar x:Name="DiffScrollBar" Classes="diffMarks" Orientation="Vertical" AllowAutoHide="False" />
+            </Panel>
             <!-- One sideways scroll for both sides of a side-by-side diff, so their lines stay level. -->
             <ScrollBar Grid.Row="1" x:Name="DiffHScrollBar" Orientation="Horizontal" AllowAutoHide="False" IsVisible="False" />
           </Grid>

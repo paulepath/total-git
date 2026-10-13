@@ -23,6 +23,7 @@ public partial class RepositoryView : UserControl
         SetUpSidebarFolding();
         Graph.AttachScrollBar(GraphScrollBar);
         DiffView.AttachScrollBar(DiffScrollBar);
+        DiffView.AttachScrollMarks(DiffMarks);
         DiffView.AttachHorizontalScrollBar(DiffHScrollBar);
 
         Graph.NearEnd += () => _ = _vm?.LoadMoreAsync();

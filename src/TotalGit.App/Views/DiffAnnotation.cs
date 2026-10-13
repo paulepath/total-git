@@ -83,6 +83,7 @@ public sealed partial class DiffView
         }
         _annotationContents = next;
         UpdateExtras();
+        _scrollMarks?.InvalidateVisual();
         InvalidateMeasure();
         InvalidateArrange();
     }
@@ -133,7 +134,9 @@ public sealed partial class DiffView
             if (row < 0 || !a.Content.IsVisible) continue;
             extras[row] = (extras.TryGetValue(row, out var h) ? h + GapSpacing : GapPadding * 2) + a.Content.DesiredSize.Height;
         }
-        if (_layout.SetExtras(extras)) SetOffset(_offset);
+        if (!_layout.SetExtras(extras)) return;
+        SetOffset(_offset);
+        _scrollMarks?.InvalidateVisual();
     }
 
     /// <summary>Whether an event came from inside one of the annotation controls (or a popup of one).</summary>
