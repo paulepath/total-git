@@ -1000,6 +1000,11 @@ public sealed partial class PullRequestReviewViewModel : ObservableObject
     public void StartComment(int lineIndex)
     {
         if (!CanCommentOnDiff || SelectedFile is not { } file || Diff is not { } diff || lineIndex < 0 || lineIndex >= diff.Lines.Count) return;
+        if (!CommentableLines.Build(diff.Lines)[lineIndex])
+        {
+            ShowError("GitHub only takes comments on changed lines and the 3 lines either side of them.");
+            return;
+        }
         if (CommentComposerViewModel.AnchorFor(file.Path, diff.Lines[lineIndex]) is not { } anchor) return;
         if (Pr.Composer is { Text.Length: > 0 } && Pr.Composer.LineIndex == lineIndex) return;
         var pr = Pr;

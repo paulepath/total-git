@@ -97,7 +97,7 @@ public sealed class GitHubPullRequestProvider : IPullRequestProvider
     {
         var comment = LineComment(anchor, body);
         comment["commit_id"] = headSha;
-        return _http.RestAsync(HttpMethod.Post, $"{_repoPath}/pulls/{number}/comments", comment, ct);
+        return ExplainUnplacedAsync(_http.RestAsync(HttpMethod.Post, $"{_repoPath}/pulls/{number}/comments", comment, ct));
     }
 
     public Task ReplyAsync(int number, ReviewThread thread, string body, CancellationToken ct = default) =>
@@ -121,7 +121,26 @@ public sealed class GitHubPullRequestProvider : IPullRequestProvider
         // GitHub rejects an empty body on a comment review but accepts it missing when there are line comments.
         if (!string.IsNullOrWhiteSpace(body)) review["body"] = body;
         if (comments.Count > 0) review["comments"] = new JsonArray([.. comments.Select(c => LineComment(c.Anchor, c.Body))]);
-        return _http.RestAsync(HttpMethod.Post, $"{_repoPath}/pulls/{number}/reviews", review, ct);
+        return ExplainUnplacedAsync(_http.RestAsync(HttpMethod.Post, $"{_repoPath}/pulls/{number}/reviews", review, ct));
+    }
+
+    /// <summary>
+    /// GitHub's "Validation Failed (could not be resolved)" (or "… must be part of the diff") means a line comment is
+    /// outside its diff of the file.
+    /// </summary>
+    private static async Task ExplainUnplacedAsync(Task call)
+    {
+        try
+        {
+            await call;
+        }
+        catch (HostException ex) when (ex.Message.Contains("could not be resolved", StringComparison.OrdinalIgnoreCase)
+                                       || ex.Message.Contains("must be part of the diff", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new HostException(ex.Kind,
+                $"GitHub couldn't place a line comment: it only takes them on changed lines and the {CommentableLines.HostContext} lines " +
+                "either side. Move the comment nearer a change, or make it a general comment.", ex);
+        }
     }
 
     /// <summary>A line comment's body and position, as both the comments and reviews endpoints take it.</summary>

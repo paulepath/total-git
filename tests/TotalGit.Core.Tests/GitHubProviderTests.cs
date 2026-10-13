@@ -555,7 +555,17 @@ public class GitHubProviderTests
         http.Route(Rest, () => FakeHttpHandler.Json("""{"message":"Validation Failed","errors":["line must be part of the diff"]}""", HttpStatusCode.UnprocessableEntity));
         var ex = await Assert.ThrowsAsync<HostException>(() => provider.AddLineCommentAsync(7, new CommentAnchor("a", DiffSide.Right, 99), "x", "h"));
         Assert.Equal(HostErrorKind.Other, ex.Kind);
-        Assert.Contains("line must be part of the diff", ex.Message);
+        Assert.Contains("only takes them on changed lines", ex.Message);
+    }
+
+    [Fact]
+    public async Task A_comment_GitHub_cant_place_says_where_comments_can_go()
+    {
+        var (provider, http) = Create();
+        http.Route(Rest, () => FakeHttpHandler.Json("""{"message":"Validation Failed","errors":["could not be resolved"]}""", HttpStatusCode.UnprocessableEntity));
+        var draft = new DraftComment(new CommentAnchor("a", DiffSide.Right, 24), "x");
+        var ex = await Assert.ThrowsAsync<HostException>(() => provider.SubmitReviewAsync(7, ReviewVerdict.Comment, "", [draft], "h"));
+        Assert.Contains("changed lines and the 3 lines either side", ex.Message);
     }
 
     [Fact]

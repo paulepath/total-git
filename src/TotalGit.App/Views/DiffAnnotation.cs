@@ -5,6 +5,7 @@ using Avalonia.Media;
 using Avalonia.VisualTree;
 using TotalGit.App.ViewModels;
 using TotalGit.Core.Git;
+using TotalGit.Core.Hosting;
 
 namespace TotalGit.App.Views;
 
@@ -166,9 +167,21 @@ public sealed partial class DiffView
         if (!CanAddComments || Diff is not { IsBinary: false } diff || RowUnder(p) is not { } row) return null;
         var side = SideAt(p.X);
         if (LineIndexOf(row, side) is not { } index) return null;
-        return diff.Lines[index].Kind is DiffLineKind.Context or DiffLineKind.Added or DiffLineKind.Removed
-            ? new CommentTarget(row, side, index)
-            : null;
+        return Commentable(diff)[index] ? new CommentTarget(row, side, index) : null;
+    }
+
+    private FileDiff? _commentableFor;
+    private bool[] _commentable = [];
+
+    /// <summary>The lines the host takes a comment on (in the whole-file view, not those far from a change).</summary>
+    private bool[] Commentable(FileDiff diff)
+    {
+        if (_commentableFor != diff)
+        {
+            _commentable = CommentableLines.Build(diff.Lines);
+            _commentableFor = diff;
+        }
+        return _commentable;
     }
 
     /// <summary>The "+" button, at the start of the code column (over the +/- sign).</summary>
