@@ -311,4 +311,17 @@ public sealed class RepositorySessionTests : IDisposable
         Assert.Equal("https://example.com/widgets.git", state.OriginUrl);
         Assert.False(session.GetStatus().IsDirty);
     }
+
+    [Fact]
+    public void A_closed_session_refuses_to_be_used_instead_of_crashing()
+    {
+        var sha = _repo.Commit("first");
+        var session = RepositorySession.Open(_repo.Root);
+        session.Dispose();
+
+        // libgit2 would read freed memory and end the process; this is an exception the app can catch.
+        Assert.Throws<ObjectDisposedException>(() => session.BlobAt(sha, "file.txt"));
+        Assert.Throws<ObjectDisposedException>(() => session.ResolveCommit("HEAD"));
+        session.Dispose(); // twice is fine
+    }
 }

@@ -223,7 +223,8 @@ public partial class RepositoryViewModel
             _ = open.LoadAsync();
             return;
         }
-        var ctx = new ReviewContext(session, _state.WorkingDirectory, Marks.Value, _settings, CheckoutPullRequestAsync, OpenTicketAsync);
+        // The tab's session as it is when asked: a refresh replaces it while the window is open.
+        var ctx = new ReviewContext(() => _session ?? session, _state.WorkingDirectory, Marks.Value, _settings, CheckoutPullRequestAsync, OpenTicketAsync);
         var vm = new PullRequestReviewViewModel(source, ctx) { Ticket = ticket };
         _reviews[source.MarksKey] = vm;
         vm.CloseRequested += () => _reviews.Remove(source.MarksKey);

@@ -17,6 +17,7 @@ public sealed class RepositorySession : IDisposable
     // dir (only system/global), so branch tracking config is read from the shared file directly.
     private readonly Configuration? _sharedConfig;
     private readonly Lock _lock = new();
+    private bool _disposed;
     private IEnumerator<Commit>? _history;
     private bool _hasMore = true;
     private string? _patchKey;
@@ -66,7 +67,7 @@ public sealed class RepositorySession : IDisposable
 
     public bool HasMoreHistory
     {
-        get { lock (_lock) return _hasMore; }
+        get { using (Use()) return _hasMore; }
     }
 
     /// <summary>Opens the repository (or worktree) containing <paramref name="path"/>.</summary>
@@ -86,7 +87,7 @@ public sealed class RepositorySession : IDisposable
 
     public RepositoryState LoadState()
     {
-        lock (_lock)
+        using (Use())
         {
             var info = _repo.Info;
             var current = info.IsHeadDetached || info.IsHeadUnborn ? null : _repo.Head.FriendlyName;
@@ -111,7 +112,7 @@ public sealed class RepositorySession : IDisposable
     /// <summary>Restarts history paging, e.g. after refs changed.</summary>
     public void ResetHistory()
     {
-        lock (_lock)
+        using (Use())
         {
             _history?.Dispose();
             _history = null;
@@ -122,7 +123,7 @@ public sealed class RepositorySession : IDisposable
     /// <summary>Returns the next <paramref name="count"/> commits in topological order.</summary>
     public IReadOnlyList<CommitInfo> ReadHistory(int count = PageSize)
     {
-        lock (_lock)
+        using (Use())
         {
             var result = new List<CommitInfo>();
             if (!_hasMore) return result;
@@ -143,7 +144,7 @@ public sealed class RepositorySession : IDisposable
 
     public WorkingTreeStatus GetStatus()
     {
-        lock (_lock)
+        using (Use())
         {
             if (_repo.Info.IsBare) return WorkingTreeStatus.Clean;
 
@@ -215,7 +216,7 @@ public sealed class RepositorySession : IDisposable
 
     public CommitDetails GetCommitDetails(string sha)
     {
-        lock (_lock)
+        using (Use())
         {
             var c = _repo.Lookup<Commit>(sha) ?? throw new ArgumentException($"Commit {sha} not found.", nameof(sha));
             var files = ToChanges(CommitPatch(c));
@@ -226,7 +227,7 @@ public sealed class RepositorySession : IDisposable
     /// <param name="wholeFile">Include every line of the file, not just the changes and the lines around them.</param>
     public FileDiff GetCommitFileDiff(string sha, string path, bool wholeFile = false, bool ignoreWhitespace = false)
     {
-        lock (_lock)
+        using (Use())
         {
             var c = _repo.Lookup<Commit>(sha) ?? throw new ArgumentException($"Commit {sha} not found.", nameof(sha));
             var entry = CommitPatch(c)[path];
@@ -247,13 +248,13 @@ public sealed class RepositorySession : IDisposable
     /// <summary>The blob (content hash) of a file at a commit, or null when the file isn't there.</summary>
     public string? BlobAt(string commitSha, string path)
     {
-        lock (_lock) return LookupCommit(commitSha)?[path]?.Target is Blob blob ? blob.Sha : null;
+        using (Use()) return LookupCommit(commitSha)?[path]?.Target is Blob blob ? blob.Sha : null;
     }
 
     /// <summary>The SHA of the commit a ref or revspec points to (tags peeled), or null when it doesn't resolve.</summary>
     public string? ResolveCommit(string revspec)
     {
-        lock (_lock) return LookupCommit(revspec)?.Sha;
+        using (Use()) return LookupCommit(revspec)?.Sha;
     }
 
     /// <summary>
@@ -262,7 +263,7 @@ public sealed class RepositorySession : IDisposable
     /// </summary>
     public string? MergeBase(string a, string b)
     {
-        lock (_lock)
+        using (Use())
         {
             if (LookupCommit(a) is not { } ca || LookupCommit(b) is not { } cb) return null;
             return _repo.ObjectDatabase.FindMergeBase(ca, cb)?.Sha;
@@ -275,13 +276,13 @@ public sealed class RepositorySession : IDisposable
     /// </summary>
     public IReadOnlyList<FileChange> GetRangeChanges(string baseSha, string headSha)
     {
-        lock (_lock) return ToChanges(RangePatch(baseSha, headSha));
+        using (Use()) return ToChanges(RangePatch(baseSha, headSha));
     }
 
     /// <summary>One file's diff between two commits' trees. For a renamed file <paramref name="path"/> is the new path.</summary>
     public FileDiff GetRangeFileDiff(string baseSha, string headSha, string path, bool wholeFile = false, bool ignoreWhitespace = false)
     {
-        lock (_lock)
+        using (Use())
         {
             var entry = RangePatch(baseSha, headSha)[path];
             if (ignoreWhitespace)
@@ -296,7 +297,7 @@ public sealed class RepositorySession : IDisposable
     /// <summary>Diff of a working-tree file: index vs HEAD when <paramref name="staged"/>, else working tree vs index.</summary>
     public FileDiff GetWorkingFileDiff(string path, bool staged, bool wholeFile = false, bool ignoreWhitespace = false)
     {
-        lock (_lock)
+        using (Use())
         {
             // Git writes the index outside this long-lived libgit2 session. Read the live index for both modes.
             var tracked = GitCli.RunAsync(WorkingDirectory, "ls-files", "--cached", "-z", "--", ":(literal)" + path).GetAwaiter().GetResult().StdOut.Length > 0;
@@ -606,10 +607,25 @@ public sealed class RepositorySession : IDisposable
         return from is null ? branch with { IsNew = false, CreatedFrom = null } : branch with { CreatedFrom = from.Name };
     }
 
+    /// <summary>
+    /// Holds the lock for one use of the repository. A disposed session throws <see cref="ObjectDisposedException"/>:
+    /// libgit2 would read freed memory and take the whole app down (a review window still using the session a
+    /// refresh replaced did).
+    /// </summary>
+    private Lock.Scope Use()
+    {
+        var scope = _lock.EnterScope();
+        if (!_disposed) return scope;
+        scope.Dispose();
+        throw new ObjectDisposedException(nameof(RepositorySession), "The repository was closed or reloaded.");
+    }
+
     public void Dispose()
     {
-        lock (_lock)
+        using (_lock.EnterScope())
         {
+            if (_disposed) return;
+            _disposed = true;
             _history?.Dispose();
             _sharedConfig?.Dispose();
             _repo.Dispose();

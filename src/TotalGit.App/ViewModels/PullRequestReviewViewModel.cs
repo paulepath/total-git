@@ -16,13 +16,17 @@ public interface IReviewDialogs
 }
 
 /// <summary>What the review window needs from the repository tab that opened it.</summary>
+/// <param name="CurrentSession">The repository as it is now: a refresh replaces (and closes) the one before.</param>
 public sealed record ReviewContext(
-    RepositorySession Session,
+    Func<RepositorySession> CurrentSession,
     string WorkingDirectory,
     ReviewMarks Marks,
     AppSettings Settings,
     Func<PullRequestSummary, Task> Checkout,
-    Func<string, Task> OpenTicket);
+    Func<string, Task> OpenTicket)
+{
+    public RepositorySession Session => CurrentSession();
+}
 
 /// <summary>
 /// A pull request in its own review window: an overview, the changed files with how far each has been reviewed, one
@@ -520,6 +524,19 @@ public sealed partial class PullRequestReviewViewModel : ObservableObject
         foreach (var f in Files) f.ThreadCount = threads.Count(t => !t.IsResolved && t.Anchor.Path == f.Path);
     }
 
+    /// <summary>A file's blob at a commit; null when it isn't there, or the repository has just been closed.</summary>
+    private string? BlobAt(string commitSha, string path)
+    {
+        try
+        {
+            return _ctx.Session.BlobAt(commitSha, path);
+        }
+        catch (ObjectDisposedException)
+        {
+            return null;
+        }
+    }
+
     /// <summary>Each file's state, from the host's viewed mark and the local one (which knows the content reviewed).</summary>
     private void UpdateStates()
     {
@@ -527,7 +544,7 @@ public sealed partial class PullRequestReviewViewModel : ObservableObject
         var marks = _ctx.Marks.All(_marksKey);
         foreach (var f in Files)
         {
-            var blob = f.Change.Kind == ChangeKind.Deleted ? null : _ctx.Session.BlobAt(head, f.Path);
+            var blob = f.Change.Kind == ChangeKind.Deleted ? null : BlobAt(head, f.Path);
             f.State = ReviewMarks.StateOf(_viewed.GetValueOrDefault(f.Path), marks.GetValueOrDefault(f.Path), blob);
         }
         FilesChanged();
@@ -603,7 +620,7 @@ public sealed partial class PullRequestReviewViewModel : ObservableObject
         _viewed[file.Path] = verdict is null ? FileViewState.Unviewed : FileViewState.Viewed;
         if (verdict is { } v)
         {
-            var blob = file.Change.Kind == ChangeKind.Deleted ? null : _ctx.Session.BlobAt(head, file.Path);
+            var blob = file.Change.Kind == ChangeKind.Deleted ? null : BlobAt(head, file.Path);
             _ctx.Marks.Mark(_marksKey, file.Path, new ReviewMark(head, blob, DateTimeOffset.Now, v));
             // Keep the reviewed head even after force-pushes, so the changes since can be shown later.
             _ = KeepReviewedHeadAsync(file.Path, head);
