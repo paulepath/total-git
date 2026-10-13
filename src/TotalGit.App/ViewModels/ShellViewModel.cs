@@ -237,11 +237,12 @@ public partial class ShellViewModel : ObservableObject
                 [new MenuAction("Restart to update", RestartToUpdateCommand)]));
         });
 
-        // First check shortly after start-up, then every few hours.
+        // First check shortly after start-up, then every half hour. Checks ask GitHub's API without a token, which
+        // allows 60 requests an hour per IP address (shared by everyone in an office).
         _updateTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
         _updateTimer.Tick += (_, _) =>
         {
-            _updateTimer.Interval = TimeSpan.FromHours(4);
+            _updateTimer.Interval = TimeSpan.FromMinutes(30);
             _ = updates.CheckAndDownloadAsync();
         };
         _updateTimer.Start();
