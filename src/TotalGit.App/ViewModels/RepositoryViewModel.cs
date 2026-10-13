@@ -814,8 +814,9 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
         BusyText = busyText;
         try
         {
-            await action();
-            if (success is not null) ShowInfo(success);
+            var switched = await WithAccountThatCanSeeAsync(action);
+            if (success is not null) ShowInfo(switched is null ? success : $"{success} {SwitchedMessage(switched)}");
+            else if (switched is not null) ShowInfo(SwitchedMessage(switched));
             return true;
         }
         catch (BranchInUseException ex)
@@ -848,6 +849,28 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
             BusyText = null;
             if (refresh == Refresh.All) await RefreshRefsAsync();
             else if (refresh == Refresh.Status) await RefreshStatusAsync();
+        }
+    }
+
+    /// <summary>
+    /// Runs a remote operation; when the host says the repository isn't there and another of the user's GitHub
+    /// accounts can see it, switches to that account and runs it again. Returns the switch, if there was one.
+    /// </summary>
+    private async Task<AccountSwitch?> WithAccountThatCanSeeAsync(Func<Task> action)
+    {
+        try
+        {
+            await action();
+            return null;
+        }
+        catch (GitCommandException ex) when (AccountSwitcher is not null && GitActions.RepositoryNotFoundUrl(ex.Message) is { } url
+                                             && RemoteHostParser.Parse(url) is { Kind: HostKind.GitHub } host)
+        {
+            BusyText = "Trying your other GitHub accounts…";
+            if (await AccountSwitcher.UseAccountThatCanSeeAsync(host) is not { } switched) throw;
+            await action();
+            if (switched.From is not null) AfterAccountSwitched();
+            return switched.From is null ? null : switched;
         }
     }
 

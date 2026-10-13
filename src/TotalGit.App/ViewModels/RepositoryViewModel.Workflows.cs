@@ -40,7 +40,8 @@ public partial class RepositoryViewModel
     }
 
     /// <summary>Lists the runs again; keeps checking while any are queued or running.</summary>
-    public async Task RefreshWorkflowsAsync(bool fresh = false)
+    /// <param name="switchAccount">When the host can't find the repository, try the user's other accounts.</param>
+    public async Task RefreshWorkflowsAsync(bool fresh = false, bool switchAccount = true)
     {
         if (_wfProvider is not { } provider) return;
         var request = ++_wfRequest;
@@ -56,6 +57,12 @@ public partial class RepositoryViewModel
         }
         catch (HostException ex)
         {
+            if (request != _wfRequest || provider != _wfProvider) return;
+            if (switchAccount && ex.Kind == HostErrorKind.NotFound && _wfHost is { } host && await SwitchAccountForAsync(host) is { } switched)
+            {
+                if (switched.From is null) await RefreshWorkflowsAsync(fresh, switchAccount: false);
+                return;
+            }
             if (request != _wfRequest || provider != _wfProvider) return;
             Sidebar.SetWorkflows(true, _runs, ex.Message, LoadJobsAsync);
         }
@@ -85,7 +92,8 @@ public partial class RepositoryViewModel
         timer.Tick += (_, _) =>
         {
             timer.Stop();
-            _ = RefreshWorkflowsAsync();
+            // Never switches account: in a background tab that would undo the switch the open tab needed.
+            _ = RefreshWorkflowsAsync(switchAccount: false);
         };
         return timer;
     }

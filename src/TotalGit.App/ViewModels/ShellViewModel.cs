@@ -115,7 +115,12 @@ public partial class ShellViewModel : ObservableObject
     }
 
     private RepositoryViewModel NewTabViewModel(string? path = null) =>
-        new(_avatars, _settings, path) { PullRequestProviders = _pullRequests, WorkflowProviders = _workflows };
+        new(_avatars, _settings, path)
+        {
+            PullRequestProviders = _pullRequests,
+            WorkflowProviders = _workflows,
+            AccountSwitcher = _pullRequests as IHostAccountSwitcher,
+        };
 
     [RelayCommand]
     private void NewTab() => SelectedTab = AddTab(NewTabViewModel());

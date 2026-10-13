@@ -20,6 +20,9 @@ public partial class RepositoryViewModel
     /// <summary>Creates pull request providers for supported hosts; set by the shell. Null hides pull requests.</summary>
     public IPullRequestProviderFactory? PullRequestProviders { get; init; }
 
+    /// <summary>Moves the user's sign-in to another of their accounts when the signed-in one can't see the repository; set by the shell.</summary>
+    public IHostAccountSwitcher? AccountSwitcher { get; init; }
+
     /// <summary>Review windows open for this repository (pull requests and local reviews), by review.</summary>
     private readonly Dictionary<string, PullRequestReviewViewModel> _reviews = [];
 
@@ -48,7 +51,8 @@ public partial class RepositoryViewModel
     }
 
     /// <summary>Lists the open pull requests again (unless <paramref name="ifOlderThan"/> says the list is recent).</summary>
-    public async Task RefreshPullRequestsAsync(TimeSpan? ifOlderThan = null)
+    /// <param name="switchAccount">When the host can't find the repository, try the user's other accounts.</param>
+    public async Task RefreshPullRequestsAsync(TimeSpan? ifOlderThan = null, bool switchAccount = true)
     {
         if (_prProvider is not { } provider) return;
         if (ifOlderThan is { } age && DateTimeOffset.Now - _prListLoadedAt < age) return;
@@ -70,9 +74,45 @@ public partial class RepositoryViewModel
         catch (HostException ex)
         {
             if (request != _prListRequest || provider != _prProvider) return;
+            if (switchAccount && ex.Kind == HostErrorKind.NotFound && await SwitchAccountForAsync(provider.Host) is { } switched)
+            {
+                // A switch asks everything again; an account that was already right (switched meanwhile) just this.
+                if (switched.From is null) await RefreshPullRequestsAsync(switchAccount: false);
+                return;
+            }
+            if (request != _prListRequest || provider != _prProvider) return;
             _prListLoadedAt = default; // try again next time
             Sidebar.SetPullRequests(true, _pullRequests, ex.Message);
         }
+    }
+
+    /// <summary>
+    /// The host can't find <paramref name="host"/>'s repository: when another of the user's accounts can see it,
+    /// switches to that one, says so and asks the host for everything again. Null when no account can see it.
+    /// </summary>
+    private async Task<AccountSwitch?> SwitchAccountForAsync(RemoteHostInfo host)
+    {
+        if (AccountSwitcher is null || await AccountSwitcher.UseAccountThatCanSeeAsync(host) is not { } switched) return null;
+        if (switched.From is not null)
+        {
+            ShowInfo(SwitchedMessage(switched));
+            AfterAccountSwitched();
+        }
+        return switched;
+    }
+
+    private string SwitchedMessage(AccountSwitch switched)
+    {
+        var repo = _prHost is { } h ? $"{h.Owner}/{h.Repo}" : "this repository";
+        return $"Switched your GitHub account from {switched.From} to {switched.Login}, as only {switched.Login} can see {repo}.";
+    }
+
+    /// <summary>Another account is signed in now: what was asked as the old one is asked again.</summary>
+    private void AfterAccountSwitched()
+    {
+        _viewerLogin = null;
+        _ = RefreshPullRequestsAsync(switchAccount: false);
+        _ = RefreshWorkflowsAsync(switchAccount: false);
     }
 
     [RelayCommand]

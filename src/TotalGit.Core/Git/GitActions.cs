@@ -637,6 +637,21 @@ public static class GitActions
         return null;
     }
 
+    /// <summary>
+    /// The https address git said doesn't exist ("fatal: repository 'https://…' not found"), or null for other
+    /// errors. Hosts say that too when the account signed in can't see a private repository.
+    /// </summary>
+    public static string? RepositoryNotFoundUrl(string message)
+    {
+        const string start = "repository '", end = "' not found";
+        var at = message.IndexOf(start + "https://", StringComparison.Ordinal);
+        if (at < 0) return null;
+        var close = message.IndexOf(end, at + start.Length, StringComparison.Ordinal);
+        if (close < 0) return null;
+        var url = message[(at + start.Length)..close];
+        return url.Contains('\'') || url.Contains('\n') ? null : url;
+    }
+
     public static async Task<string?> DefaultRemoteAsync(string worktree)
     {
         var remotes = (await GitCli.RunAsync(worktree, "remote")).StdOut
