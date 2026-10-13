@@ -95,7 +95,7 @@ public partial class PullRequestReviewView : UserControl
         if (_vm is null) return;
         DiffView.CanAddComments = _vm.CanCommentOnDiff;
         DiffView.Annotations = _vm.DiffThreads
-            .Select(t => new DiffAnnotation(t.LineIndex, new ReviewThreadView { DataContext = t.ViewModel }))
+            .Select(t => new DiffAnnotation(t.LineIndex, new ReviewThreadView { DataContext = t.ViewModel }, t.Side))
             .ToList();
     }
 

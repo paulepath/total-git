@@ -11,9 +11,10 @@ namespace TotalGit.App.Views;
 
 /// <summary>
 /// A control shown in the diff below a line, such as a review comment thread. <see cref="LineIndex"/> is an
-/// index into <see cref="FileDiff.Lines"/>; side by side, the control spans both sides below that line's row.
+/// index into <see cref="FileDiff.Lines"/>; side by side, the control goes below that line's row on
+/// <see cref="Side"/> (a comment on the new code under the right side, one on removed code under the left).
 /// </summary>
-public sealed record DiffAnnotation(int LineIndex, Control Content);
+public sealed record DiffAnnotation(int LineIndex, Control Content, DiffSide Side = DiffSide.Right);
 
 // Annotations: real controls hosted between the drawn rows, with the rows below moved down to make room,
 // and a "+" on the hovered line to start a new comment.
@@ -42,8 +43,8 @@ public sealed partial class DiffView
 
     private IReadOnlyList<DiffAnnotation> _annotations = [];
     private HashSet<Control> _annotationContents = new(ReferenceEqualityComparer.Instance);
-    // Where the next thread goes in each row's space, while arranging.
-    private readonly Dictionary<int, double> _stackTops = [];
+    // Where the next thread goes in each row's space (side by side, on each side), while arranging.
+    private readonly Dictionary<(int Row, int Column), double> _stackTops = [];
     private CommentTarget? _hover;
     private readonly Cursor _textCursor = new(StandardCursorType.Ibeam);
     private readonly Cursor _arrowCursor = new(StandardCursorType.Arrow);
@@ -89,16 +90,26 @@ public sealed partial class DiffView
         InvalidateArrange();
     }
 
-    /// <summary>Threads line up with the code (side by side, they span both sides after the left gutter).</summary>
-    private double AnnotationLeft => Mode == DiffViewMode.Split ? GutterWidth : GutterWidth * 2;
+    /// <summary>Which stack an annotation joins below its row: side by side, its side's; inline, the one.</summary>
+    private int ColumnOf(DiffAnnotation a) => Mode == DiffViewMode.Split && a.Side == DiffSide.Left ? 0 : 1;
 
-    private double AnnotationWidth(double width) => Math.Max(0, width - AnnotationLeft - GapRightMargin);
+    /// <summary>
+    /// Where an annotation goes across a view <paramref name="width"/> wide, lined up with the code: inline, after
+    /// both gutters; side by side, on its own side after that side's gutter.
+    /// </summary>
+    private (double Left, double Width) AnnotationSpan(DiffAnnotation a, double width)
+    {
+        if (Mode != DiffViewMode.Split) return (GutterWidth * 2, Math.Max(0, width - GutterWidth * 2 - GapRightMargin));
+        var half = Math.Floor(width / 2);
+        var left = a.Side == DiffSide.Left ? GutterWidth : half + 1 + GutterWidth;
+        var right = a.Side == DiffSide.Left ? half : width;
+        return (left, Math.Max(0, right - left - GapRightMargin));
+    }
 
     protected override Size MeasureOverride(Size availableSize)
     {
         var width = double.IsFinite(availableSize.Width) ? availableSize.Width : Bounds.Width;
-        var size = new Size(AnnotationWidth(width), double.PositiveInfinity);
-        foreach (var c in _annotationContents) c.Measure(size);
+        foreach (var a in _annotations) a.Content.Measure(new Size(AnnotationSpan(a, width).Width, double.PositiveInfinity));
         UpdateExtras();
         // The view takes the space it's given; the threads don't size it.
         return default;
@@ -106,35 +117,39 @@ public sealed partial class DiffView
 
     protected override Size ArrangeOverride(Size finalSize)
     {
-        var width = AnnotationWidth(finalSize.Width);
         _stackTops.Clear();
         foreach (var a in _annotations)
         {
             var c = a.Content;
+            var (left, width) = AnnotationSpan(a, finalSize.Width);
             var row = RowOfLine(a.LineIndex);
             if (row < 0 || !c.IsVisible)
             {
                 // Out of sight (not hidden, which could take the focus away).
-                c.Arrange(new Rect(AnnotationLeft, -c.DesiredSize.Height - 1000, width, c.DesiredSize.Height));
+                c.Arrange(new Rect(left, -c.DesiredSize.Height - 1000, width, c.DesiredSize.Height));
                 continue;
             }
-            var top = _stackTops.TryGetValue(row, out var t) ? t : _layout.GapTopOf(row) + GapPadding;
-            c.Arrange(new Rect(AnnotationLeft, top - _offset, width, c.DesiredSize.Height));
-            _stackTops[row] = top + c.DesiredSize.Height + GapSpacing;
+            var key = (row, ColumnOf(a));
+            var top = _stackTops.TryGetValue(key, out var t) ? t : _layout.GapTopOf(row) + GapPadding;
+            c.Arrange(new Rect(left, top - _offset, width, c.DesiredSize.Height));
+            _stackTops[key] = top + c.DesiredSize.Height + GapSpacing;
         }
         return finalSize;
     }
 
-    /// <summary>Reserves the space below each row for its threads (as last measured).</summary>
+    /// <summary>Reserves the space below each row for its threads (as last measured): side by side, the taller side's.</summary>
     private void UpdateExtras()
     {
-        var extras = new Dictionary<int, double>();
+        var stacks = new Dictionary<(int Row, int Column), double>();
         foreach (var a in _annotations)
         {
             var row = RowOfLine(a.LineIndex);
             if (row < 0 || !a.Content.IsVisible) continue;
-            extras[row] = (extras.TryGetValue(row, out var h) ? h + GapSpacing : GapPadding * 2) + a.Content.DesiredSize.Height;
+            var key = (row, ColumnOf(a));
+            stacks[key] = (stacks.TryGetValue(key, out var h) ? h + GapSpacing : GapPadding * 2) + a.Content.DesiredSize.Height;
         }
+        var extras = new Dictionary<int, double>();
+        foreach (var ((row, _), height) in stacks) extras[row] = Math.Max(extras.GetValueOrDefault(row), height);
         if (!_layout.SetExtras(extras)) return;
         SetOffset(_offset);
         _scrollMarks?.InvalidateVisual();

@@ -7,7 +7,7 @@ namespace TotalGit.App.ViewModels;
 
 /// <summary>Something shown between diff lines: a thread, a comment being written, or a pending review comment.</summary>
 /// <param name="LineIndex">The index into the diff's lines it's shown below.</param>
-public sealed record DiffThreadItem(int LineIndex, object ViewModel);
+public sealed record DiffThreadItem(int LineIndex, object ViewModel, DiffSide Side);
 
 public sealed class CommentViewModel(PrComment comment)
 {

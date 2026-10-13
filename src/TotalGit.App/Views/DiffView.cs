@@ -218,6 +218,9 @@ public sealed partial class DiffView : Control
             UpdateMarks();
             SetOffset(0);
             SetHOffset(_hOffset);
+            // Side by side, threads sit on one side: narrower, so taller.
+            InvalidateMeasure();
+            InvalidateArrange();
         }
         else if (change.Property == SinceReviewProperty)
         {

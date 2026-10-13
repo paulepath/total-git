@@ -973,14 +973,14 @@ public sealed partial class PullRequestReviewViewModel : ObservableObject
             foreach (var thread in threads)
             {
                 if (!_threadViewModels.TryGetValue(thread.Id, out var threadVm)) _threadViewModels[thread.Id] = threadVm = Pr.NewThread(thread);
-                items.Add(new DiffThreadItem(line, threadVm));
+                items.Add(new DiffThreadItem(line, threadVm, thread.Anchor.Side));
             }
         }
         foreach (var pending in Pr.Pending.Where(p => p.Draft.Anchor.Path == file.Path))
         {
-            if (LineIndexOf(diff, pending.Draft.Anchor) is { } line) items.Add(new DiffThreadItem(line, pending));
+            if (LineIndexOf(diff, pending.Draft.Anchor) is { } line) items.Add(new DiffThreadItem(line, pending, pending.Draft.Anchor.Side));
         }
-        if (Pr.Composer is { } composer && composer.Anchor.Path == file.Path) items.Add(new DiffThreadItem(composer.LineIndex, composer));
+        if (Pr.Composer is { } composer && composer.Anchor.Path == file.Path) items.Add(new DiffThreadItem(composer.LineIndex, composer, composer.Anchor.Side));
         DiffThreads = items.OrderBy(i => i.LineIndex).ToList();
     }
 
