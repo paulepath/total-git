@@ -68,6 +68,11 @@ public partial class SidebarNode : ObservableObject
     public bool HasWorktree { get; init; }
     public bool IsDimmed { get; init; }
 
+    /// <summary>A worktree's count of uncommitted changes ("3"); null when it has none.</summary>
+    public string? ChangesText { get; init; }
+    public bool HasChanges => ChangesText is not null;
+    public string ChangesTip => $"{ChangesText} uncommitted {(ChangesText == "1" ? "change" : "changes")}. Click to see {(ChangesText == "1" ? "it" : "them")}.";
+
     /// <summary>feature/bug/hot-fix icon, shown instead of the plain branch/folder/worktree glyph.</summary>
     public Bitmap? KindIcon { get; init; }
     public bool HasKindIcon => KindIcon is not null;
@@ -273,6 +278,7 @@ public partial class SidebarViewModel : ObservableObject
     private IReadOnlyList<string> _leftovers = [];
     private IReadOnlyList<StashInfo> _stashes = [];
     private string? _currentWorktree;
+    private Dictionary<string, int> _worktreeChanges = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _collapsed = ["REMOTE", "TAGS", "STASHES", "PULL REQUESTS/" + nameof(PrGroup.Drafts)];
 
     // Pull requests come from the hosting service, separately from the git refresh.
@@ -450,6 +456,19 @@ public partial class SidebarViewModel : ObservableObject
         Rebuild();
     }
 
+    /// <summary>Uncommitted changes per worktree path, shown on the WORKTREES rows; rebuilds only when they change.</summary>
+    public void SetWorktreeChanges(IReadOnlyDictionary<string, int> changes)
+    {
+        if (changes.Count == _worktreeChanges.Count
+            && changes.All(kv => _worktreeChanges.TryGetValue(kv.Key, out var n) && n == kv.Value))
+            return;
+        _worktreeChanges = new Dictionary<string, int>(changes, StringComparer.OrdinalIgnoreCase);
+        Rebuild();
+    }
+
+    private int ChangesIn(string worktreePath) =>
+        _worktreeChanges.FirstOrDefault(kv => WorktreeService.SamePath(kv.Key, worktreePath)).Value;
+
     /// <summary>
     /// Shows the PULL REQUESTS section (hidden when <paramref name="visible"/> is false, e.g. the remote isn't on
     /// a supported host). <paramref name="message"/> replaces the rows: "Loading…" or why they can't be shown.
@@ -475,6 +494,7 @@ public partial class SidebarViewModel : ObservableObject
         _stashes = [];
         _worktrees = [];
         _leftovers = [];
+        _worktreeChanges.Clear();
         Nodes.Clear();
     }
 
@@ -579,8 +599,10 @@ public partial class SidebarViewModel : ObservableObject
             var isCurrent = WorktreeService.SamePath(w.Path, _currentWorktree ?? "");
             var branchRef = w.Branch is null ? null : _refs.FirstOrDefault(r => r.Kind == RefKind.LocalBranch && r.Name == w.Branch);
             var state = w.IsPrunable ? " (missing)" : w.IsLocked ? " (locked)" : "";
+            var changes = ChangesIn(w.Path);
             wtSection.Children.Add(new SidebarNode(SidebarNodeKind.Worktree, w.IsMain ? $"{w.Name} (main)" : w.Name)
             {
+                ChangesText = changes > 0 ? changes.ToString() : null,
                 Worktree = w,
                 KindIcon = BranchIcons.ForBranch(w.Branch),
                 Target = branchRef is not null ? BranchTarget.From(branchRef, w) : w.HeadSha is not null ? new BranchTarget(RefKind.DetachedHead, "HEAD", w.HeadSha, Worktree: w) : null,

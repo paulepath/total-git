@@ -39,14 +39,17 @@
             <Grid ColumnDefinitions="Auto,*,Auto" Opacity="{Binding IsSelectable, Converter={x:Static vm:Converters.DimWhenFalse}}">
               <CheckBox IsChecked="{Binding IsChecked}" IsEnabled="{Binding IsSelectable}" VerticalAlignment="Top" Margin="0,-4,4,0" />
               <StackPanel Grid.Column="1" Spacing="2">
-                <StackPanel Orientation="Horizontal" Spacing="6">
-                  <Image Source="{Binding KindIcon}" IsVisible="{Binding HasKindIcon}" Width="14" Height="14" VerticalAlignment="Center" />
-                  <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Foreground="#E6E8EB" />
-                  <TextBlock Text="{Binding Upstream}" FontSize="12" Foreground="#8A9099" VerticalAlignment="Center" />
-                </StackPanel>
+                <!-- One wrapping block, so a long name or upstream wraps instead of running under the date. -->
+                <DockPanel>
+                  <Image DockPanel.Dock="Left" Source="{Binding KindIcon}" IsVisible="{Binding HasKindIcon}" Width="14" Height="14"
+                         VerticalAlignment="Top" Margin="0,3,6,0" />
+                  <TextBlock TextWrapping="Wrap">
+                    <Run Text="{Binding Name}" FontWeight="SemiBold" Foreground="#E6E8EB" /><Run Text="  " /><Run Text="{Binding Upstream}" FontSize="12" Foreground="#8A9099" />
+                  </TextBlock>
+                </DockPanel>
                 <TextBlock Text="{Binding Subject}" FontSize="12" Foreground="#A9AFB8" TextTrimming="CharacterEllipsis" />
                 <TextBlock Text="{Binding UnpushedText}" IsVisible="{Binding HasUnpushed}" FontSize="12" Foreground="#F5C26B" />
-                <TextBlock Text="{Binding Reason}" IsVisible="{Binding HasReason}" FontSize="12" Foreground="#F5C26B" />
+                <TextBlock Text="{Binding Reason}" IsVisible="{Binding HasReason}" FontSize="12" Foreground="#F5C26B" TextWrapping="Wrap" />
               </StackPanel>
               <TextBlock Grid.Column="2" Text="{Binding When}" FontSize="12" Foreground="#8A9099" VerticalAlignment="Top" Margin="12,0,0,0" />
             </Grid>

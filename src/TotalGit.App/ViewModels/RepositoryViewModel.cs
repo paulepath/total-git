@@ -40,7 +40,24 @@ public sealed record GraphData(
 
     /// <summary>Open pull requests from this repository's branches, by branch name: their labels carry a chip.</summary>
     public IReadOnlyDictionary<string, PullRequestSummary> PullRequestsByBranch { get; init; } = new Dictionary<string, PullRequestSummary>();
+
+    /// <summary>
+    /// Labels that sit on a row other than their commit's, by ref name: a branch with no commits yet goes on its WIP
+    /// row or its own "new branch" row (with its remote branch, when that's at the same commit).
+    /// </summary>
+    public IReadOnlyDictionary<string, string> LabelRows { get; init; } = new Dictionary<string, string>();
+
+    /// <summary>The rows standing for branches with no commits yet, by the row's SHA.</summary>
+    public IReadOnlyDictionary<string, NewBranchInfo> NewBranches { get; init; } = new Dictionary<string, NewBranchInfo>();
+
+    /// <summary>The row a ref's label goes on.</summary>
+    public string RowOf(RefInfo r) =>
+        LabelRows.TryGetValue(r.Name, out var row) ? row : ShownAs.GetValueOrDefault(r.TargetSha, r.TargetSha);
 }
+
+/// <summary>A branch with no commits yet, drawn as a row of its own above the commit it was made from.</summary>
+/// <param name="BaseName">The branch it was made from, when known.</param>
+public sealed record NewBranchInfo(RefInfo Branch, string? BaseName);
 
 /// <summary>A pull request shown on the graph.</summary>
 /// <param name="HeadSha">Its newest commit here (the remote branch's tip when its head isn't fetched yet).</param>
@@ -430,7 +447,9 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
             UpdateOperationBanner();
             if (wasDirty != status.IsDirty || countChanged) RebuildGraph();
             Staging?.Update(status);
-            if (SelectedSha == CommitInfo.WorkingTreeSha && !status.IsDirty) SelectedSha = null;
+            // Changes all committed or discarded: a branch with no commits yet goes back to its own row.
+            if (SelectedSha == CommitInfo.WorkingTreeSha && !status.IsDirty)
+                SelectedSha = Graph?.NewBranches.FirstOrDefault(kv => kv.Value.Branch.IsCurrent).Key;
             await ReloadDiffAsync();
         }
         catch (Exception ex) when (ex is LibGit2Sharp.LibGit2SharpException or IOException)
@@ -499,13 +518,16 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
         var projected = ProjectHistory(state);
         var builder = new GraphLayoutBuilder(TrunkCommits(_commits, state));
         var wip = new Dictionary<string, WipInfo>();
-        if (_status.IsDirty && state.HeadSha is not null)
+        var hasWip = _status.IsDirty && state.HeadSha is not null;
+        if (hasWip)
         {
-            builder.Append([new CommitInfo(CommitInfo.WorkingTreeSha, [state.HeadSha], "", "", DateTimeOffset.Now,
+            builder.Append([new CommitInfo(CommitInfo.WorkingTreeSha, [state.HeadSha!], "", "", DateTimeOffset.Now,
                 "// WIP", IsWorkingTree: true)]);
             wip[CommitInfo.WorkingTreeSha] = new WipInfo(_status.TotalCount, null);
         }
-        builder.Append(WithOtherWorktreeRows(projected.Commits, wip));
+        var labelRows = new Dictionary<string, string>(StringComparer.Ordinal);
+        var newBranches = new Dictionary<string, NewBranchInfo>(StringComparer.Ordinal);
+        builder.Append(WithNewBranchRows(WithOtherWorktreeRows(projected.Commits, wip), state, projected.ShownAs, hasWip, labelRows, newBranches));
 
         var byBranch = _worktrees
             .Where(w => w.Branch is not null)
@@ -528,11 +550,23 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
             PullRequestsByBranch = _pullRequests.Where(p => !p.IsCrossRepository)
                 .GroupBy(p => p.HeadRef, StringComparer.Ordinal)
                 .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal),
+            LabelRows = labelRows,
+            NewBranches = newBranches,
         };
         UpdateFilterSummary(projected.Commits.Count);
         UpdateCommitCount();
         UpdateBranchOwners(state);
         RefreshHistorySearch();
+        Sidebar.SetWorktreeChanges(WorktreeChangeCounts(state));
+        FollowNewBranchSelection();
+    }
+
+    /// <summary>Uncommitted changes per worktree path: this one's and the other worktrees' (for the sidebar).</summary>
+    private Dictionary<string, int> WorktreeChangeCounts(RepositoryState state)
+    {
+        var counts = _otherWip.ToDictionary(kv => kv.Key, kv => kv.Value.TotalCount, StringComparer.OrdinalIgnoreCase);
+        if (_status.IsDirty) counts[state.WorkingDirectory] = _status.TotalCount;
+        return counts;
     }
 
     private void UpdateCommitCount()
@@ -560,7 +594,17 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
         Diff = null;
         SelectedRange = null;
 
-        if (sha is null)
+        if (sha is not null && Graph?.NewBranches.GetValueOrDefault(sha) is { } newBranch)
+        {
+            Details = null;
+            Staging = null;
+            WorktreeChanges = null;
+            NewBranch = CreateNewBranchCard(newBranch);
+            return;
+        }
+        NewBranch = null;
+
+        if (sha is null || CommitInfo.NewBranchOf(sha) is not null)
         {
             Details = null;
             Staging = null;
@@ -710,6 +754,15 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private async Task SelectShaAsync(string sha)
     {
+        // WIP and new-branch rows aren't commits: no history to load to find them.
+        if (CommitInfo.IsPlaceholderSha(sha))
+        {
+            if (Graph?.Layout.Rows.Any(r => r.Commit.Sha == sha) != true) return;
+            SelectedSha = sha;
+            ScrollToShaRequested?.Invoke(sha);
+            return;
+        }
+
         for (var i = 0; i < 25 && Graph is not null && !_commits.Any(c => c.Sha == sha) && _session?.HasMoreHistory == true; i++)
             await LoadMoreAsync();
 
@@ -740,6 +793,8 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
         }
         ClearPullRequestHighlight();
         if (node.Stash is { } stash) SelectedSha = stash.Sha;
+        // A branch or worktree with uncommitted changes shows them; a branch with no commits yet, its own row.
+        else if (RowForSidebarNode(node) is { } row) _ = SelectShaAsync(row);
         else if (node.Target?.Sha is { } sha) _ = SelectShaAsync(sha);
     }
 
@@ -1331,27 +1386,34 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
     public IReadOnlyList<MenuAction> ActionsForCommit(CommitInfo commit)
     {
         if (ActionsForRange(commit) is { } rangeActions) return rangeActions;
-        if (commit.IsOtherWorktree) return ActionsForOtherWip(commit);
-        if (commit.IsWorkingTree)
-            return
-            [
-                new MenuAction("Open in VS Code", OpenInVsCodeCommand, _state?.WorkingDirectory, Icon: MenuIcons.Code),
-                new MenuAction("Open in Visual Studio", OpenInVisualStudioCommand, _state?.WorkingDirectory, Icon: MenuIcons.VisualStudio),
-                MenuAction.Separator,
-                new MenuAction(IsOperationInProgress ? "Discard all changes… (finish or abort first)" : "Discard all changes…",
-                    DiscardAllCommand, IsEnabled: _status.IsDirty && !IsOperationInProgress && !IsBusy, Icon: MenuIcons.Reset),
-            ];
+        // A new branch's row: that branch's actions.
+        if (Graph?.NewBranches.GetValueOrDefault(commit.Sha) is { } newBranch)
+        {
+            Graph.WorktreesByBranch.TryGetValue(newBranch.Branch.Name, out var newBranchWorktree);
+            return ActionsFor(BranchTarget.From(newBranch.Branch, newBranchWorktree));
+        }
 
         var actions = new List<MenuAction>();
-        // Including labels of commits folded into this row.
-        var refs = Graph?.Refs.Where(r => Graph.ShownAs.GetValueOrDefault(r.TargetSha, r.TargetSha) == commit.Sha
-                                          && r.Kind != RefKind.DetachedHead).ToList() ?? [];
+        // Including labels of commits folded into this row, and of new branches whose label is on their WIP row.
+        var refs = Graph?.Refs.Where(r => Graph.RowOf(r) == commit.Sha && r.Kind != RefKind.DetachedHead).ToList() ?? [];
         foreach (var r in refs)
         {
             Graph!.WorktreesByBranch.TryGetValue(r.Kind == RefKind.LocalBranch ? r.Name : "", out var wt);
             actions.Add(new MenuAction(r.Name, Children: ActionsFor(BranchTarget.From(r, wt))));
         }
         if (actions.Count > 0) actions.Add(MenuAction.Separator);
+
+        if (commit.IsOtherWorktree) return [.. actions, .. ActionsForOtherWip(commit)];
+        if (commit.IsWorkingTree)
+            return
+            [
+                .. actions,
+                new MenuAction("Open in VS Code", OpenInVsCodeCommand, _state?.WorkingDirectory, Icon: MenuIcons.Code),
+                new MenuAction("Open in Visual Studio", OpenInVisualStudioCommand, _state?.WorkingDirectory, Icon: MenuIcons.VisualStudio),
+                MenuAction.Separator,
+                new MenuAction(IsOperationInProgress ? "Discard all changes… (finish or abort first)" : "Discard all changes…",
+                    DiscardAllCommand, IsEnabled: _status.IsDirty && !IsOperationInProgress && !IsBusy, Icon: MenuIcons.Reset),
+            ];
 
         var here = new BranchTarget(RefKind.DetachedHead, commit.ShortSha, commit.Sha);
         var isCheckedOut = _state?.HeadSha == commit.Sha && _state.CurrentBranch is null;

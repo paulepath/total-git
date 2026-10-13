@@ -21,10 +21,12 @@ public static class CommitRange
     /// </remarks>
     public static CommitRangeResult Resolve(IReadOnlyDictionary<string, CommitInfo> bySha, string a, string b)
     {
+        if (CommitInfo.IsPlaceholderSha(a) || CommitInfo.IsPlaceholderSha(b))
+            return Fail("The selection includes a row that isn't a commit (the WIP row, or a branch with no commits yet). Select commits only.");
         if (!bySha.TryGetValue(a, out var ca) || !bySha.TryGetValue(b, out var cb))
             return Fail("The selection goes past the loaded history. Scroll down to load more commits, then try again.");
-        if (ca.IsWorkingTree || cb.IsWorkingTree)
-            return Fail("The selection includes uncommitted changes (the WIP row). Select commits only.");
+        if (ca.IsPlaceholder || cb.IsPlaceholder)
+            return Fail("The selection includes a row that isn't a commit (the WIP row, or a branch with no commits yet). Select commits only.");
 
         var walk = Walk(bySha, a, b) ?? Walk(bySha, b, a);
         if (walk is null)

@@ -554,6 +554,7 @@ public sealed class RepositorySession : IDisposable
             }
 
             var (upstream, ahead, behind, gone) = ReadTracking(branch);
+            var (isNew, createdFrom) = BranchReflog.ReadCreation(CommonGitDirectory, branch.FriendlyName, branch.Tip.Sha);
             result.Add(new RefInfo(
                 branch.FriendlyName,
                 RefKind.LocalBranch,
@@ -562,7 +563,9 @@ public sealed class RepositorySession : IDisposable
                 Upstream: upstream,
                 Ahead: ahead,
                 Behind: behind,
-                UpstreamGone: gone));
+                UpstreamGone: gone,
+                IsNew: isNew,
+                CreatedFrom: createdFrom));
         }
 
         foreach (var tag in _repo.Tags)
@@ -575,7 +578,32 @@ public sealed class RepositorySession : IDisposable
         if (_repo.Info.IsHeadDetached && _repo.Head.Tip is { } head)
             result.Add(new RefInfo("HEAD", RefKind.DetachedHead, head.Sha, true));
 
+        // Branches nothing has been committed to yet can't vouch for each other.
+        var settled = result.Where(r => r.Kind is RefKind.LocalBranch or RefKind.RemoteBranch && !r.IsNew).ToList();
+        for (var i = 0; i < result.Count; i++)
+            if (result[i].IsNew) result[i] = WithBase(result[i], settled);
         return result;
+    }
+
+    /// <summary>
+    /// A branch the reflog says is untouched since it was created only has no commits of its own when another branch
+    /// already holds its commit; one checked out from someone's remote branch holds their commits, so isn't new.
+    /// <see cref="RefInfo.CreatedFrom"/> becomes that other branch: the one named when it was created if it holds the
+    /// commit, else one at the same commit (local first), else any that contains it.
+    /// </summary>
+    private RefInfo WithBase(RefInfo branch, IReadOnlyList<RefInfo> branches)
+    {
+        // Not its own remote copy (same name): that is the branch itself.
+        var others = branches.Where(r => r.ShortName != branch.Name).ToList();
+        var tip = _repo.Lookup<Commit>(branch.TargetSha);
+        bool Holds(RefInfo r) => r.TargetSha == branch.TargetSha
+            || (tip is not null && _repo.Lookup<Commit>(r.TargetSha) is { } other && _repo.ObjectDatabase.FindMergeBase(tip, other)?.Sha == tip.Sha);
+
+        var from = branch.CreatedFrom is { } name && others.FirstOrDefault(r => r.Name == name) is { } named && Holds(named)
+            ? named
+            : others.Where(r => r.TargetSha == branch.TargetSha).OrderBy(r => r.Kind == RefKind.LocalBranch ? 0 : 1).FirstOrDefault()
+              ?? others.OrderBy(r => r.Kind == RefKind.LocalBranch ? 0 : 1).FirstOrDefault(Holds);
+        return from is null ? branch with { IsNew = false, CreatedFrom = null } : branch with { CreatedFrom = from.Name };
     }
 
     public void Dispose()

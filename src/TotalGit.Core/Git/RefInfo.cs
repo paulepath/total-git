@@ -12,6 +12,11 @@ public enum RefKind
 /// <param name="RemoteName">For remote branches, the remote (e.g. <c>origin</c>).</param>
 /// <param name="Upstream">For local branches, the tracked remote branch friendly name.</param>
 /// <param name="UpstreamGone">For local branches, the configured upstream no longer exists (deleted on the remote and pruned).</param>
+/// <param name="IsNew">
+/// For local branches, created here and not moved since, and its commit is already on another branch: no commits of
+/// its own yet.
+/// </param>
+/// <param name="CreatedFrom">For a new branch, the branch it was made from (or another branch holding its commit).</param>
 public sealed record RefInfo(
     string Name,
     RefKind Kind,
@@ -21,7 +26,9 @@ public sealed record RefInfo(
     string? Upstream = null,
     int Ahead = 0,
     int Behind = 0,
-    bool UpstreamGone = false)
+    bool UpstreamGone = false,
+    bool IsNew = false,
+    string? CreatedFrom = null)
 {
     /// <summary>Branch name without the remote prefix (<c>origin/feature/x</c> → <c>feature/x</c>).</summary>
     public string ShortName => RemoteName is not null && Name.StartsWith(RemoteName + "/", StringComparison.Ordinal)

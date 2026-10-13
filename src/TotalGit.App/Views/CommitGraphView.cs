@@ -771,10 +771,12 @@ public sealed class CommitGraphView : Control
         {
             ShowTip(card);
         }
-        else if (overNode && !_tipSuppressed)
+        else if (overNode && !_tipSuppressed && !Rows[row].Commit.IsWorkingTree)
         {
             var c = Rows[row].Commit;
-            ShowTip($"{c.Sha}\n{c.AuthorName} <{c.AuthorEmail}>\n{c.AuthorDate.LocalDateTime:f}\n\n{c.MessageShort}");
+            ShowTip(c.NewBranchName is { } name
+                ? $"{name} has no commits yet." + (Data?.NewBranches.GetValueOrDefault(c.Sha)?.BaseName is { } from ? $" It was made from {from}." : "")
+                : $"{c.Sha}\n{c.AuthorName} <{c.AuthorEmail}>\n{c.AuthorDate.LocalDateTime:f}\n\n{c.MessageShort}");
         }
         else
         {
@@ -1100,6 +1102,13 @@ public sealed class CommitGraphView : Control
             return;
         }
 
+        // A branch with no commits yet: an empty dashed node.
+        if (row.Commit.NewBranchName is not null)
+        {
+            ctx.DrawEllipse(BackgroundBrush, WipPen, center, NodeRadius - 1, NodeRadius - 1);
+            return;
+        }
+
         if (Data?.Folds.ContainsKey(row.Commit.Sha) == true)
         {
             for (var k = 2; k >= 1; k--)
@@ -1147,6 +1156,14 @@ public sealed class CommitGraphView : Control
             var label = info?.WorktreeName is { } name ? $"// WIP {name} · {files}" : $"// WIP    {files} changed";
             var wip = Text(label, 13, MutedTextBrush, _typeface, messageWidth);
             ctx.DrawText(wip, new Point(MessageLeft, top + (RowHeight - wip.Height) / 2));
+            return;
+        }
+
+        if (c.NewBranchName is not null)
+        {
+            var from = Data?.NewBranches.GetValueOrDefault(c.Sha)?.BaseName;
+            var text = Text(from is null ? "No commits yet" : $"No commits yet · made from {from}", 13, MutedTextBrush, _italicTypeface, messageWidth);
+            ctx.DrawText(text, new Point(MessageLeft, top + (RowHeight - text.Height) / 2));
             return;
         }
 
@@ -1344,7 +1361,7 @@ public sealed class CommitGraphView : Control
         {
             var refs = data.Refs;
             var result = new Dictionary<string, List<RefBadge>>();
-            foreach (var group in refs.GroupBy(r => data.ShownAs.GetValueOrDefault(r.TargetSha, r.TargetSha)))
+            foreach (var group in refs.GroupBy(data.RowOf))
             {
                 var badges = new List<RefBadge>();
                 var remotes = group.Where(r => r.Kind == RefKind.RemoteBranch).ToList();

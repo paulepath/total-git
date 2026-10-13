@@ -470,6 +470,7 @@
         <views:StagingView x:Name="StagingPane" DataContext="{Binding Staging}" IsVisible="{Binding $parent[views:RepositoryView].((vm:RepositoryViewModel)DataContext).ShowStaging}" />
         <views:WorktreeChangesView x:Name="WorktreeChangesPane" DataContext="{Binding WorktreeChanges}" IsVisible="{Binding $parent[views:RepositoryView].((vm:RepositoryViewModel)DataContext).ShowWorktreeChanges}" />
         <views:CommitRangeView DataContext="{Binding Range}" IsVisible="{Binding $parent[views:RepositoryView].((vm:RepositoryViewModel)DataContext).ShowRange}" />
+        <views:NewBranchView DataContext="{Binding NewBranch}" IsVisible="{Binding $parent[views:RepositoryView].((vm:RepositoryViewModel)DataContext).ShowNewBranch}" />
         <TextBlock Text="Select a commit to see its details" Foreground="{StaticResource MutedTextBrush}"
                    HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="12">
           <TextBlock.IsVisible>
@@ -478,6 +479,7 @@
               <Binding Path="!ShowStaging" />
               <Binding Path="!ShowWorktreeChanges" />
               <Binding Path="!ShowRange" />
+              <Binding Path="!ShowNewBranch" />
               <Binding Path="HasRepository" />
             </MultiBinding>
           </TextBlock.IsVisible>
