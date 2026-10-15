@@ -339,6 +339,8 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
             _otherWip.Clear();
             ApplyState();
             RebuildGraph();
+            // A repository or worktree just opened: its uncommitted changes are what it's likely opened for.
+            if (!sameRepo) SelectChangesIfAny();
             UpdatePullRequestHost();
             UpdateWorkflowHost();
             if (sameRepo) await ReloadSelectionAsync();
@@ -1022,6 +1024,15 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
             await CheckoutWithChangesAsync(name, mode, m => GitActions.CheckoutRemoteAsync(dir, remote, name, m));
         else
             await CheckoutWithChangesAsync(name, mode, m => GitActions.CheckoutAsync(dir, name, m));
+        SelectChangesIfAny();
+    }
+
+    /// <summary>Selects the uncommitted changes (the WIP row), when there are any, so they show on the right.</summary>
+    private void SelectChangesIfAny()
+    {
+        if (!_status.IsDirty || _state?.HeadSha is null || SelectedSha == CommitInfo.WorkingTreeSha) return;
+        SelectedSha = CommitInfo.WorkingTreeSha;
+        ScrollToShaRequested?.Invoke(CommitInfo.WorkingTreeSha);
     }
 
     // ------------------------------------------------------------------ worktrees
