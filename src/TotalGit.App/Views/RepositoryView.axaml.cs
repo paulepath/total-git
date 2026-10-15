@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.Layout;
@@ -25,6 +26,18 @@ public partial class RepositoryView : UserControl
         DiffView.AttachScrollBar(DiffScrollBar);
         DiffView.AttachScrollMarks(DiffMarks);
         DiffView.AttachHorizontalScrollBar(DiffHScrollBar);
+
+        // Pane widths are saved as soon as a splitter is let go, not only on closing: an update's restart doesn't
+        // close the window first. After the next layout, when the columns have their new widths.
+        MainGrid.AddHandler(Thumb.DragCompletedEvent, (_, e) =>
+        {
+            if (e.Source is GridSplitter) Dispatcher.UIThread.Post(() =>
+            {
+                if (_vm is not { } vm) return;
+                SaveLayout(vm.Settings);
+                vm.Settings.Save();
+            }, DispatcherPriority.Background);
+        });
 
         Graph.NearEnd += () => _ = _vm?.LoadMoreAsync();
         Graph.ColumnsChanged += () => SaveGraphColumns(_vm?.Settings);

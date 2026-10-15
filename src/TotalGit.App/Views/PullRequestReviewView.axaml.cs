@@ -82,6 +82,21 @@ public partial class PullRequestReviewView : UserControl
         ShowDiffThreads();
     }
 
+    private bool HasSidePane => (DataContext as PullRequestReviewViewModel)?.IsLocal != true;
+
+    /// <summary>The file list's and right-hand pane's widths, shared by every review window.</summary>
+    public void ApplyPaneWidths(TotalGit.App.Services.AppSettings s)
+    {
+        Panes.ColumnDefinitions[0].Width = new GridLength(s.ReviewFilesWidth);
+        if (HasSidePane) Panes.ColumnDefinitions[4].Width = new GridLength(s.ReviewSideWidth);
+    }
+
+    public void SavePaneWidths(TotalGit.App.Services.AppSettings s)
+    {
+        if (Panes.ColumnDefinitions[0].ActualWidth > 0) s.ReviewFilesWidth = Panes.ColumnDefinitions[0].ActualWidth;
+        if (HasSidePane && Panes.ColumnDefinitions[4].ActualWidth > 0) s.ReviewSideWidth = Panes.ColumnDefinitions[4].ActualWidth;
+    }
+
     private void OnViewModelChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (e.PropertyName is nameof(PullRequestReviewViewModel.DiffThreads) or nameof(PullRequestReviewViewModel.CanCommentOnDiff)) ShowDiffThreads();

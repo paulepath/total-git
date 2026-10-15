@@ -150,6 +150,7 @@ public partial class MainWindow : Window, IDialogService
         if (_shell is null) return;
 
         _shell.Dialogs = this;
+        if (!IsVisible) RestorePlacement(_shell.Settings);
         Zoom.Initialize(_shell.Settings);
         ApplyZoom(showIndicator: false);
         _shell.PropertyChanging += OnShellPropertyChanging;
@@ -210,9 +211,83 @@ public partial class MainWindow : Window, IDialogService
         if (_shell is not null)
         {
             ActiveView()?.SaveLayout(_shell.Settings);
+            StorePlacement(_shell.Settings);
             _shell.Settings.Save();
         }
         base.OnClosing(e);
+    }
+
+    // ------------------------------------------------------------------ remembered size and place
+
+    // The size and place it goes back to from maximised (Bounds while maximised are the screen's).
+    private PixelPoint _normalPosition;
+    private Size _normalSize;
+    private bool _maximized;
+    private bool _placementKnown;
+    private readonly Avalonia.Threading.DispatcherTimer _placementSaveTimer = new() { Interval = TimeSpan.FromSeconds(1) };
+
+    /// <summary>Opens where it was last time, unless that's no longer on a screen (a monitor unplugged).</summary>
+    private void RestorePlacement(AppSettings s)
+    {
+        Opened += (_, _) =>
+        {
+            NotePlacement();
+            PositionChanged += (_, _) => NotePlacement();
+        };
+        // Saved soon after a move or resize too, not only on closing: an update's restart doesn't close the window.
+        _placementSaveTimer.Tick += (_, _) =>
+        {
+            _placementSaveTimer.Stop();
+            if (_shell is null) return;
+            StorePlacement(_shell.Settings);
+            _shell.Settings.Save();
+        };
+
+        if (s.MainWindowPlacement is not { } p
+            || Screens.All.FirstOrDefault(sc => sc.WorkingArea.Contains(new PixelPoint(p.X + 60, p.Y + 15))) is not { } screen)
+            return;
+        var area = screen.WorkingArea;
+        WindowStartupLocation = WindowStartupLocation.Manual;
+        Width = Math.Min(p.Width, area.Width / screen.Scaling);
+        Height = Math.Min(p.Height, area.Height / screen.Scaling);
+        Position = new PixelPoint(p.X, p.Y);
+        // Opening maximised, the size and place to go back to are only these.
+        (_normalPosition, _normalSize, _placementKnown) = (Position, new Size(Width, Height), true);
+        if (p.Maximized) WindowState = WindowState.Maximized;
+    }
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property == ClientSizeProperty || change.Property == WindowStateProperty) NotePlacement();
+    }
+
+    /// <summary>
+    /// Notes the window's size and place once things settle: maximising moves and resizes it before the state says
+    /// maximised, and that size isn't the one to keep.
+    /// </summary>
+    private void NotePlacement()
+    {
+        if (!IsVisible) return;
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            if (WindowState == WindowState.Minimized) return;
+            _maximized = WindowState is WindowState.Maximized or WindowState.FullScreen;
+            if (WindowState == WindowState.Normal)
+            {
+                _normalPosition = Position;
+                _normalSize = ClientSize;
+                _placementKnown = true;
+            }
+            _placementSaveTimer.Stop();
+            _placementSaveTimer.Start();
+        }, Avalonia.Threading.DispatcherPriority.Background);
+    }
+
+    private void StorePlacement(AppSettings s)
+    {
+        if (!_placementKnown) return;
+        s.MainWindowPlacement = new WindowPlacement(_normalPosition.X, _normalPosition.Y, _normalSize.Width, _normalSize.Height, _maximized);
     }
 
     // ------------------------------------------------------------------ IDialogService

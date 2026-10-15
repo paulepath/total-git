@@ -81,7 +81,7 @@
     <TextBlock IsVisible="{Binding IsBinary}" Text="This is a binary file. Use the Whole file menu above to choose which side's version to keep."
                HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="#8A9099" />
 
-    <Grid IsVisible="{Binding IsText}" RowDefinitions="Auto,*,4,Auto,*,Auto" ColumnDefinitions="*,Auto">
+    <Grid x:Name="TextPanes" IsVisible="{Binding IsText}" RowDefinitions="Auto,*,4,Auto,*,Auto" ColumnDefinitions="*,Auto">
       <!-- What goes into the result for the current conflict -->
       <Border Grid.Row="0" Grid.ColumnSpan="2" Background="#1F2328" Padding="12,5" BorderBrush="#30353C" BorderThickness="0,0,0,1">
         <Grid ColumnDefinitions="Auto,*,Auto">

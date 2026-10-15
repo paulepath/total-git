@@ -116,6 +116,9 @@ public sealed partial class MergeToolViewModel : ObservableObject
     public bool HasConflicts => ConflictCount > 0;
     public bool HasBase => Document?.HasBase == true;
 
+    /// <summary>Where the pane sizes are kept.</summary>
+    public AppSettings Settings => _settings;
+
     /// <summary>The base pane is shown (when there is a base).</summary>
     public bool ShowBase
     {

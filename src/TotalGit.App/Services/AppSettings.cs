@@ -88,6 +88,19 @@ public sealed class AppSettings
     public double ReviewWindowHeight { get; set; } = 950;
     public bool ReviewWindowMaximized { get; set; }
 
+    /// <summary>The review window's file list and right-hand pane widths.</summary>
+    public double ReviewFilesWidth { get; set; } = 290;
+    public double ReviewSideWidth { get; set; } = 360;
+
+    /// <summary>The main window's place and size (when last not maximised), and whether it was maximised; null until first moved.</summary>
+    public WindowPlacement? MainWindowPlacement { get; set; }
+
+    /// <summary>The merge tool's base, ours and theirs pane widths, in proportion (null for equal thirds).</summary>
+    public double[]? MergePaneWidths { get; set; }
+
+    /// <summary>The merge tool's sides and result heights, in proportion (null for half each).</summary>
+    public double[]? MergeRowHeights { get; set; }
+
     /// <summary>The review window's file list leaves out test files (to look at later).</summary>
     public bool ReviewHideTests { get; set; }
 
@@ -203,6 +216,9 @@ public sealed class AppSettings
         catch (IOException) { }
     }
 }
+
+/// <summary>A window's top-left in screen pixels, its size in device-independent units, and whether it was maximised.</summary>
+public sealed record WindowPlacement(int X, int Y, double Width, double Height, bool Maximized);
 
 /// <summary>A repository opened before: its folder (the main working directory), name and when it was last opened.</summary>
 public sealed record RecentRepository(string Path, string Name, DateTimeOffset LastOpened);

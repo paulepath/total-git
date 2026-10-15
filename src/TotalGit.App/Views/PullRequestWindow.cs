@@ -1,7 +1,9 @@
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
+using Avalonia.Threading;
 using TotalGit.App.Services;
 using TotalGit.App.ViewModels;
 
@@ -13,6 +15,7 @@ public sealed class PullRequestWindow : Window, IReviewDialogs
     private readonly PullRequestReviewViewModel _vm;
     private readonly AppSettings _settings;
     private readonly LayoutTransformControl _zoomHost;
+    private readonly PullRequestReviewView _view;
 
     public PullRequestWindow(PullRequestReviewViewModel vm, AppSettings settings, Window? owner)
     {
@@ -31,8 +34,19 @@ public sealed class PullRequestWindow : Window, IReviewDialogs
         Background = new SolidColorBrush(Color.Parse("#1C1F24"));
         if (owner?.Icon is { } icon) Icon = icon;
 
-        _zoomHost = new LayoutTransformControl { Child = new PullRequestReviewView() };
+        _view = new PullRequestReviewView();
+        _zoomHost = new LayoutTransformControl { Child = _view };
         Content = _zoomHost;
+        _view.ApplyPaneWidths(settings);
+        // Saved as soon as a splitter is let go (after the next layout, when the columns have their new widths).
+        _view.AddHandler(Thumb.DragCompletedEvent, (_, e) =>
+        {
+            if (e.Source is GridSplitter) Dispatcher.UIThread.Post(() =>
+            {
+                _view.SavePaneWidths(_settings);
+                _settings.Save();
+            }, DispatcherPriority.Background);
+        });
         ApplyZoom();
         Zoom.Changed += ApplyZoom;
 
@@ -105,6 +119,7 @@ public sealed class PullRequestWindow : Window, IReviewDialogs
             _settings.ReviewWindowWidth = Bounds.Width;
             _settings.ReviewWindowHeight = Bounds.Height;
         }
+        _view.SavePaneWidths(_settings);
         _settings.Save();
         base.OnClosing(e);
     }

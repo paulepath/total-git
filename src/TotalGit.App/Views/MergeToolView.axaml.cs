@@ -46,6 +46,11 @@ public partial class MergeToolView : UserControl
         ResultPane.SegmentEditRequested += BeginEdit;
         // Tunnel: the shortcuts work whichever pane has the focus (but not while typing).
         AddHandler(KeyDownEvent, OnShortcut, RoutingStrategies.Tunnel);
+        // After the next layout, when the panes have their new sizes.
+        AddHandler(Thumb.DragCompletedEvent, (_, e) =>
+        {
+            if (e.Source is GridSplitter) Dispatcher.UIThread.Post(SavePaneSizes, DispatcherPriority.Background);
+        });
     }
 
     private IEnumerable<MergePaneView> Panes => [BasePane, OursPane, TheirsPane, ResultPane];
@@ -69,6 +74,7 @@ public partial class MergeToolView : UserControl
         _scroll.SetResultHOffset(0);
         OnLayoutChanged();
         ApplyShowBase();
+        ApplyRowHeights();
         // Once the panes have their sizes, show the first conflict.
         Dispatcher.UIThread.Post(() => OnRevealConflict(_vm?.CurrentIndex ?? 0), DispatcherPriority.Background);
     }
@@ -103,15 +109,43 @@ public partial class MergeToolView : UserControl
         _scroll.Reveal(first, count);
     }
 
-    /// <summary>The base pane takes a third of the width when shown, none when hidden.</summary>
+    /// <summary>The panes take their last widths (a third each at first); the base pane none when hidden.</summary>
     private void ApplyShowBase()
     {
         var show = _vm?.ShowBase == true;
+        var widths = _vm?.Settings.MergePaneWidths is [> 0, > 0, > 0] w ? w : [1, 1, 1];
         var columns = SourcePanes.ColumnDefinitions;
-        columns[0].Width = show ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
+        columns[0].Width = show ? new GridLength(widths[0], GridUnitType.Star) : new GridLength(0);
         columns[1].Width = new GridLength(show ? 4 : 0);
+        columns[2].Width = new GridLength(widths[1], GridUnitType.Star);
+        columns[4].Width = new GridLength(widths[2], GridUnitType.Star);
         BaseColumn.IsVisible = show;
         BaseSplitter.IsVisible = show;
+    }
+
+    /// <summary>The sides and the result take their last heights (half each at first).</summary>
+    private void ApplyRowHeights()
+    {
+        var heights = _vm?.Settings.MergeRowHeights is [> 0, > 0] h ? h : [1, 1];
+        TextPanes.RowDefinitions[1].Height = new GridLength(heights[0], GridUnitType.Star);
+        TextPanes.RowDefinitions[4].Height = new GridLength(heights[1], GridUnitType.Star);
+    }
+
+    /// <summary>Keeps the pane sizes (as proportions, so they suit any window size) after a splitter is let go.</summary>
+    private void SavePaneSizes()
+    {
+        if (_vm is null || !TextPanes.IsVisible) return;
+        var s = _vm.Settings;
+        var columns = SourcePanes.ColumnDefinitions;
+        // With the base hidden, its share stays what it was, against the others' old total.
+        var old = s.MergePaneWidths is [> 0, > 0, > 0] w ? w : [1, 1, 1];
+        var baseWidth = _vm.ShowBase ? columns[0].ActualWidth : old[0] / (old[1] + old[2]) * (columns[2].ActualWidth + columns[4].ActualWidth);
+        if (columns[2].ActualWidth > 0 && columns[4].ActualWidth > 0 && baseWidth > 0)
+            s.MergePaneWidths = [baseWidth, columns[2].ActualWidth, columns[4].ActualWidth];
+        var rows = TextPanes.RowDefinitions;
+        if (rows[1].ActualHeight > 0 && rows[4].ActualHeight > 0)
+            s.MergeRowHeights = [rows[1].ActualHeight, rows[4].ActualHeight];
+        s.Save();
     }
 
     private void SyncScrollBars()
