@@ -46,6 +46,14 @@ public sealed class AppSettings
 
     private static string FilePath => Path.Combine(DataDirectory, "settings.json");
 
+    /// <summary>
+    /// Defaults that are never saved, for the stand-alone merge window: it mustn't touch the settings of a Total Git
+    /// that may be running.
+    /// </summary>
+    public static AppSettings Detached() => new() { _detached = true };
+
+    private bool _detached;
+
     /// <summary>Only read to seed <see cref="OpenTabs"/> for settings from before tabs existed.</summary>
     public string? LastRepository { get; set; }
 
@@ -208,6 +216,7 @@ public sealed class AppSettings
 
     public void Save()
     {
+        if (_detached) return;
         try
         {
             Directory.CreateDirectory(DataDirectory);

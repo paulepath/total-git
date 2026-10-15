@@ -69,7 +69,7 @@
             </Button.Flyout>
           </Button>
           <Button Classes="small accent" Command="{Binding SaveCommand}" IsVisible="{Binding IsText}"
-                  ToolTip.Tip="Write the result and mark the file resolved">Save and mark resolved</Button>
+                  ToolTip.Tip="{Binding SaveToolTip}" Content="{Binding SaveText}" />
           <Button Command="{Binding CloseCommand}" Background="Transparent" Padding="6" ToolTip.Tip="Close (Esc)">
             <PathIcon Data="{StaticResource CloseIcon}" Width="12" Height="12" />
           </Button>

@@ -99,8 +99,31 @@ Pull requests and Actions need the repository to be on GitHub; everything else w
 ## Updates
 
 Every push to `master` that changes the app is built by GitHub Actions and published as a release (`v0.3.<run>`).
-The installed app checks for a new release at start-up and every few hours, downloads it in the
+The installed app checks for a new release at start-up and every half hour, downloads it in the
 background, and shows an **Update** button. Restart to apply it, or it's applied when you next close the app.
+
+## As git's merge tool
+
+`TotalGit.exe --merge <file>` opens just the merge tool for one conflicted file, and exits when its window closes:
+
+| Exit | Meaning |
+|------|---------|
+| 0 | Saved with every conflict resolved (or one side's whole version taken) |
+| 1 | Closed without saving; the file is untouched |
+| 2 | Bad arguments, no such file, or not in a git repository |
+| 3 | Not something it can merge: deleted on one side, binary, not UTF-8, or not conflicted (no window opens) |
+
+It never stages the file (git mergetool does that after exit 0), and it doesn't touch your settings or open tabs.
+A one-line reason goes to stderr. To make it git's merge tool:
+
+```
+git config --global merge.tool totalgit
+git config --global mergetool.totalgit.cmd '"C:/Users/<you>/AppData/Local/TotalGitApp/current/TotalGit.exe" --merge "$MERGED"'
+git config --global mergetool.totalgit.trustExitCode true
+```
+
+Then `git mergetool` opens it for each conflicted file. Use the `current\TotalGit.exe` path, not the
+`Total Git.exe` launcher beside it.
 
 ## Build from source
 

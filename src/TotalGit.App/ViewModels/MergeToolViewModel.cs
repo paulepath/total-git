@@ -32,7 +32,8 @@ public sealed partial class MergeToolViewModel : ObservableObject
         Func<string, Task<bool>> markResolved,
         Func<string, bool, Task> takeWholeFile,
         Func<string, string, string, Task<bool>> confirm,
-        Action close)
+        Action close,
+        Func<string, string, Task>? standaloneMessage = null)
     {
         var bytes = await File.ReadAllBytesAsync(System.IO.Path.Combine(worktree, path));
         string? text = null;
@@ -60,7 +61,7 @@ public sealed partial class MergeToolViewModel : ObservableObject
         {
             // git's own labels, then.
         }
-        return new MergeToolViewModel(worktree, path, text, hasBom, sides, settings, markResolved, takeWholeFile, confirm, close);
+        return new MergeToolViewModel(worktree, path, text, hasBom, sides, settings, markResolved, takeWholeFile, confirm, close, standaloneMessage);
     }
 
     private MergeToolViewModel(
@@ -73,9 +74,11 @@ public sealed partial class MergeToolViewModel : ObservableObject
         Func<string, Task<bool>> markResolved,
         Func<string, bool, Task> takeWholeFile,
         Func<string, string, string, Task<bool>> confirm,
-        Action close)
+        Action close,
+        Func<string, string, Task>? standaloneMessage)
     {
         _worktree = worktree;
+        _standaloneMessage = standaloneMessage;
         Path = path;
         _settings = settings;
         _markResolved = markResolved;
@@ -93,6 +96,13 @@ public sealed partial class MergeToolViewModel : ObservableObject
     }
 
     public string Path { get; }
+
+    // Set in the stand-alone merge window (TotalGit --merge), which tells the user things with it.
+    private readonly Func<string, string, Task>? _standaloneMessage;
+
+    /// <summary>In-app, saving also stages the file; the stand-alone window leaves that to its caller (git mergetool).</summary>
+    public string SaveText => _standaloneMessage is null ? "Save and mark resolved" : "Save";
+    public string SaveToolTip => _standaloneMessage is null ? "Write the result and mark the file resolved" : "Write the result and close";
     private string FullPath => System.IO.Path.Combine(_worktree, Path);
     public bool IsBinary { get; }
     public bool IsText => !IsBinary;
@@ -373,6 +383,12 @@ public sealed partial class MergeToolViewModel : ObservableObject
     {
         if (_file is null || Document is null) return;
         var text = IsTextMode ? Result : Document.Render();
+        // The stand-alone window promises its caller a file with every conflict resolved.
+        if (_standaloneMessage is not null && ConflictFile.HasMarkers(text))
+        {
+            await _standaloneMessage("Conflicts left", "The result still has conflict markers. Resolve every conflict before saving.");
+            return;
+        }
         if (ConflictFile.HasMarkers(text)
             && !await _confirm("Conflict markers left",
                 "The result still contains conflict markers. Save it and mark the file resolved anyway?", "Save anyway"))

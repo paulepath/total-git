@@ -300,9 +300,13 @@ public static class GitActions
     /// <summary>Resolves a conflicted file with one side's whole version and stages it.</summary>
     public static async Task TakeSideAsync(string worktree, string path, bool ours)
     {
-        await GitCli.RunAsync(worktree, "checkout", ours ? "--ours" : "--theirs", "--", path);
+        await CheckoutSideAsync(worktree, path, ours);
         await GitCli.RunAsync(worktree, "add", "--", path);
     }
+
+    /// <summary>Writes one side's whole version of a conflicted file to the working tree, leaving the index (still conflicted) alone.</summary>
+    public static Task CheckoutSideAsync(string worktree, string path, bool ours) =>
+        GitCli.RunAsync(worktree, "checkout", ours ? "--ours" : "--theirs", "--", path);
 
     /// <summary>
     /// The conflicted file with the common ancestor's text in each conflict (diff3-style markers), rebuilt from

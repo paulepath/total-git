@@ -22,6 +22,14 @@ public partial class App : Application
             // Dark-tile icon in every window's title bar; the taskbar keeps the transparent one.
             Window.WindowOpenedEvent.AddClassHandler<Window>((w, _) => TitleBarIcon.Apply(w));
 
+            // TotalGit --merge <file>: just the merge window, for git mergetool or another app.
+            if (TotalGit.Core.Git.MergeCommandLine.IsMerge(desktop.Args ?? []))
+            {
+                MergeMode.Start(desktop);
+                base.OnFrameworkInitializationCompleted();
+                return;
+            }
+
             var avatars = new AvatarService(Path.Combine(AppSettings.DataDirectory, "avatars"));
             var settings = AppSettings.Load();
             settings.ApplyBranchRules();
