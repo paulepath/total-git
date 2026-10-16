@@ -66,7 +66,7 @@
   repository's tabs a colour, an icon and a name of their own.
 - **A new tab** shows tiles of the repositories you've opened before, with their current branch.
 - **Worktrees** under `.worktrees/<name>`, opened in a tab, in VS Code or in Visual Studio.
-- **A VS Code extension** lists the worktrees in VS Code and switches between them (see below).
+- **VS Code and Visual Studio extensions** list the worktrees and switch between them (see below).
 
 | Reviewing changes | Recent repositories and coloured tabs |
 | --- | --- |
@@ -140,6 +140,22 @@ button. Once it's installed, Total Git keeps it up to date.
   the file once it's saved.
 
 The source is in `vscode/`. `npm ci` then `npm run package` builds `totalgit.vsix`.
+
+## Visual Studio extension
+
+Each release also carries one for Visual Studio 2022 and 2026. Install it from the **▾** next to the toolbar's
+**Visual Studio** button. That opens Visual Studio's own installer, which finishes once Visual Studio is closed.
+Later releases update it when Total Git starts while Visual Studio is closed.
+
+- **Worktrees window** (View > Other Windows, or Tools > Total Git > Worktrees). It lists the worktrees with branch,
+  ahead/behind and uncommitted changes, and conflicts are marked. Double-click one to switch: Visual Studio opens the
+  same solution in that worktree (or asks which one, when it can't tell) and offers to save first. Right-click to open
+  it in a new Visual Studio, in Total Git or in VS Code, or to open its folder.
+- **Tools > Total Git > Switch Worktree…** lists them from anywhere; bind it to a key in Tools > Options > Keyboard.
+- **Resolve Conflict in Total Git** is on a conflicted file's right-click menu in Solution Explorer and on its tab.
+- **Tools > Options > Total Git** sets where Total Git is, if not where its installer puts it.
+
+The source is in `visualstudio/`. `dotnet build visualstudio/TotalGit.VisualStudio.csproj` builds the `.vsix`.
 
 ## Build from source
 

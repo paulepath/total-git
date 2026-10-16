@@ -127,6 +127,9 @@ public partial class RepositoryView : UserControl
     /// <summary>The VS Code button's menu: check what's installed in VS Code each time it opens.</summary>
     private void OnVsCodeMenuOpening(object? sender, EventArgs e) => _vm?.RefreshVsCodeExtension();
 
+    /// <summary>The Visual Studio button's menu: check what's installed in Visual Studio each time it opens.</summary>
+    private void OnVisualStudioMenuOpening(object? sender, EventArgs e) => _vm?.RefreshVisualStudioExtension();
+
     protected override void OnDataContextChanged(EventArgs e)
     {
         base.OnDataContextChanged(e);

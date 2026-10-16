@@ -57,8 +57,13 @@ public partial class App : Application
             // Reopen last session's tabs; a folder passed on the command line opens (or selects) a tab too.
             shell.RestoreTabs(desktop.Args is [var first, ..] ? first : null);
 
-            // An older Total Git extension in VS Code gets this release's, a little after start-up.
-            _ = Task.Delay(TimeSpan.FromSeconds(30)).ContinueWith(_ => VsCodeExtension.UpdateIfOlderAsync(settings.VsCodePath), TaskScheduler.Default);
+            // Older Total Git extensions in VS Code and Visual Studio get this release's, a little after start-up (Visual
+            // Studio's only while it's closed).
+            _ = Task.Delay(TimeSpan.FromSeconds(30)).ContinueWith(async _ =>
+            {
+                await VsCodeExtension.UpdateIfOlderAsync(settings.VsCodePath);
+                await VisualStudioExtension.UpdateIfOlderAsync();
+            }, TaskScheduler.Default);
         }
 
         base.OnFrameworkInitializationCompleted();

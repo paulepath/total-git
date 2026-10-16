@@ -1,0 +1,212 @@
+<?xml version="1.0" encoding="utf-8"?>
+<CommandTable xmlns="http://schemas.microsoft.com/VisualStudio/2005-10-18/CommandTable" xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <Extern href="stdidcmd.h" />
+  <Extern href="vsshlids.h" />
+  <Include href="KnownImageIds.vsct" />
+
+  <Commands package="guidTotalGitPackage">
+    <Menus>
+      <!-- Tools > Total Git -->
+      <Menu guid="guidTotalGitCmdSet" id="menuTotalGit" priority="0x0100" type="Menu">
+        <Parent guid="guidTotalGitCmdSet" id="grpToolsMenu" />
+        <Strings>
+          <ButtonText>Total Git</ButtonText>
+        </Strings>
+      </Menu>
+      <!-- The Worktrees window's toolbar. -->
+      <Menu guid="guidTotalGitCmdSet" id="tbWorktrees" type="ToolWindowToolbar">
+        <CommandFlag>DefaultDocked</CommandFlag>
+        <Strings>
+          <ButtonText>Worktrees</ButtonText>
+        </Strings>
+      </Menu>
+      <!-- Right-click on a worktree in the Worktrees window. -->
+      <Menu guid="guidTotalGitCmdSet" id="ctxWorktree" type="Context">
+        <Strings>
+          <ButtonText>Worktree</ButtonText>
+        </Strings>
+      </Menu>
+    </Menus>
+
+    <Groups>
+      <Group guid="guidTotalGitCmdSet" id="grpToolsMenu" priority="0x0600">
+        <Parent guid="guidSHLMainMenu" id="IDM_VS_MENU_TOOLS" />
+      </Group>
+      <Group guid="guidTotalGitCmdSet" id="grpSubmenu" priority="0x0100">
+        <Parent guid="guidTotalGitCmdSet" id="menuTotalGit" />
+      </Group>
+      <Group guid="guidTotalGitCmdSet" id="grpViewOtherWindows" priority="0x0100">
+        <Parent guid="guidSHLMainMenu" id="IDG_VS_WNDO_OTRWNDWS1" />
+      </Group>
+      <Group guid="guidTotalGitCmdSet" id="grpItemContext" priority="0x0700">
+        <Parent guid="guidSHLMainMenu" id="IDM_VS_CTXT_ITEMNODE" />
+      </Group>
+      <Group guid="guidTotalGitCmdSet" id="grpDocTabContext" priority="0x0700">
+        <Parent guid="guidSHLMainMenu" id="IDM_VS_CTXT_EZDOCWINTAB" />
+      </Group>
+      <Group guid="guidTotalGitCmdSet" id="grpToolbar" priority="0x0100">
+        <Parent guid="guidTotalGitCmdSet" id="tbWorktrees" />
+      </Group>
+      <Group guid="guidTotalGitCmdSet" id="grpCtxOpen" priority="0x0100">
+        <Parent guid="guidTotalGitCmdSet" id="ctxWorktree" />
+      </Group>
+      <Group guid="guidTotalGitCmdSet" id="grpCtxApps" priority="0x0200">
+        <Parent guid="guidTotalGitCmdSet" id="ctxWorktree" />
+      </Group>
+      <Group guid="guidTotalGitCmdSet" id="grpCtxFolder" priority="0x0300">
+        <Parent guid="guidTotalGitCmdSet" id="ctxWorktree" />
+      </Group>
+    </Groups>
+
+    <Buttons>
+      <Button guid="guidTotalGitCmdSet" id="cmdShowWorktrees" priority="0x0100" type="Button">
+        <Parent guid="guidTotalGitCmdSet" id="grpSubmenu" />
+        <Icon guid="ImageCatalogGuid" id="BranchGroup" />
+        <CommandFlag>IconIsMoniker</CommandFlag>
+        <Strings>
+          <ButtonText>Worktrees</ButtonText>
+          <CommandName>TotalGit.Worktrees</CommandName>
+        </Strings>
+      </Button>
+      <Button guid="guidTotalGitCmdSet" id="cmdSwitchWorktree" priority="0x0200" type="Button">
+        <Parent guid="guidTotalGitCmdSet" id="grpSubmenu" />
+        <Icon guid="ImageCatalogGuid" id="PickBranch" />
+        <CommandFlag>IconIsMoniker</CommandFlag>
+        <Strings>
+          <ButtonText>Switch Worktree...</ButtonText>
+          <CommandName>TotalGit.SwitchWorktree</CommandName>
+        </Strings>
+      </Button>
+      <Button guid="guidTotalGitCmdSet" id="cmdOpenRepoInTotalGit" priority="0x0300" type="Button">
+        <Parent guid="guidTotalGitCmdSet" id="grpSubmenu" />
+        <Icon guid="ImageCatalogGuid" id="Git" />
+        <CommandFlag>IconIsMoniker</CommandFlag>
+        <Strings>
+          <ButtonText>Open in Total Git</ButtonText>
+          <CommandName>TotalGit.OpenInTotalGit</CommandName>
+        </Strings>
+      </Button>
+      <Button guid="guidTotalGitCmdSet" id="cmdResolveInTotalGit" priority="0x0400" type="Button">
+        <Parent guid="guidTotalGitCmdSet" id="grpSubmenu" />
+        <Icon guid="ImageCatalogGuid" id="MergeChangeswithTool" />
+        <CommandFlag>IconIsMoniker</CommandFlag>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <CommandFlag>DefaultInvisible</CommandFlag>
+        <Strings>
+          <ButtonText>Resolve Conflict in Total Git</ButtonText>
+          <CommandName>TotalGit.ResolveConflict</CommandName>
+        </Strings>
+      </Button>
+      <Button guid="guidTotalGitCmdSet" id="cmdRefresh" priority="0x0400" type="Button">
+        <Parent guid="guidTotalGitCmdSet" id="grpToolbar" />
+        <Icon guid="ImageCatalogGuid" id="Refresh" />
+        <CommandFlag>IconIsMoniker</CommandFlag>
+        <Strings>
+          <ButtonText>Refresh</ButtonText>
+          <CommandName>TotalGit.RefreshWorktrees</CommandName>
+        </Strings>
+      </Button>
+
+      <!-- Right-click on a worktree. -->
+      <Button guid="guidTotalGitCmdSet" id="cmdCtxSwitch" priority="0x0100" type="Button">
+        <Parent guid="guidTotalGitCmdSet" id="grpCtxOpen" />
+        <Icon guid="ImageCatalogGuid" id="PickBranch" />
+        <CommandFlag>IconIsMoniker</CommandFlag>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <Strings>
+          <ButtonText>Switch to This Worktree</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidTotalGitCmdSet" id="cmdCtxNewWindow" priority="0x0200" type="Button">
+        <Parent guid="guidTotalGitCmdSet" id="grpCtxOpen" />
+        <Icon guid="ImageCatalogGuid" id="NewWindow" />
+        <CommandFlag>IconIsMoniker</CommandFlag>
+        <Strings>
+          <ButtonText>Open in New Visual Studio</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidTotalGitCmdSet" id="cmdCtxOpenInTotalGit" priority="0x0100" type="Button">
+        <Parent guid="guidTotalGitCmdSet" id="grpCtxApps" />
+        <Icon guid="ImageCatalogGuid" id="Git" />
+        <CommandFlag>IconIsMoniker</CommandFlag>
+        <Strings>
+          <ButtonText>Open in Total Git</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidTotalGitCmdSet" id="cmdCtxOpenInVsCode" priority="0x0200" type="Button">
+        <Parent guid="guidTotalGitCmdSet" id="grpCtxApps" />
+        <Icon guid="ImageCatalogGuid" id="Code" />
+        <CommandFlag>IconIsMoniker</CommandFlag>
+        <Strings>
+          <ButtonText>Open in VS Code</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidTotalGitCmdSet" id="cmdCtxReveal" priority="0x0100" type="Button">
+        <Parent guid="guidTotalGitCmdSet" id="grpCtxFolder" />
+        <Icon guid="ImageCatalogGuid" id="OpenFolder" />
+        <CommandFlag>IconIsMoniker</CommandFlag>
+        <Strings>
+          <ButtonText>Open Folder in File Explorer</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidTotalGitCmdSet" id="cmdCtxCopyPath" priority="0x0200" type="Button">
+        <Parent guid="guidTotalGitCmdSet" id="grpCtxFolder" />
+        <Icon guid="ImageCatalogGuid" id="Copy" />
+        <CommandFlag>IconIsMoniker</CommandFlag>
+        <Strings>
+          <ButtonText>Copy Path</ButtonText>
+        </Strings>
+      </Button>
+    </Buttons>
+  </Commands>
+
+  <CommandPlacements>
+    <!-- View > Other Windows > Total Git Worktrees. -->
+    <CommandPlacement guid="guidTotalGitCmdSet" id="cmdShowWorktrees" priority="0x0100">
+      <Parent guid="guidTotalGitCmdSet" id="grpViewOtherWindows" />
+    </CommandPlacement>
+    <!-- The Worktrees window's toolbar. -->
+    <CommandPlacement guid="guidTotalGitCmdSet" id="cmdSwitchWorktree" priority="0x0100">
+      <Parent guid="guidTotalGitCmdSet" id="grpToolbar" />
+    </CommandPlacement>
+    <CommandPlacement guid="guidTotalGitCmdSet" id="cmdOpenRepoInTotalGit" priority="0x0200">
+      <Parent guid="guidTotalGitCmdSet" id="grpToolbar" />
+    </CommandPlacement>
+    <!-- A conflicted file's right-click menus (Solution Explorer and its editor tab). -->
+    <CommandPlacement guid="guidTotalGitCmdSet" id="cmdResolveInTotalGit" priority="0x0100">
+      <Parent guid="guidTotalGitCmdSet" id="grpItemContext" />
+    </CommandPlacement>
+    <CommandPlacement guid="guidTotalGitCmdSet" id="cmdResolveInTotalGit" priority="0x0100">
+      <Parent guid="guidTotalGitCmdSet" id="grpDocTabContext" />
+    </CommandPlacement>
+  </CommandPlacements>
+
+  <Symbols>
+    <GuidSymbol name="guidTotalGitPackage" value="{fa889656-5f5d-464b-87a7-16c23c7bbf28}" />
+    <GuidSymbol name="guidTotalGitCmdSet" value="{cdbe376f-73e5-4954-a8ba-4929f55c0090}">
+      <IDSymbol name="cmdShowWorktrees" value="0x0100" />
+      <IDSymbol name="cmdSwitchWorktree" value="0x0101" />
+      <IDSymbol name="cmdOpenRepoInTotalGit" value="0x0102" />
+      <IDSymbol name="cmdResolveInTotalGit" value="0x0103" />
+      <IDSymbol name="cmdRefresh" value="0x0104" />
+      <IDSymbol name="cmdCtxSwitch" value="0x0200" />
+      <IDSymbol name="cmdCtxNewWindow" value="0x0201" />
+      <IDSymbol name="cmdCtxOpenInTotalGit" value="0x0202" />
+      <IDSymbol name="cmdCtxOpenInVsCode" value="0x0203" />
+      <IDSymbol name="cmdCtxReveal" value="0x0204" />
+      <IDSymbol name="cmdCtxCopyPath" value="0x0205" />
+      <IDSymbol name="menuTotalGit" value="0x1000" />
+      <IDSymbol name="tbWorktrees" value="0x1001" />
+      <IDSymbol name="ctxWorktree" value="0x1002" />
+      <IDSymbol name="grpToolsMenu" value="0x1100" />
+      <IDSymbol name="grpSubmenu" value="0x1101" />
+      <IDSymbol name="grpViewOtherWindows" value="0x1102" />
+      <IDSymbol name="grpItemContext" value="0x1103" />
+      <IDSymbol name="grpDocTabContext" value="0x1104" />
+      <IDSymbol name="grpToolbar" value="0x1105" />
+      <IDSymbol name="grpCtxOpen" value="0x1106" />
+      <IDSymbol name="grpCtxApps" value="0x1107" />
+      <IDSymbol name="grpCtxFolder" value="0x1108" />
+    </GuidSymbol>
+  </Symbols>
+</CommandTable>

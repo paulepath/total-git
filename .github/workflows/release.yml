@@ -59,6 +59,15 @@ jobs:
           npm run package
           Copy-Item totalgit.vsix ../publish/totalgit.vsix
 
+      # The Visual Studio extension too, stamped with the same version.
+      - name: Package Visual Studio extension
+        shell: pwsh
+        run: |
+          $manifest = 'visualstudio/source.extension.vsixmanifest'
+          (Get-Content $manifest -Raw) -replace '(<Identity [^>]*Version=")[^"]*', "`${1}$env:VERSION" | Set-Content $manifest -NoNewline
+          dotnet build visualstudio/TotalGit.VisualStudio.csproj -c Release
+          Copy-Item visualstudio/bin/Release/net472/TotalGit.VisualStudio.vsix publish/TotalGit.VisualStudio.vsix
+
       - name: Install vpk
         run: dotnet tool install -g vpk --version ${{ env.VPK_VERSION }}
 

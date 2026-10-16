@@ -147,6 +147,21 @@
               <TextBlock Classes="label" Text="Visual Studio" />
             </StackPanel>
           </Button>
+          <!-- The Total Git extension for Visual Studio (a Worktrees window), bundled with each release. -->
+          <Button Classes="tool" MinWidth="0" Padding="2,4" Margin="-6,0,0,0" IsVisible="{Binding OffersVisualStudioExtension}"
+                  ToolTip.Tip="The Total Git extension for Visual Studio">
+            <PathIcon Data="{StaticResource ChevronIcon}" Width="10" Height="10" Foreground="#A9AFB8">
+              <PathIcon.RenderTransform>
+                <RotateTransform Angle="90" />
+              </PathIcon.RenderTransform>
+            </PathIcon>
+            <Button.Flyout>
+              <MenuFlyout Placement="BottomEdgeAlignedLeft" Opening="OnVisualStudioMenuOpening">
+                <MenuItem Header="Open in Visual Studio" Command="{Binding OpenInVisualStudioCommand}" />
+                <MenuItem Header="{Binding VisualStudioExtensionText}" Command="{Binding InstallVisualStudioExtensionCommand}" />
+              </MenuFlyout>
+            </Button.Flyout>
+          </Button>
         </StackPanel>
         </Viewbox>
 
