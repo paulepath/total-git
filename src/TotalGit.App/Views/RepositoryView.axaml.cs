@@ -124,6 +124,9 @@ public partial class RepositoryView : UserControl
         Sidebar.FocusFilter();
     }
 
+    /// <summary>The VS Code button's menu: check what's installed in VS Code each time it opens.</summary>
+    private void OnVsCodeMenuOpening(object? sender, EventArgs e) => _vm?.RefreshVsCodeExtension();
+
     protected override void OnDataContextChanged(EventArgs e)
     {
         base.OnDataContextChanged(e);

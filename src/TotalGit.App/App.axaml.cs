@@ -36,9 +36,18 @@ public partial class App : Application
             var updates = new UpdateService();
             var pullRequests = new GitHubProviderFactory(ChainedCredentialSource.Default());
             var shell = new ShellViewModel(avatars, settings, updates, pullRequests, workflows: pullRequests);
-            desktop.MainWindow = new MainWindow { DataContext = shell };
+            var window = new MainWindow { DataContext = shell };
+            desktop.MainWindow = window;
+
+            // Later starts hand their folder over to this copy.
+            var instance = SingleInstance.Listen(path => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                if (path is not null && Directory.Exists(path)) _ = shell.OpenPathAsync(path);
+                window.BringToFront();
+            }));
             desktop.Exit += (_, _) =>
             {
+                instance.Dispose();
                 foreach (var tab in shell.Tabs) tab.Dispose();
                 avatars.Dispose();
                 pullRequests.Dispose();
@@ -47,6 +56,9 @@ public partial class App : Application
 
             // Reopen last session's tabs; a folder passed on the command line opens (or selects) a tab too.
             shell.RestoreTabs(desktop.Args is [var first, ..] ? first : null);
+
+            // An older Total Git extension in VS Code gets this release's, a little after start-up.
+            _ = Task.Delay(TimeSpan.FromSeconds(30)).ContinueWith(_ => VsCodeExtension.UpdateIfOlderAsync(settings.VsCodePath), TaskScheduler.Default);
         }
 
         base.OnFrameworkInitializationCompleted();

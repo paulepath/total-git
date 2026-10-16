@@ -66,6 +66,7 @@
   repository's tabs a colour, an icon and a name of their own.
 - **A new tab** shows tiles of the repositories you've opened before, with their current branch.
 - **Worktrees** under `.worktrees/<name>`, opened in a tab, in VS Code or in Visual Studio.
+- **A VS Code extension** lists the worktrees in VS Code and switches between them (see below).
 
 | Reviewing changes | Recent repositories and coloured tabs |
 | --- | --- |
@@ -124,6 +125,21 @@ git config --global mergetool.totalgit.trustExitCode true
 
 Then `git mergetool` opens it for each conflicted file. Use the `current\TotalGit.exe` path, not the
 `Total Git.exe` launcher beside it.
+
+## VS Code extension
+
+Each release carries a Total Git extension for VS Code. Install it from the **▾** next to the toolbar's **VS Code**
+button. Once it's installed, Total Git keeps it up to date.
+
+- **Worktrees view.** The Total Git icon in VS Code's activity bar lists the repository's worktrees, with each one's
+  branch, ahead/behind counts and uncommitted changes. Click one to switch the window to it, or use its button to open
+  it in a new window. The status bar shows the current worktree; click it to switch.
+- **Open in Total Git** shows the repository or a worktree in the Total Git that's already running. Starting Total
+  Git again with a folder (`TotalGit.exe <folder>`) does the same.
+- **Resolve Conflict in Total Git** is on conflicted files in Source Control. It opens the merge window and stages
+  the file once it's saved.
+
+The source is in `vscode/`. `npm ci` then `npm run package` builds `totalgit.vsix`.
 
 ## Build from source
 

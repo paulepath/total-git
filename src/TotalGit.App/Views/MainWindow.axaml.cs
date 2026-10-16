@@ -290,6 +290,18 @@ public partial class MainWindow : Window, IDialogService
         s.MainWindowPlacement = new WindowPlacement(_normalPosition.X, _normalPosition.Y, _normalSize.Width, _normalSize.Height, _maximized);
     }
 
+    /// <summary>Restores the window if minimised and brings it to the front (when Total Git is started again).</summary>
+    public void BringToFront()
+    {
+        if (WindowState == WindowState.Minimized) WindowState = _maximized ? WindowState.Maximized : WindowState.Normal;
+        Activate();
+        // Activate alone may only flash the taskbar; the second start allowed this process to take the foreground.
+        if (OperatingSystem.IsWindows() && TryGetPlatformHandle()?.Handle is { } handle) SetForegroundWindow(handle);
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool SetForegroundWindow(IntPtr window);
+
     // ------------------------------------------------------------------ IDialogService
 
     public async Task<string?> PickFolderAsync()

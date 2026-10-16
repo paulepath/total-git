@@ -42,6 +42,60 @@ public static class VsCodeLauncher
         Process.Start(psi)?.Dispose();
     }
 
+    /// <summary>
+    /// Runs VS Code's command line (e.g. <c>--install-extension</c>) and waits for it. Returns its exit code and output.
+    /// </summary>
+    public static async Task<(int Exit, string Output)> RunCliAsync(string? configuredPath, params string[] args)
+    {
+        var cli = ResolveCli(configuredPath)
+            ?? throw new FileNotFoundException("Visual Studio Code was not found. Set its path in settings.json (VsCodePath).");
+        ProcessStartInfo psi;
+        if (cli.EndsWith(".cmd", StringComparison.OrdinalIgnoreCase))
+        {
+            var quoted = string.Join(' ', args.Select(a => a.StartsWith('-') ? a : $"\"{a}\""));
+            psi = new ProcessStartInfo("cmd.exe") { Arguments = $"/s /c \"\"{cli}\" {quoted}\"" };
+        }
+        else
+        {
+            psi = new ProcessStartInfo(cli);
+            foreach (var a in args) psi.ArgumentList.Add(a);
+        }
+        psi.UseShellExecute = false;
+        psi.CreateNoWindow = true;
+        psi.RedirectStandardOutput = true;
+        psi.RedirectStandardError = true;
+
+        using var process = Process.Start(psi) ?? throw new FileNotFoundException($"Couldn't start {cli}.");
+        var output = process.StandardOutput.ReadToEndAsync();
+        var error = process.StandardError.ReadToEndAsync();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+        try
+        {
+            await process.WaitForExitAsync(timeout.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            process.Kill(entireProcessTree: true);
+            throw new TimeoutException("VS Code's command line didn't finish within two minutes.");
+        }
+        return (process.ExitCode, ((await output) + (await error)).Trim());
+    }
+
+    /// <summary>
+    /// VS Code's command-line script: Code.exe itself starts the editor, so commands like --install-extension go
+    /// through bin\code.cmd beside it.
+    /// </summary>
+    public static string? ResolveCli(string? configuredPath = null)
+    {
+        if (Resolve(configuredPath) is not { } found) return null;
+        if (OperatingSystem.IsWindows() && Path.GetFileName(found).Equals("Code.exe", StringComparison.OrdinalIgnoreCase))
+        {
+            var cli = Path.Combine(Path.GetDirectoryName(found)!, "bin", "code.cmd");
+            return File.Exists(cli) ? cli : null;
+        }
+        return found;
+    }
+
     public static string? Resolve(string? configuredPath = null)
     {
         if (!string.IsNullOrWhiteSpace(configuredPath) && File.Exists(configuredPath)) return configuredPath;

@@ -1,0 +1,6 @@
+**
+!dist/extension.js
+!resources/**
+!icon.png
+!README.md
+!package.json

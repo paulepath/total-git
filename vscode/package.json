@@ -1,0 +1,219 @@
+{
+  "name": "totalgit",
+  "displayName": "Total Git",
+  "description": "See a repository's worktrees and switch between them, and open things in Total Git.",
+  "version": "0.3.0",
+  "publisher": "paulepath",
+  "license": "UNLICENSED",
+  "private": true,
+  "icon": "icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/paulepath/total-git"
+  },
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "SCM Providers",
+    "Other"
+  ],
+  "keywords": [
+    "git",
+    "worktree",
+    "worktrees",
+    "total git"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "totalgit",
+          "title": "Total Git",
+          "icon": "resources/activity.svg"
+        }
+      ]
+    },
+    "views": {
+      "totalgit": [
+        {
+          "id": "totalgit.worktrees",
+          "name": "Worktrees",
+          "icon": "resources/activity.svg"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "totalgit.switchWorktree",
+        "title": "Switch Worktree…",
+        "category": "Total Git",
+        "icon": "$(arrow-swap)"
+      },
+      {
+        "command": "totalgit.openWorktreeInNewWindow",
+        "title": "Open Worktree in New Window…",
+        "category": "Total Git",
+        "icon": "$(empty-window)"
+      },
+      {
+        "command": "totalgit.openInTotalGit",
+        "title": "Open in Total Git",
+        "category": "Total Git",
+        "icon": {
+          "light": "resources/totalgit-light.svg",
+          "dark": "resources/totalgit-dark.svg"
+        }
+      },
+      {
+        "command": "totalgit.resolveInTotalGit",
+        "title": "Resolve Conflict in Total Git",
+        "category": "Total Git",
+        "icon": "$(git-merge)"
+      },
+      {
+        "command": "totalgit.refresh",
+        "title": "Refresh Worktrees",
+        "category": "Total Git",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "totalgit.revealWorktree",
+        "title": "Reveal in File Explorer",
+        "category": "Total Git"
+      },
+      {
+        "command": "totalgit.openWorktreeInTerminal",
+        "title": "Open in Terminal",
+        "category": "Total Git"
+      },
+      {
+        "command": "totalgit.copyWorktreePath",
+        "title": "Copy Path",
+        "category": "Total Git"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "totalgit.openInTotalGit",
+          "when": "view == totalgit.worktrees",
+          "group": "navigation@1"
+        },
+        {
+          "command": "totalgit.refresh",
+          "when": "view == totalgit.worktrees",
+          "group": "navigation@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "totalgit.openWorktreeInNewWindow",
+          "when": "view == totalgit.worktrees && viewItem =~ /\\bopenable\\b/",
+          "group": "inline@1"
+        },
+        {
+          "command": "totalgit.openInTotalGit",
+          "when": "view == totalgit.worktrees && viewItem =~ /\\bopenable\\b/",
+          "group": "inline@2"
+        },
+        {
+          "command": "totalgit.switchWorktree",
+          "when": "view == totalgit.worktrees && viewItem =~ /\\bother openable\\b/",
+          "group": "1_open@1"
+        },
+        {
+          "command": "totalgit.openWorktreeInNewWindow",
+          "when": "view == totalgit.worktrees && viewItem =~ /\\bopenable\\b/",
+          "group": "1_open@2"
+        },
+        {
+          "command": "totalgit.openInTotalGit",
+          "when": "view == totalgit.worktrees && viewItem =~ /\\bopenable\\b|^repo$/",
+          "group": "2_totalgit@1"
+        },
+        {
+          "command": "totalgit.revealWorktree",
+          "when": "view == totalgit.worktrees && viewItem =~ /\\bopenable\\b/",
+          "group": "3_folder@1"
+        },
+        {
+          "command": "totalgit.openWorktreeInTerminal",
+          "when": "view == totalgit.worktrees && viewItem =~ /\\bopenable\\b/",
+          "group": "3_folder@2"
+        },
+        {
+          "command": "totalgit.copyWorktreePath",
+          "when": "view == totalgit.worktrees && viewItem =~ /^worktree/",
+          "group": "3_folder@3"
+        }
+      ],
+      "scm/resourceState/context": [
+        {
+          "command": "totalgit.resolveInTotalGit",
+          "when": "scmProvider == git && scmResourceGroup == merge",
+          "group": "inline@0"
+        },
+        {
+          "command": "totalgit.resolveInTotalGit",
+          "when": "scmProvider == git && scmResourceGroup == merge",
+          "group": "1_modification@0"
+        }
+      ],
+      "editor/title/context": [
+        {
+          "command": "totalgit.resolveInTotalGit",
+          "when": "resourceScheme == file && git.state == initialized",
+          "group": "totalgit@1"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "totalgit.revealWorktree",
+          "when": "false"
+        },
+        {
+          "command": "totalgit.openWorktreeInTerminal",
+          "when": "false"
+        },
+        {
+          "command": "totalgit.copyWorktreePath",
+          "when": "false"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Total Git",
+      "properties": {
+        "totalGit.path": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Path to `TotalGit.exe`. Leave empty to use the installed copy (`%LOCALAPPDATA%\\TotalGitApp\\current\\TotalGit.exe`).",
+          "scope": "machine"
+        },
+        "totalGit.showStatusBar": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the current worktree in the status bar (click it to switch)."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "check": "tsc -p .",
+    "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --platform=node --format=cjs --target=node20 --external:vscode",
+    "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test test/worktrees.test.ts",
+    "package": "npm run check && npm test && npm run build && vsce package --skip-license --out totalgit.vsix"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "@types/vscode": "1.95.0",
+    "@vscode/vsce": "3.9.2",
+    "esbuild": "0.28.2",
+    "typescript": "5.9.3"
+  }
+}

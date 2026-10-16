@@ -126,6 +126,21 @@
               <TextBlock Classes="label" Text="VS Code" />
             </StackPanel>
           </Button>
+          <!-- The Total Git extension for VS Code (worktrees in VS Code), bundled with each release. -->
+          <Button Classes="tool" MinWidth="0" Padding="2,4" Margin="-6,0,0,0" IsVisible="{Binding OffersVsCodeExtension}"
+                  ToolTip.Tip="The Total Git extension for VS Code">
+            <PathIcon Data="{StaticResource ChevronIcon}" Width="10" Height="10" Foreground="#A9AFB8">
+              <PathIcon.RenderTransform>
+                <RotateTransform Angle="90" />
+              </PathIcon.RenderTransform>
+            </PathIcon>
+            <Button.Flyout>
+              <MenuFlyout Placement="BottomEdgeAlignedLeft" Opening="OnVsCodeMenuOpening">
+                <MenuItem Header="Open in VS Code" Command="{Binding OpenInVsCodeCommand}" />
+                <MenuItem Header="{Binding VsCodeExtensionText}" Command="{Binding InstallVsCodeExtensionCommand}" />
+              </MenuFlyout>
+            </Button.Flyout>
+          </Button>
           <Button Classes="tool" Command="{Binding OpenInVisualStudioCommand}" ToolTip.Tip="Open this worktree's solution (.sln/.slnx) in Visual Studio">
             <StackPanel>
               <PathIcon Data="{StaticResource VisualStudioIcon}" Foreground="#A77BDB" />

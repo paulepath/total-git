@@ -45,6 +45,20 @@ jobs:
         shell: pwsh
         run: Remove-Item publish/*.pdb
 
+      # The VS Code extension, same version, shipped beside the app (Total Git installs and updates it in VS Code).
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+
+      - name: Package VS Code extension
+        working-directory: vscode
+        shell: pwsh
+        run: |
+          npm ci --no-audit --no-fund
+          npm version ${{ env.VERSION }} --no-git-tag-version --allow-same-version
+          npm run package
+          Copy-Item totalgit.vsix ../publish/totalgit.vsix
+
       - name: Install vpk
         run: dotnet tool install -g vpk --version ${{ env.VPK_VERSION }}
 
