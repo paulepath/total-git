@@ -1,45 +1,46 @@
 <UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:t="using:TotalGit.App.Services"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:TotalGit.App.ViewModels"
              xmlns:views="using:TotalGit.App.Views"
              x:Class="TotalGit.App.Views.CommitDetailsView"
              x:DataType="vm:CommitDetailsViewModel">
   <Grid RowDefinitions="Auto,*">
-    <Border Grid.Row="0" Padding="14,12" BorderBrush="#30353C" BorderThickness="0,0,0,1">
+    <Border Grid.Row="0" Padding="14,12" BorderBrush="{x:Static t:Palette.Border}" BorderThickness="0,0,0,1">
       <StackPanel Spacing="10">
         <Grid ColumnDefinitions="Auto,*">
           <Panel Width="40" Height="40" VerticalAlignment="Top">
-            <Border CornerRadius="20" Background="#3A4250" IsVisible="{Binding Avatar, Converter={x:Static ObjectConverters.IsNull}}">
+            <Border CornerRadius="20" Background="{x:Static t:Palette.NeutralChip}" IsVisible="{Binding Avatar, Converter={x:Static ObjectConverters.IsNull}}">
               <TextBlock Text="{Binding Initials}" HorizontalAlignment="Center" VerticalAlignment="Center"
                          FontWeight="SemiBold" Foreground="White" />
             </Border>
             <!-- Black behind the avatar so transparent logos stay clear, as in the graph. -->
-            <Border CornerRadius="20" ClipToBounds="True" Background="Black" IsVisible="{Binding Avatar, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <Border CornerRadius="20" ClipToBounds="True" Background="{x:Static t:Palette.NodeHole}" IsVisible="{Binding Avatar, Converter={x:Static ObjectConverters.IsNotNull}}">
               <Image Source="{Binding Avatar}" Stretch="UniformToFill" />
             </Border>
           </Panel>
           <StackPanel Grid.Column="1" Margin="10,0,0,0" Spacing="1">
-            <TextBlock Text="{Binding AuthorName}" FontWeight="SemiBold" Foreground="#E6E8EB" />
-            <TextBlock Text="{Binding AuthorEmail}" FontSize="11" Foreground="#8A9099" />
-            <TextBlock Text="{Binding AuthorDate}" FontSize="11" Foreground="#8A9099" />
+            <TextBlock Text="{Binding AuthorName}" FontWeight="SemiBold" Foreground="{x:Static t:Palette.TextPrimary}" />
+            <TextBlock Text="{Binding AuthorEmail}" FontSize="11" Foreground="{x:Static t:Palette.TextMuted}" />
+            <TextBlock Text="{Binding AuthorDate}" FontSize="11" Foreground="{x:Static t:Palette.TextMuted}" />
           </StackPanel>
         </Grid>
 
-        <SelectableTextBlock Text="{Binding Summary}" FontSize="14" FontWeight="SemiBold" Foreground="#E6E8EB" TextWrapping="Wrap" />
-        <SelectableTextBlock Text="{Binding Body}" FontSize="12" Foreground="#C2C7CE" TextWrapping="Wrap" IsVisible="{Binding HasBody}" />
-        <TextBlock Text="{Binding CommitterText}" FontSize="11" Foreground="#8A9099" IsVisible="{Binding CommitterDiffers}" />
+        <SelectableTextBlock Text="{Binding Summary}" FontSize="14" FontWeight="SemiBold" Foreground="{x:Static t:Palette.TextPrimary}" TextWrapping="Wrap" />
+        <SelectableTextBlock Text="{Binding Body}" FontSize="12" Foreground="{x:Static t:Palette.TextSoft}" TextWrapping="Wrap" IsVisible="{Binding HasBody}" />
+        <TextBlock Text="{Binding CommitterText}" FontSize="11" Foreground="{x:Static t:Palette.TextMuted}" IsVisible="{Binding CommitterDiffers}" />
 
         <WrapPanel Orientation="Horizontal">
-          <TextBlock Text="commit" FontSize="11" Foreground="#8A9099" VerticalAlignment="Center" Margin="0,0,6,0" />
+          <TextBlock Text="commit" FontSize="11" Foreground="{x:Static t:Palette.TextMuted}" VerticalAlignment="Center" Margin="0,0,6,0" />
           <Button x:Name="CopyShaButton" FontFamily="Cascadia Mono, Consolas, monospace" FontSize="11"
                   Padding="6,1" MinHeight="0" ToolTip.Tip="Click to copy the full SHA">
             <StackPanel Orientation="Horizontal" Spacing="5">
               <TextBlock x:Name="ShaText" Text="{Binding ShortSha}" VerticalAlignment="Center" />
-              <TextBlock x:Name="CopiedText" Text="Copied ✓" Foreground="#4CC38A" VerticalAlignment="Center" IsVisible="False" />
-              <PathIcon Data="{StaticResource CopyIcon}" Width="10" Height="10" Foreground="#8A9099" VerticalAlignment="Center" />
+              <TextBlock x:Name="CopiedText" Text="Copied ✓" Foreground="{x:Static t:Palette.Success}" VerticalAlignment="Center" IsVisible="False" />
+              <PathIcon Data="{StaticResource CopyIcon}" Width="10" Height="10" Foreground="{x:Static t:Palette.TextMuted}" VerticalAlignment="Center" />
             </StackPanel>
           </Button>
-          <TextBlock Text="parents" FontSize="11" Foreground="#8A9099" VerticalAlignment="Center" Margin="12,0,6,0" />
+          <TextBlock Text="parents" FontSize="11" Foreground="{x:Static t:Palette.TextMuted}" VerticalAlignment="Center" Margin="12,0,6,0" />
           <ItemsControl ItemsSource="{Binding Parents}">
             <ItemsControl.ItemsPanel>
               <ItemsPanelTemplate>

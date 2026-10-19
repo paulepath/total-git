@@ -2,6 +2,8 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using Avalonia.Styling;
+using Avalonia.VisualTree;
 using TotalGit.App.Services;
 using TotalGit.App.ViewModels;
 using TotalGit.App.Views;
@@ -13,7 +15,41 @@ namespace TotalGit.App;
 
 public partial class App : Application
 {
-    public override void Initialize() => AvaloniaXamlLoader.Load(this);
+    private static readonly List<Window> OpenWindows = [];
+
+    public override void Initialize()
+    {
+        AvaloniaXamlLoader.Load(this);
+        // The app's own colours follow Fluent's theme (which follows Windows when the choice is "System").
+        Palette.Apply(ActualThemeVariant);
+        ActualThemeVariantChanged += (_, _) => OnThemeChanged();
+        Window.WindowOpenedEvent.AddClassHandler<Window>((w, _) =>
+        {
+            OpenWindows.Add(w);
+            w.Closed += (_, _) => OpenWindows.Remove(w);
+        });
+    }
+
+    /// <summary>Applies a theme choice: "Dark", "Light" or "System".</summary>
+    public static void SetTheme(string? choice)
+    {
+        if (Current is not { } app) return;
+        app.RequestedThemeVariant = choice switch
+        {
+            "Light" => ThemeVariant.Light,
+            "System" => ThemeVariant.Default,
+            _ => ThemeVariant.Dark,
+        };
+    }
+
+    private void OnThemeChanged()
+    {
+        Palette.Apply(ActualThemeVariant);
+        // Controls that draw themselves paint with the palette's brushes; redraw them in the new colours.
+        foreach (var window in OpenWindows.ToList())
+            foreach (var visual in window.GetVisualDescendants())
+                visual.InvalidateVisual();
+    }
 
     public override void OnFrameworkInitializationCompleted()
     {
@@ -21,6 +57,9 @@ public partial class App : Application
         {
             // Dark-tile icon in every window's title bar; the taskbar keeps the transparent one.
             Window.WindowOpenedEvent.AddClassHandler<Window>((w, _) => TitleBarIcon.Apply(w));
+
+            // The theme first, so no window opens in the wrong one. (Only read: the merge window never saves settings.)
+            SetTheme(AppSettings.Load().Theme);
 
             // TotalGit --merge <file>: just the merge window, for git mergetool or another app.
             if (TotalGit.Core.Git.MergeCommandLine.IsMerge(desktop.Args ?? []))

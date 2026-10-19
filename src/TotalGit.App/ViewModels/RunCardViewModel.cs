@@ -110,8 +110,8 @@ public sealed partial class RunCardViewModel : ObservableObject
 /// <summary>The workflow rail's colours.</summary>
 public static class RunRailColors
 {
-    public static readonly IBrush Queued = new SolidColorBrush(Color.Parse("#8A9099"));
-    public static readonly IBrush Cancelled = new SolidColorBrush(Color.Parse("#4A5059"));
+    public static readonly IBrush Queued = Palette.TextMuted;
+    public static readonly IBrush Cancelled = Palette.Cancelled;
 
     public static IBrush For(RunRail rail) => rail switch
     {

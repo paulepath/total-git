@@ -250,4 +250,22 @@ public partial class ShellViewModel : ObservableObject
 
     [RelayCommand]
     private void RestartToUpdate() => _updates?.RestartToUpdate();
+
+    // ------------------------------------------------------------------ theme
+
+    public bool IsDarkTheme => _settings.Theme is not ("Light" or "System");
+    public bool IsLightTheme => _settings.Theme == "Light";
+    public bool IsSystemTheme => _settings.Theme == "System";
+
+    /// <summary>"Dark", "Light" or "System" (follow Windows); applies at once and is remembered.</summary>
+    [RelayCommand]
+    private void SetTheme(string choice)
+    {
+        _settings.Theme = choice;
+        _settings.Save();
+        App.SetTheme(choice);
+        OnPropertyChanged(nameof(IsDarkTheme));
+        OnPropertyChanged(nameof(IsLightTheme));
+        OnPropertyChanged(nameof(IsSystemTheme));
+    }
 }

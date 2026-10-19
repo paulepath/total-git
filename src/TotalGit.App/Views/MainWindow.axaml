@@ -1,4 +1,5 @@
 <Window xmlns="https://github.com/avaloniaui"
+        xmlns:t="using:TotalGit.App.Services"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:TotalGit.App.ViewModels"
         xmlns:views="using:TotalGit.App.Views"
@@ -8,7 +9,7 @@
         Title="{Binding WindowTitle}"
         Width="1500" Height="900"
 
-        Background="{StaticResource WindowBackgroundBrush}">
+        Background="{x:Static t:Palette.Surface}">
   <Window.KeyBindings>
     <KeyBinding Gesture="F5" Command="{Binding SelectedTab.RefreshCommand}" />
     <KeyBinding Gesture="Ctrl+O" Command="{Binding OpenRepositoryCommand}" />
@@ -24,21 +25,21 @@
       <Setter Property="Margin" Value="0,0,1,0" />
       <Setter Property="MinHeight" Value="0" />
       <Setter Property="CornerRadius" Value="6,6,0,0" />
-      <Setter Property="Background" Value="#1F2328" />
+      <Setter Property="Background" Value="{x:Static t:Palette.Tab}" />
     </Style>
     <Style Selector="ListBox#TabStrip ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-      <Setter Property="Background" Value="#262A31" />
+      <Setter Property="Background" Value="{x:Static t:Palette.TabHover}" />
     </Style>
     <!-- The selected tab joins the toolbar below it. -->
     <Style Selector="ListBox#TabStrip ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
-      <Setter Property="Background" Value="{StaticResource ToolbarBackgroundBrush}" />
+      <Setter Property="Background" Value="{x:Static t:Palette.Toolbar}" />
     </Style>
     <!-- A coloured tab: tinted, a little stronger when selected. -->
     <Style Selector="ListBox#TabStrip ListBoxItem:selected Border.tabTint" x:DataType="vm:RepositoryViewModel">
       <Setter Property="Background" Value="{Binding TabTintStrong}" />
     </Style>
     <Style Selector="ListBox#TabStrip ListBoxItem:selected TextBlock.tabTitle">
-      <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
+      <Setter Property="Foreground" Value="{x:Static t:Palette.TextPrimary}" />
     </Style>
     <Style Selector="Button.tabClose">
       <Setter Property="Background" Value="Transparent" />
@@ -54,10 +55,10 @@
   <DockPanel>
     <!-- Our own title bar (the window extends into the system one) so the app icon can be larger than
          Windows' small title-bar icon. Windows still draws the minimise/maximise/close buttons on the right. -->
-    <Border x:Name="TitleRow" DockPanel.Dock="Top" Height="32" Background="#16191D" chrome:WindowDecorationProperties.ElementRole="TitleBar">
+    <Border x:Name="TitleRow" DockPanel.Dock="Top" Height="32" Background="{x:Static t:Palette.Chrome}" chrome:WindowDecorationProperties.ElementRole="TitleBar">
       <StackPanel Orientation="Horizontal" Spacing="9" Margin="9,0,150,0" VerticalAlignment="Center" IsHitTestVisible="False">
         <Image Source="/Assets/totalgit-dark.png" Width="20" Height="20" RenderOptions.BitmapInterpolationMode="HighQuality" />
-        <TextBlock Text="{Binding WindowTitle}" FontSize="12" Foreground="#C2C7CE" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+        <TextBlock Text="{Binding WindowTitle}" FontSize="12" Foreground="{x:Static t:Palette.TextSoft}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
       </StackPanel>
     </Border>
 
@@ -66,7 +67,7 @@
     <LayoutTransformControl x:Name="ZoomHost">
     <DockPanel>
     <!-- Tab strip -->
-    <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,Auto,*,Auto" Background="#16191D">
+    <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,Auto,*,Auto" Background="{x:Static t:Palette.Chrome}">
       <ListBox Grid.Column="0" x:Name="TabStrip" ItemsSource="{Binding Tabs}" SelectedItem="{Binding SelectedTab}"
                Background="Transparent" Margin="6,6,0,0" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
         <ListBox.ItemsPanel>
@@ -83,9 +84,9 @@
               <Grid ColumnDefinitions="Auto,*,Auto">
                 <Panel Margin="12,0,8,0" VerticalAlignment="Center">
                   <Image Source="{Binding TabIcon}" Width="14" Height="14" IsVisible="{Binding HasTabIcon}" />
-                  <PathIcon Data="{StaticResource FolderIcon}" Width="12" Height="12" Foreground="#8A9099" IsVisible="{Binding HasNoTabIcon}" />
+                  <PathIcon Data="{StaticResource FolderIcon}" Width="12" Height="12" Foreground="{x:Static t:Palette.TextMuted}" IsVisible="{Binding HasNoTabIcon}" />
                 </Panel>
-                <TextBlock Grid.Column="1" Classes="tabTitle" Text="{Binding TabTitle}" FontSize="12" Foreground="#A9AFB8"
+                <TextBlock Grid.Column="1" Classes="tabTitle" Text="{Binding TabTitle}" FontSize="12" Foreground="{x:Static t:Palette.TextSecondary}"
                            VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
                 <Button Grid.Column="2" Classes="tabClose" Margin="6,0,6,0" ToolTip.Tip="Close tab (Ctrl+W)"
                         Command="{Binding $parent[Window].((vm:ShellViewModel)DataContext).CloseTabCommand}" CommandParameter="{Binding}">
@@ -99,18 +100,33 @@
 
       <Button Grid.Column="1" Command="{Binding NewTabCommand}" Background="Transparent" Padding="8" Margin="4,6,0,0"
               VerticalAlignment="Center" ToolTip.Tip="New tab (Ctrl+T)">
-        <PathIcon Data="{StaticResource PlusIcon}" Width="12" Height="12" Foreground="#A9AFB8" />
+        <PathIcon Data="{StaticResource PlusIcon}" Width="12" Height="12" Foreground="{x:Static t:Palette.TextSecondary}" />
       </Button>
 
-      <!-- Shown once an update has downloaded; stays until the user restarts. -->
-      <Button Grid.Column="3" Command="{Binding RestartToUpdateCommand}" IsVisible="{Binding HasUpdate}" Background="Transparent"
-              Padding="10,4" Margin="0,4,8,0" VerticalAlignment="Center"
-              ToolTip.Tip="{Binding UpdateVersion, StringFormat='Total Git {0} is ready. Restart to update.'}">
-        <StackPanel Orientation="Horizontal" Spacing="6">
-          <PathIcon Data="{StaticResource UpdateIcon}" Width="14" Height="14" Foreground="#4CC38A" />
-          <TextBlock Text="Restart to update" FontSize="12" Foreground="#4CC38A" VerticalAlignment="Center" />
-        </StackPanel>
-      </Button>
+      <StackPanel Grid.Column="3" Orientation="Horizontal" Margin="0,4,8,0" VerticalAlignment="Center">
+        <!-- Shown once an update has downloaded; stays until the user restarts. -->
+        <Button Command="{Binding RestartToUpdateCommand}" IsVisible="{Binding HasUpdate}" Background="Transparent"
+                Padding="10,4" VerticalAlignment="Center"
+                ToolTip.Tip="{Binding UpdateVersion, StringFormat='Total Git {0} is ready. Restart to update.'}">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <PathIcon Data="{StaticResource UpdateIcon}" Width="14" Height="14" Foreground="{x:Static t:Palette.Success}" />
+            <TextBlock Text="Restart to update" FontSize="12" Foreground="{x:Static t:Palette.Success}" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+        <Button x:Name="ThemeButton" Background="Transparent" Padding="8" VerticalAlignment="Center" ToolTip.Tip="Dark or light">
+          <PathIcon Data="{StaticResource ThemeIcon}" Width="14" Height="14" Foreground="{x:Static t:Palette.TextSecondary}" />
+          <Button.Flyout>
+            <MenuFlyout Placement="BottomEdgeAlignedRight">
+              <MenuItem Header="Dark" ToggleType="Radio" IsChecked="{Binding IsDarkTheme, Mode=OneWay}"
+                        Command="{Binding SetThemeCommand}" CommandParameter="Dark" />
+              <MenuItem Header="Light" ToggleType="Radio" IsChecked="{Binding IsLightTheme, Mode=OneWay}"
+                        Command="{Binding SetThemeCommand}" CommandParameter="Light" />
+              <MenuItem Header="Follow Windows" ToggleType="Radio" IsChecked="{Binding IsSystemTheme, Mode=OneWay}"
+                        Command="{Binding SetThemeCommand}" CommandParameter="System" />
+            </MenuFlyout>
+          </Button.Flyout>
+        </Button>
+      </StackPanel>
     </Grid>
 
     <!-- One view per tab, only the selected one visible, so each keeps its scroll position and selection. -->
@@ -131,9 +147,9 @@
 
     <!-- Shows the zoom level for a moment after it changes. -->
     <Border x:Name="ZoomIndicator" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,24,24"
-            Background="#E62B2F36" BorderBrush="#4A505A" BorderThickness="1" CornerRadius="8" Padding="14,6"
+            Background="{x:Static t:Palette.ZoomOverlay}" BorderBrush="{x:Static t:Palette.BorderInput}" BorderThickness="1" CornerRadius="8" Padding="14,6"
             IsVisible="False" IsHitTestVisible="False">
-      <TextBlock x:Name="ZoomText" FontSize="16" FontWeight="SemiBold" Foreground="#E6E8EB" />
+      <TextBlock x:Name="ZoomText" FontSize="16" FontWeight="SemiBold" Foreground="{x:Static t:Palette.TextPrimary}" />
     </Border>
     </Panel>
   </DockPanel>

@@ -129,8 +129,8 @@ public sealed class PrCardViewModel
 /// <summary>The status rail's colours.</summary>
 public static class PrRailColors
 {
-    public static readonly IBrush YourReview = new SolidColorBrush(Color.Parse("#5AA9F2"));
-    public static readonly IBrush Draft = new SolidColorBrush(Color.Parse("#5C636D"));
+    public static readonly IBrush YourReview = Palette.Accent;
+    public static readonly IBrush Draft = Palette.Draft;
 
     public static IBrush For(PrRail rail) => rail switch
     {

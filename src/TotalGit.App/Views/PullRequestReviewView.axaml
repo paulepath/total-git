@@ -1,19 +1,20 @@
 <UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:t="using:TotalGit.App.Services"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:TotalGit.App.ViewModels"
              xmlns:views="using:TotalGit.App.Views"
              x:Class="TotalGit.App.Views.PullRequestReviewView"
              x:DataType="vm:PullRequestReviewViewModel"
-             Background="#1C1F24">
+             Background="{x:Static t:Palette.Surface}">
   <UserControl.Styles>
     <Style Selector="TextBlock.muted">
       <Setter Property="FontSize" Value="11" />
-      <Setter Property="Foreground" Value="#8A9099" />
+      <Setter Property="Foreground" Value="{x:Static t:Palette.TextMuted}" />
     </Style>
     <Style Selector="TextBlock.section">
       <Setter Property="FontSize" Value="10.5" />
       <Setter Property="FontWeight" Value="SemiBold" />
-      <Setter Property="Foreground" Value="#7D848E" />
+      <Setter Property="Foreground" Value="{x:Static t:Palette.TextHeader}" />
       <Setter Property="LetterSpacing" Value="0.8" />
     </Style>
     <Style Selector="Button.link">
@@ -21,14 +22,14 @@
       <Setter Property="Padding" Value="4,0" />
       <Setter Property="MinHeight" Value="0" />
       <Setter Property="FontSize" Value="11" />
-      <Setter Property="Foreground" Value="#5AA9F2" />
+      <Setter Property="Foreground" Value="{x:Static t:Palette.Accent}" />
     </Style>
     <Style Selector="Button.small.ready">
-      <Setter Property="Background" Value="#238636" />
+      <Setter Property="Background" Value="{x:Static t:Palette.GreenButton}" />
       <Setter Property="Foreground" Value="White" />
     </Style>
     <Style Selector="Button.small.ready:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-      <Setter Property="Background" Value="#2EA043" />
+      <Setter Property="Background" Value="{x:Static t:Palette.GreenButtonHover}" />
       <Setter Property="Foreground" Value="White" />
     </Style>
     <Style Selector="Button.small, ToggleButton.small">
@@ -37,23 +38,24 @@
       <Setter Property="FontSize" Value="12" />
     </Style>
     <Style Selector="ToggleButton.small:checked /template/ ContentPresenter#PART_ContentPresenter">
-      <Setter Property="Background" Value="#1F4E7A" />
+      <Setter Property="Background" Value="{x:Static t:Palette.SelectedFill}" />
+      <Setter Property="Foreground" Value="{x:Static t:Palette.SelectedFillText}" />
     </Style>
     <!-- The open file's Approve / Reject switch. -->
     <Style Selector="Button.seg.approvedOn">
-      <Setter Property="Background" Value="#2FA36B" />
+      <Setter Property="Background" Value="{x:Static t:Palette.ApproveButton}" />
       <Setter Property="Foreground" Value="White" />
     </Style>
     <Style Selector="Button.seg.approvedOn:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-      <Setter Property="Background" Value="#38B87A" />
+      <Setter Property="Background" Value="{x:Static t:Palette.ApproveButtonHover}" />
       <Setter Property="Foreground" Value="White" />
     </Style>
     <Style Selector="Button.seg.rejectedOn">
-      <Setter Property="Background" Value="#D9474D" />
+      <Setter Property="Background" Value="{x:Static t:Palette.RejectButton}" />
       <Setter Property="Foreground" Value="White" />
     </Style>
     <Style Selector="Button.seg.rejectedOn:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-      <Setter Property="Background" Value="#E5585E" />
+      <Setter Property="Background" Value="{x:Static t:Palette.RejectButtonHover}" />
       <Setter Property="Foreground" Value="White" />
     </Style>
     <!-- The review box: ☐ not reviewed, ☑ approved (green), ☒ rejected (red), ◩ changed since, in the verdict's colour. -->
@@ -84,29 +86,29 @@
       <Setter Property="CornerRadius" Value="3" />
     </Style>
     <Style Selector="Button.commitRow.selected">
-      <Setter Property="Background" Value="#24303C" />
+      <Setter Property="Background" Value="{x:Static t:Palette.BranchChip}" />
     </Style>
     <Style Selector="Border.tab.active">
-      <Setter Property="BorderBrush" Value="#3B82C4" />
-      <Setter Property="Background" Value="#23272D" />
+      <Setter Property="BorderBrush" Value="{x:Static t:Palette.AccentBorder}" />
+      <Setter Property="Background" Value="{x:Static t:Palette.Panel}" />
     </Style>
   </UserControl.Styles>
 
   <DockPanel>
     <!-- Header: title, branches, ticket and the actions -->
-    <Border DockPanel.Dock="Top" Background="#23272D" BorderBrush="#30353C" BorderThickness="0,0,0,1" Padding="16,10">
+    <Border DockPanel.Dock="Top" Background="{x:Static t:Palette.Panel}" BorderBrush="{x:Static t:Palette.Border}" BorderThickness="0,0,0,1" Padding="16,10">
       <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
         <StackPanel Spacing="4">
-          <SelectableTextBlock TextWrapping="Wrap" FontSize="16" FontWeight="SemiBold" Foreground="#EEF0F2">
-            <Run Text="{Binding NumberText}" Foreground="#8A9099" FontWeight="Normal" />
+          <SelectableTextBlock TextWrapping="Wrap" FontSize="16" FontWeight="SemiBold" Foreground="{x:Static t:Palette.TextHeading}">
+            <Run Text="{Binding NumberText}" Foreground="{x:Static t:Palette.TextMuted}" FontWeight="Normal" />
             <Run Text="{Binding Pr.Title}" />
           </SelectableTextBlock>
           <StackPanel Orientation="Horizontal" Spacing="8">
-            <Border Background="#3A4250" CornerRadius="9" Padding="7,1" IsVisible="{Binding Pr.IsDraft}">
-              <TextBlock Text="Draft" FontSize="11" Foreground="#C2C7CE" />
+            <Border Background="{x:Static t:Palette.NeutralChip}" CornerRadius="9" Padding="7,1" IsVisible="{Binding Pr.IsDraft}">
+              <TextBlock Text="Draft" FontSize="11" Foreground="{x:Static t:Palette.TextSoft}" />
             </Border>
-            <Border Background="#24303C" CornerRadius="3" Padding="6,1">
-              <TextBlock Text="{Binding BranchesText}" FontFamily="Cascadia Mono, Consolas, monospace" FontSize="11" Foreground="#9DC4EA" />
+            <Border Background="{x:Static t:Palette.BranchChip}" CornerRadius="3" Padding="6,1">
+              <TextBlock Text="{Binding BranchesText}" FontFamily="Cascadia Mono, Consolas, monospace" FontSize="11" Foreground="{x:Static t:Palette.BranchText}" />
             </Border>
             <Button Classes="link" IsVisible="{Binding HasTicket}" Command="{Binding OpenTicketCommand}" ToolTip.Tip="Open the ticket">
               <TextBlock Text="{Binding Ticket}" FontFamily="Cascadia Mono, Consolas, monospace" />
@@ -121,9 +123,9 @@
           <Button Classes="small" Command="{Binding LoadCommand}" ToolTip.Tip="Reload the pull request (F5)">
             <PathIcon Data="{StaticResource RefreshIcon}" Width="12" Height="12" />
           </Button>
-          <Border Background="#2A2140" CornerRadius="9" Padding="8,2" IsVisible="{Binding IsLocal}" VerticalAlignment="Center"
+          <Border Background="{x:Static t:Palette.PurpleFill}" CornerRadius="9" Padding="8,2" IsVisible="{Binding IsLocal}" VerticalAlignment="Center"
                   ToolTip.Tip="Changes that aren't in a pull request: review boxes are kept on this machine; no comments or checks.">
-            <TextBlock Text="Local review" FontSize="11" Foreground="#D9CCFA" />
+            <TextBlock Text="Local review" FontSize="11" Foreground="{x:Static t:Palette.PurpleText}" />
           </Border>
           <Button Classes="small" Command="{Binding OpenInBrowserCommand}" ToolTip.Tip="Open on the web" IsVisible="{Binding IsPullRequest}">
             <StackPanel Orientation="Horizontal" Spacing="6">
@@ -138,9 +140,9 @@
             </StackPanel>
           </Button>
           <StackPanel Orientation="Horizontal" IsVisible="{Binding HasSuggestionBatch}">
-            <Button Classes="small" Background="#238636" Foreground="White" CornerRadius="4,0,0,4" Command="{Binding CommitSuggestionBatchCommand}"
+            <Button Classes="small" Background="{x:Static t:Palette.GreenButton}" Foreground="White" CornerRadius="4,0,0,4" Command="{Binding CommitSuggestionBatchCommand}"
                     Content="{Binding CommitBatchText}" ToolTip.Tip="Commit the suggestions you gathered in one commit, and push it" />
-            <Button Classes="small" Background="#1D6F2E" Foreground="White" CornerRadius="0,4,4,0" Command="{Binding ClearSuggestionBatchCommand}"
+            <Button Classes="small" Background="{x:Static t:Palette.GreenButtonDark}" Foreground="White" CornerRadius="0,4,4,0" Command="{Binding ClearSuggestionBatchCommand}"
                     ToolTip.Tip="Empty the batch">
               <PathIcon Data="{StaticResource CloseIcon}" Width="9" Height="9" />
             </Button>
@@ -159,9 +161,9 @@
           </Button>
         </StackPanel>
         <Border Grid.Row="1" Grid.ColumnSpan="2" Margin="0,8,0,0" BorderBrush="{Binding Pr.MergeBrush}" BorderThickness="3,0,0,0"
-                Background="#262A31" Padding="8,4" CornerRadius="2" HorizontalAlignment="Left"
+                Background="{x:Static t:Palette.SubtleFill}" Padding="8,4" CornerRadius="2" HorizontalAlignment="Left"
                 IsVisible="{Binding Pr.MergeText, Converter={x:Static ObjectConverters.IsNotNull}}">
-          <TextBlock Text="{Binding Pr.MergeText}" FontSize="12" Foreground="#D5D8DD" TextWrapping="Wrap" />
+          <TextBlock Text="{Binding Pr.MergeText}" FontSize="12" Foreground="{x:Static t:Palette.TextStrong}" TextWrapping="Wrap" />
         </Border>
       </Grid>
     </Border>
@@ -170,7 +172,7 @@
     <Border DockPanel.Dock="Top" Padding="16,6" IsVisible="{Binding HasMessage}"
             Background="{Binding MessageIsError, Converter={x:Static views:ReviewConverters.MessageBackground}}">
       <Grid ColumnDefinitions="*,Auto">
-        <TextBlock Text="{Binding Message}" Foreground="#EEF0F2" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center" />
+        <TextBlock Text="{Binding Message}" Foreground="{x:Static t:Palette.TextHeading}" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center" />
         <Button Grid.Column="1" Classes="small" Background="Transparent" Command="{Binding DismissMessageCommand}" ToolTip.Tip="Dismiss">
           <PathIcon Data="{StaticResource CloseIcon}" Width="9" Height="9" />
         </Button>
@@ -179,11 +181,11 @@
 
     <Grid x:Name="Panes" ColumnDefinitions="290,4,*,4,360">
       <!-- Left: the files, with review boxes and progress -->
-      <DockPanel Grid.Column="0" Background="#20242A">
+      <DockPanel Grid.Column="0" Background="{x:Static t:Palette.Gutter}">
         <StackPanel DockPanel.Dock="Top" Margin="12,10,12,6" Spacing="6">
           <Grid ColumnDefinitions="*,Auto,Auto">
             <TextBlock Classes="section" Text="FILES" VerticalAlignment="Center" />
-            <TextBlock Grid.Column="1" Text="{Binding ProgressText}" FontSize="11.5" Foreground="#C9CED6" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1" Text="{Binding ProgressText}" FontSize="11.5" Foreground="{x:Static t:Palette.TextBody}" VerticalAlignment="Center" />
             <ToggleButton Grid.Column="2" Classes="small" IsChecked="{Binding ShowAsTree}" Margin="8,0,0,0" Padding="6,3"
                           ToolTip.Tip="Group files by folder">
               <PathIcon Data="{StaticResource FolderIcon}" Width="12" Height="12" />
@@ -191,10 +193,10 @@
           </Grid>
           <views:ReviewProgressBar Approved="{Binding ApprovedCount}" Rejected="{Binding RejectedCount}" Changed="{Binding ChangedCount}"
                                    Total="{Binding Files.Count}" />
-          <TextBlock Text="{Binding ProgressDetail}" FontSize="11" Foreground="#8A9099" TextWrapping="Wrap" />
-          <Border Background="#24303C" BorderBrush="#3B82C4" BorderThickness="3,0,0,0" CornerRadius="2" Padding="8,4" IsVisible="{Binding IsCommitView}">
+          <TextBlock Text="{Binding ProgressDetail}" FontSize="11" Foreground="{x:Static t:Palette.TextMuted}" TextWrapping="Wrap" />
+          <Border Background="{x:Static t:Palette.BranchChip}" BorderBrush="{x:Static t:Palette.AccentBorder}" BorderThickness="3,0,0,0" CornerRadius="2" Padding="8,4" IsVisible="{Binding IsCommitView}">
             <Grid ColumnDefinitions="*,Auto">
-              <TextBlock Text="{Binding CommitViewText}" FontSize="11.5" Foreground="#C9D8EA" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+              <TextBlock Text="{Binding CommitViewText}" FontSize="11.5" Foreground="{x:Static t:Palette.InfoText}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
                          ToolTip.Tip="{Binding CommitViewText}" />
               <Button Grid.Column="1" Classes="small" Content="All changes" Command="{Binding ShowAllCommitsCommand}" Margin="6,0,0,0" />
             </Grid>
@@ -224,9 +226,9 @@
               <Panel>
                 <!-- Folder: name and how many of its files are reviewed -->
                 <Grid ColumnDefinitions="Auto,*,Auto" IsVisible="{Binding IsFolder}" Background="Transparent">
-                  <PathIcon Data="{StaticResource FolderIcon}" Width="12" Height="12" Foreground="#8A9099" Margin="2,0,6,0" VerticalAlignment="Center" />
-                  <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="12" Foreground="#A9AFB8" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
-                  <TextBlock Grid.Column="2" Text="{Binding ReviewedText}" FontSize="10.5" Foreground="#6B727C" Margin="6,0,4,0" VerticalAlignment="Center" />
+                  <PathIcon Data="{StaticResource FolderIcon}" Width="12" Height="12" Foreground="{x:Static t:Palette.TextMuted}" Margin="2,0,6,0" VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="12" Foreground="{x:Static t:Palette.TextSecondary}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="2" Text="{Binding ReviewedText}" FontSize="10.5" Foreground="{x:Static t:Palette.TextDim}" Margin="6,0,4,0" VerticalAlignment="Center" />
                 </Grid>
                 <!-- File: review box, status, name, comments, size -->
                 <Grid Classes="fileRow" ColumnDefinitions="Auto,Auto,*,Auto,Auto" IsVisible="{Binding IsFile}" ToolTip.Tip="{Binding File.ToolTip}" Background="Transparent"
@@ -242,14 +244,14 @@
                     <!-- A long name fades out before the comments and line counts, which always show whole -->
                     <views:FadeOverflow>
                       <StackPanel Orientation="Horizontal" Spacing="6">
-                        <TextBlock Text="{Binding Name}" FontSize="12.5" Foreground="#E6E8EB" />
-                        <Border Background="#2B3340" CornerRadius="3" Padding="4,0" VerticalAlignment="Center"
+                        <TextBlock Text="{Binding Name}" FontSize="12.5" Foreground="{x:Static t:Palette.TextPrimary}" />
+                        <Border Background="{x:Static t:Palette.TestChip}" CornerRadius="3" Padding="4,0" VerticalAlignment="Center"
                                 IsVisible="{Binding File.IsTest, FallbackValue=False}">
-                          <TextBlock Text="test" FontSize="9.5" Foreground="#9DB8D6" />
+                          <TextBlock Text="test" FontSize="9.5" Foreground="{x:Static t:Palette.ChipText}" />
                         </Border>
                       </StackPanel>
                     </views:FadeOverflow>
-                    <TextBlock Text="{Binding File.Folder}" FontSize="10.5" Foreground="#6B727C" TextTrimming="LeadingCharacterEllipsis">
+                    <TextBlock Text="{Binding File.Folder}" FontSize="10.5" Foreground="{x:Static t:Palette.TextDim}" TextTrimming="LeadingCharacterEllipsis">
                       <TextBlock.IsVisible>
                         <MultiBinding Converter="{x:Static BoolConverters.And}">
                           <Binding Path="ShowFolder" />
@@ -260,12 +262,12 @@
                   </StackPanel>
                   <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="3" VerticalAlignment="Center" Margin="6,0,0,0"
                               IsVisible="{Binding File.HasThreads, FallbackValue=False}" ToolTip.Tip="Open comment threads">
-                    <PathIcon Data="{StaticResource CommentIcon}" Width="11" Height="11" Foreground="#8A9099" />
-                    <TextBlock Text="{Binding File.ThreadText}" FontSize="11" Foreground="#8A9099" />
+                    <PathIcon Data="{StaticResource CommentIcon}" Width="11" Height="11" Foreground="{x:Static t:Palette.TextMuted}" />
+                    <TextBlock Text="{Binding File.ThreadText}" FontSize="11" Foreground="{x:Static t:Palette.TextMuted}" />
                   </StackPanel>
                   <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center" Margin="6,0,4,0">
-                    <TextBlock Text="{Binding File.AddedText}" FontSize="10.5" Foreground="#4CC38A" FontFamily="Cascadia Mono, Consolas, monospace" />
-                    <TextBlock Text="{Binding File.DeletedText}" FontSize="10.5" Foreground="#E5484D" FontFamily="Cascadia Mono, Consolas, monospace" />
+                    <TextBlock Text="{Binding File.AddedText}" FontSize="10.5" Foreground="{x:Static t:Palette.Success}" FontFamily="Cascadia Mono, Consolas, monospace" />
+                    <TextBlock Text="{Binding File.DeletedText}" FontSize="10.5" Foreground="{x:Static t:Palette.Failure}" FontFamily="Cascadia Mono, Consolas, monospace" />
                   </StackPanel>
                 </Grid>
               </Panel>
@@ -273,22 +275,22 @@
           </TreeView.ItemTemplate>
         </TreeView>
       </DockPanel>
-      <GridSplitter Grid.Column="1" ResizeDirection="Columns" Background="#2B2F36" />
+      <GridSplitter Grid.Column="1" ResizeDirection="Columns" Background="{x:Static t:Palette.Splitter}" />
 
       <!-- Middle: the overview, or the one open file -->
       <DockPanel Grid.Column="2">
-        <Border DockPanel.Dock="Top" Background="#1F2328" BorderBrush="#30353C" BorderThickness="0,0,0,1">
+        <Border DockPanel.Dock="Top" Background="{x:Static t:Palette.SubHeader}" BorderBrush="{x:Static t:Palette.Border}" BorderThickness="0,0,0,1">
           <StackPanel Orientation="Horizontal">
             <Border x:Name="OverviewTab" Classes="tab" Classes.active="{Binding IsOverview}">
               <StackPanel Orientation="Horizontal" Spacing="6">
-                <PathIcon Data="{StaticResource PullRequestIcon}" Width="12" Height="12" Foreground="#A9AFB8" />
-                <TextBlock Text="Overview" FontSize="12.5" Foreground="#E6E8EB" />
+                <PathIcon Data="{StaticResource PullRequestIcon}" Width="12" Height="12" Foreground="{x:Static t:Palette.TextSecondary}" />
+                <TextBlock Text="Overview" FontSize="12.5" Foreground="{x:Static t:Palette.TextPrimary}" />
               </StackPanel>
             </Border>
             <Border Classes="tab active" IsVisible="{Binding HasOpenFile}">
               <StackPanel Orientation="Horizontal" Spacing="6">
                 <views:ReviewBox State="{Binding SelectedFile.State}" />
-                <TextBlock Text="{Binding OpenFileTitle}" FontSize="12.5" Foreground="#E6E8EB" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding OpenFileTitle}" FontSize="12.5" Foreground="{x:Static t:Palette.TextPrimary}" VerticalAlignment="Center" />
               </StackPanel>
             </Border>
           </StackPanel>
@@ -301,10 +303,10 @@
               <TextBlock Text="Loading the pull request…" Classes="muted" IsVisible="{Binding IsLoading}" />
 
               <!-- Since the last review -->
-              <Border Background="#2A2140" BorderBrush="#A371F7" BorderThickness="3,0,0,0" CornerRadius="3" Padding="12,8"
+              <Border Background="{x:Static t:Palette.PurpleFill}" BorderBrush="{x:Static t:Palette.Purple}" BorderThickness="3,0,0,0" CornerRadius="3" Padding="12,8"
                       IsVisible="{Binding CanShowSinceLastReview}">
                 <Grid ColumnDefinitions="*,Auto">
-                  <TextBlock Text="{Binding SinceLastReviewText}" FontSize="12.5" Foreground="#E6E8EB" TextWrapping="Wrap" VerticalAlignment="Center" />
+                  <TextBlock Text="{Binding SinceLastReviewText}" FontSize="12.5" Foreground="{x:Static t:Palette.TextPrimary}" TextWrapping="Wrap" VerticalAlignment="Center" />
                   <Button Grid.Column="1" Classes="small" Content="Show only those" Command="{Binding ShowSinceLastReviewCommand}" Margin="12,0,0,0" />
                 </Grid>
               </Border>
@@ -312,7 +314,7 @@
               <!-- Description -->
               <StackPanel Spacing="6" IsVisible="{Binding IsPullRequest}">
                 <TextBlock Classes="section" Text="DESCRIPTION" />
-                <Border Background="#23272D" CornerRadius="4" Padding="12,10">
+                <Border Background="{x:Static t:Palette.Panel}" CornerRadius="4" Padding="12,10">
                   <Panel>
                     <views:MarkdownView Markdown="{Binding Pr.Body}" IsVisible="{Binding Pr.HasBody}" />
                     <TextBlock Text="No description." Classes="muted" IsVisible="{Binding !Pr.HasBody}" />
@@ -329,7 +331,7 @@
                     <ItemsControl.ItemTemplate>
                       <DataTemplate x:DataType="vm:ReviewerItem">
                         <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,2">
-                          <TextBlock Text="{Binding Name}" FontSize="12.5" Foreground="#E6E8EB" />
+                          <TextBlock Text="{Binding Name}" FontSize="12.5" Foreground="{x:Static t:Palette.TextPrimary}" />
                           <TextBlock Text="{Binding StateText}" FontSize="11.5" Foreground="{Binding StateBrush}" VerticalAlignment="Center" />
                         </StackPanel>
                       </DataTemplate>
@@ -344,7 +346,7 @@
                       <DataTemplate x:DataType="vm:CheckItemViewModel">
                         <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,2">
                           <Ellipse Width="8" Height="8" Fill="{Binding StatusBrush}" VerticalAlignment="Center" />
-                          <TextBlock Text="{Binding Name}" FontSize="12.5" Foreground="#E6E8EB" />
+                          <TextBlock Text="{Binding Name}" FontSize="12.5" Foreground="{x:Static t:Palette.TextPrimary}" />
                           <TextBlock Text="{Binding StatusText}" FontSize="11.5" Foreground="{Binding StatusBrush}" VerticalAlignment="Center" />
                         </StackPanel>
                       </DataTemplate>
@@ -372,21 +374,21 @@
                                 Command="{Binding $parent[views:PullRequestReviewView].((vm:PullRequestReviewViewModel)DataContext).OpenFileCommand}"
                                 CommandParameter="{Binding}">
                           <TextBlock FontSize="12.5" TextTrimming="LeadingCharacterEllipsis">
-                            <Run Text="{Binding Folder, StringFormat='{}{0}/'}" Foreground="#6B727C" />
-                            <Run Text="{Binding FileName}" Foreground="#E6E8EB" />
+                            <Run Text="{Binding Folder, StringFormat='{}{0}/'}" Foreground="{x:Static t:Palette.TextDim}" />
+                            <Run Text="{Binding FileName}" Foreground="{x:Static t:Palette.TextPrimary}" />
                           </TextBlock>
                         </Button>
                         <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0">
-                          <Border Background="#4CC38A" Width="{Binding AddedBarWidth}" Height="6" CornerRadius="1" />
-                          <Border Background="#E5484D" Width="{Binding DeletedBarWidth}" Height="6" CornerRadius="1" />
+                          <Border Background="{x:Static t:Palette.Success}" Width="{Binding AddedBarWidth}" Height="6" CornerRadius="1" />
+                          <Border Background="{x:Static t:Palette.Failure}" Width="{Binding DeletedBarWidth}" Height="6" CornerRadius="1" />
                         </StackPanel>
                         <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="3" VerticalAlignment="Center" Margin="0,0,10,0" IsVisible="{Binding HasThreads}">
-                          <PathIcon Data="{StaticResource CommentIcon}" Width="11" Height="11" Foreground="#8A9099" />
-                          <TextBlock Text="{Binding ThreadText}" FontSize="11" Foreground="#8A9099" />
+                          <PathIcon Data="{StaticResource CommentIcon}" Width="11" Height="11" Foreground="{x:Static t:Palette.TextMuted}" />
+                          <TextBlock Text="{Binding ThreadText}" FontSize="11" Foreground="{x:Static t:Palette.TextMuted}" />
                         </StackPanel>
                         <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" MinWidth="80">
-                          <TextBlock Text="{Binding AddedText}" FontSize="11" Foreground="#4CC38A" FontFamily="Cascadia Mono, Consolas, monospace" />
-                          <TextBlock Text="{Binding DeletedText}" FontSize="11" Foreground="#E5484D" FontFamily="Cascadia Mono, Consolas, monospace" />
+                          <TextBlock Text="{Binding AddedText}" FontSize="11" Foreground="{x:Static t:Palette.Success}" FontFamily="Cascadia Mono, Consolas, monospace" />
+                          <TextBlock Text="{Binding DeletedText}" FontSize="11" Foreground="{x:Static t:Palette.Failure}" FontFamily="Cascadia Mono, Consolas, monospace" />
                         </StackPanel>
                       </Grid>
                     </DataTemplate>
@@ -404,10 +406,10 @@
                           </Button>
                           <Button Grid.Column="1" Classes="link" HorizontalAlignment="Left" Padding="6,0" Content="{Binding Path}"
                                   Command="{Binding $parent[views:PullRequestReviewView].((vm:PullRequestReviewViewModel)DataContext).OpenFileCommand}"
-                                  CommandParameter="{Binding}" Foreground="#8A9099" />
+                                  CommandParameter="{Binding}" Foreground="{x:Static t:Palette.TextMuted}" />
                           <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                            <TextBlock Text="{Binding AddedText}" FontSize="11" Foreground="#4CC38A" FontFamily="Cascadia Mono, Consolas, monospace" />
-                            <TextBlock Text="{Binding DeletedText}" FontSize="11" Foreground="#E5484D" FontFamily="Cascadia Mono, Consolas, monospace" />
+                            <TextBlock Text="{Binding AddedText}" FontSize="11" Foreground="{x:Static t:Palette.Success}" FontFamily="Cascadia Mono, Consolas, monospace" />
+                            <TextBlock Text="{Binding DeletedText}" FontSize="11" Foreground="{x:Static t:Palette.Failure}" FontFamily="Cascadia Mono, Consolas, monospace" />
                           </StackPanel>
                         </Grid>
                       </DataTemplate>
@@ -429,7 +431,7 @@
                               Command="{Binding $parent[views:PullRequestReviewView].((vm:PullRequestReviewViewModel)DataContext).ShowCommitCommand}"
                               CommandParameter="{Binding}" ToolTip.Tip="Show only this commit's changes (click again for all)">
                         <Grid ColumnDefinitions="*,Auto">
-                          <TextBlock Text="{Binding Summary}" FontSize="12" Foreground="#C9CED6" FontFamily="Cascadia Mono, Consolas, monospace"
+                          <TextBlock Text="{Binding Summary}" FontSize="12" Foreground="{x:Static t:Palette.TextBody}" FontFamily="Cascadia Mono, Consolas, monospace"
                                      TextTrimming="CharacterEllipsis" />
                           <TextBlock Grid.Column="1" Text="{Binding Author}" Classes="muted" Margin="12,0,0,0" />
                         </Grid>
@@ -446,17 +448,17 @@
 
           <!-- The open file -->
           <DockPanel IsVisible="{Binding HasOpenFile}">
-            <Border DockPanel.Dock="Top" Background="#23272D" BorderBrush="#30353C" BorderThickness="0,0,0,1" Padding="10,5">
+            <Border DockPanel.Dock="Top" Background="{x:Static t:Palette.Panel}" BorderBrush="{x:Static t:Palette.Border}" BorderThickness="0,0,0,1" Padding="10,5">
               <Grid ColumnDefinitions="*,Auto">
                 <Grid ColumnDefinitions="Auto,*" VerticalAlignment="Center" Margin="0,0,10,0">
-                  <TextBlock Text="{Binding SelectedFile.Path}" FontFamily="Cascadia Mono, Consolas, monospace" FontSize="12" Foreground="#E6E8EB"
+                  <TextBlock Text="{Binding SelectedFile.Path}" FontFamily="Cascadia Mono, Consolas, monospace" FontSize="12" Foreground="{x:Static t:Palette.TextPrimary}"
                              VerticalAlignment="Center" TextTrimming="LeadingCharacterEllipsis" MaxWidth="420" />
-                  <Border Grid.Column="1" Background="#2A2140" CornerRadius="3" Padding="6,1" Margin="10,0,0,0" IsVisible="{Binding HasFileNote}"
+                  <Border Grid.Column="1" Background="{x:Static t:Palette.PurpleFill}" CornerRadius="3" Padding="6,1" Margin="10,0,0,0" IsVisible="{Binding HasFileNote}"
                           HorizontalAlignment="Left" ToolTip.Tip="{Binding FileNote}">
                     <DockPanel>
-                      <Border DockPanel.Dock="Left" Width="3" Margin="0,0,6,0" Background="#A371F7"
+                      <Border DockPanel.Dock="Left" Width="3" Margin="0,0,6,0" Background="{x:Static t:Palette.Purple}"
                               IsVisible="{Binding SinceReview, Converter={x:Static ObjectConverters.IsNotNull}}" />
-                      <TextBlock Text="{Binding FileNote}" FontSize="11.5" Foreground="#D9CCFA" TextTrimming="CharacterEllipsis" />
+                      <TextBlock Text="{Binding FileNote}" FontSize="11.5" Foreground="{x:Static t:Palette.PurpleText}" TextTrimming="CharacterEllipsis" />
                     </DockPanel>
                   </Border>
                 </Grid>
@@ -509,7 +511,7 @@
                 <ScrollBar Grid.Row="1" x:Name="DiffHScrollBar" Orientation="Horizontal" AllowAutoHide="False" IsVisible="False" />
               </Grid>
               <StackPanel IsVisible="{Binding IsGeneratedHidden}" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10">
-                <TextBlock Text="Generated file, hidden" FontSize="14" Foreground="#C9CED6" HorizontalAlignment="Center" />
+                <TextBlock Text="Generated file, hidden" FontSize="14" Foreground="{x:Static t:Palette.TextBody}" HorizontalAlignment="Center" />
                 <TextBlock Text="Lock files, generated code and build output are usually not worth reading line by line." Classes="muted" HorizontalAlignment="Center" />
                 <Button Classes="small" Content="Show anyway" Command="{Binding ShowGeneratedFileCommand}" HorizontalAlignment="Center" />
               </StackPanel>
@@ -517,10 +519,10 @@
           </DockPanel>
         </Panel>
       </DockPanel>
-      <GridSplitter Grid.Column="3" ResizeDirection="Columns" Background="#2B2F36" />
+      <GridSplitter Grid.Column="3" ResizeDirection="Columns" Background="{x:Static t:Palette.Splitter}" />
 
       <!-- Right: conversation, checks, your pending review -->
-      <TabControl Grid.Column="4" Padding="0" Background="#23272D" IsVisible="{Binding IsPullRequest}">
+      <TabControl Grid.Column="4" Padding="0" Background="{x:Static t:Palette.Panel}" IsVisible="{Binding IsPullRequest}">
         <TabItem Header="{Binding Pr.ConversationTabText}">
           <ScrollViewer HorizontalScrollBarVisibility="Disabled">
             <StackPanel Margin="14,8" Spacing="10">
@@ -530,16 +532,16 @@
                   <DataTemplate x:DataType="vm:ConversationItem">
                     <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,10">
                       <views:PersonAvatar DataContext="{Binding Person}" Width="28" Height="28" VerticalAlignment="Top" Margin="0,0,10,0" />
-                      <Border Grid.Column="1" Background="#262A31" BorderBrush="#3A404A" BorderThickness="1" CornerRadius="8" ClipToBounds="True">
+                      <Border Grid.Column="1" Background="{x:Static t:Palette.Raised}" BorderBrush="{x:Static t:Palette.BorderStrong}" BorderThickness="1" CornerRadius="8" ClipToBounds="True">
                         <StackPanel>
-                          <Border Background="#2A2F37" BorderBrush="#3A404A" BorderThickness="0,0,0,1" Padding="10,5">
+                          <Border Background="{x:Static t:Palette.BoxHeader}" BorderBrush="{x:Static t:Palette.BorderStrong}" BorderThickness="0,0,0,1" Padding="10,5">
                             <WrapPanel>
-                              <TextBlock Text="{Binding Author}" FontSize="12.5" FontWeight="SemiBold" Foreground="#E6E8EB" Margin="0,0,6,0" VerticalAlignment="Center" />
-                              <Border BorderBrush="#4A515C" BorderThickness="1" CornerRadius="9" Padding="6,0" Margin="0,0,6,0" IsVisible="{Binding IsBot}" VerticalAlignment="Center">
-                                <TextBlock Text="bot" FontSize="11" Foreground="#B4BAC3" />
+                              <TextBlock Text="{Binding Author}" FontSize="12.5" FontWeight="SemiBold" Foreground="{x:Static t:Palette.TextPrimary}" Margin="0,0,6,0" VerticalAlignment="Center" />
+                              <Border BorderBrush="{x:Static t:Palette.BorderBadge}" BorderThickness="1" CornerRadius="9" Padding="6,0" Margin="0,0,6,0" IsVisible="{Binding IsBot}" VerticalAlignment="Center">
+                                <TextBlock Text="bot" FontSize="11" Foreground="{x:Static t:Palette.TextBadge}" />
                               </Border>
                               <TextBlock Text="{Binding Verdict}" FontSize="12" Foreground="{Binding VerdictBrush}" IsVisible="{Binding HasVerdict}" Margin="0,0,6,0" VerticalAlignment="Center" />
-                              <TextBlock Text="{Binding When}" ToolTip.Tip="{Binding WhenToolTip}" FontSize="12" Foreground="#969CA5" VerticalAlignment="Center" />
+                              <TextBlock Text="{Binding When}" ToolTip.Tip="{Binding WhenToolTip}" FontSize="12" Foreground="{x:Static t:Palette.TextMeta}" VerticalAlignment="Center" />
                             </WrapPanel>
                           </Border>
                           <views:MarkdownView Markdown="{Binding Body}" BaseFontSize="12.5" IsVisible="{Binding HasBody}" Margin="10,8" />
@@ -550,7 +552,7 @@
                 </ItemsControl.ItemTemplate>
               </ItemsControl>
               <StackPanel Spacing="4" IsVisible="{Binding Pr.HasFileThreads}">
-                <TextBlock Text="{Binding Pr.FileThreadsHeader}" FontSize="11" FontWeight="SemiBold" Foreground="#8A9099" />
+                <TextBlock Text="{Binding Pr.FileThreadsHeader}" FontSize="11" FontWeight="SemiBold" Foreground="{x:Static t:Palette.TextMuted}" />
                 <ItemsControl ItemsSource="{Binding Pr.FileThreads}">
                   <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="vm:ReviewThreadViewModel">
@@ -584,7 +586,7 @@
                       <Ellipse Width="8" Height="8" Fill="{Binding StatusBrush}" VerticalAlignment="Top" Margin="0,5,8,0" />
                       <StackPanel Grid.Column="1" Spacing="1">
                         <StackPanel Orientation="Horizontal" Spacing="6">
-                          <TextBlock Text="{Binding Name}" FontSize="12" Foreground="#E6E8EB" TextTrimming="CharacterEllipsis" />
+                          <TextBlock Text="{Binding Name}" FontSize="12" Foreground="{x:Static t:Palette.TextPrimary}" TextTrimming="CharacterEllipsis" />
                           <TextBlock Text="required" Classes="muted" IsVisible="{Binding IsRequired}" VerticalAlignment="Center" />
                         </StackPanel>
                         <TextBlock Text="{Binding Description}" Classes="muted" TextWrapping="Wrap" IsVisible="{Binding HasDescription}" />
@@ -606,17 +608,17 @@
         <TabItem Header="Your review">
           <ScrollViewer HorizontalScrollBarVisibility="Disabled">
             <StackPanel Margin="14,10" Spacing="10">
-              <TextBlock Text="{Binding ProgressText}" FontSize="12.5" Foreground="#E6E8EB" />
+              <TextBlock Text="{Binding ProgressText}" FontSize="12.5" Foreground="{x:Static t:Palette.TextPrimary}" />
               <TextBlock Classes="muted" TextWrapping="Wrap" IsVisible="{Binding !Pr.HasPending}"
                          Text="No line comments yet. Hover a line in a file and click + to add one, then choose Add to review." />
               <ItemsControl ItemsSource="{Binding Pr.Pending}">
                 <ItemsControl.ItemTemplate>
                   <DataTemplate x:DataType="vm:PendingCommentViewModel">
-                    <Border Background="#262A31" CornerRadius="4" Padding="10,6" Margin="0,0,0,6">
+                    <Border Background="{x:Static t:Palette.SubtleFill}" CornerRadius="4" Padding="10,6" Margin="0,0,0,6">
                       <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
-                        <TextBlock Text="{Binding Location}" FontFamily="Cascadia Mono, Consolas, monospace" FontSize="11" Foreground="#9DC4EA" />
+                        <TextBlock Text="{Binding Location}" FontFamily="Cascadia Mono, Consolas, monospace" FontSize="11" Foreground="{x:Static t:Palette.BranchText}" />
                         <Button Grid.Column="1" Classes="link" Content="Remove" Command="{Binding RemoveCommand}" />
-                        <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Text="{Binding Body}" FontSize="12" Foreground="#C9CED6" TextWrapping="Wrap" Margin="0,4,0,0" />
+                        <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Text="{Binding Body}" FontSize="12" Foreground="{x:Static t:Palette.TextBody}" TextWrapping="Wrap" Margin="0,4,0,0" />
                       </Grid>
                     </Border>
                   </DataTemplate>

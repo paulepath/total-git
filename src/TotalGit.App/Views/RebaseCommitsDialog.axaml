@@ -1,4 +1,5 @@
 <Window xmlns="https://github.com/avaloniaui"
+        xmlns:t="using:TotalGit.App.Services"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:TotalGit.App.ViewModels"
         x:Class="TotalGit.App.Views.RebaseCommitsDialog"
@@ -6,19 +7,19 @@
         Title="Rebase selected commits"
         Width="620" SizeToContent="Height" CanResize="False"
         WindowStartupLocation="CenterOwner"
-        Background="#23272D">
+        Background="{x:Static t:Palette.Dialog}">
   <StackPanel Margin="20" Spacing="12">
-    <TextBlock Text="{Binding Heading}" FontSize="18" FontWeight="SemiBold" Foreground="#E6E8EB" />
+    <TextBlock Text="{Binding Heading}" FontSize="18" FontWeight="SemiBold" Foreground="{x:Static t:Palette.TextPrimary}" />
 
     <!-- The commits that will be replayed, newest first, as in the graph. -->
-    <Border Background="#1C1F24" CornerRadius="4" Padding="10,6" BorderBrush="#3B82F6" BorderThickness="3,0,0,0">
+    <Border Background="{x:Static t:Palette.Well}" CornerRadius="4" Padding="10,6" BorderBrush="{x:Static t:Palette.AccentStrong}" BorderThickness="3,0,0,0">
       <ScrollViewer MaxHeight="160" HorizontalScrollBarVisibility="Disabled">
         <ItemsControl ItemsSource="{Binding Commits}">
           <ItemsControl.ItemTemplate>
             <DataTemplate x:DataType="vm:RangeCommitItem">
               <Grid ColumnDefinitions="Auto,*" Margin="0,2">
-                <TextBlock Text="{Binding ShortSha}" FontFamily="Cascadia Mono, Consolas, monospace" FontSize="12" Foreground="#5AA9F2" Margin="0,0,10,0" />
-                <TextBlock Grid.Column="1" Text="{Binding Subject}" FontSize="12" Foreground="#E6E8EB" TextTrimming="CharacterEllipsis" />
+                <TextBlock Text="{Binding ShortSha}" FontFamily="Cascadia Mono, Consolas, monospace" FontSize="12" Foreground="{x:Static t:Palette.Accent}" Margin="0,0,10,0" />
+                <TextBlock Grid.Column="1" Text="{Binding Subject}" FontSize="12" Foreground="{x:Static t:Palette.TextPrimary}" TextTrimming="CharacterEllipsis" />
               </Grid>
             </DataTemplate>
           </ItemsControl.ItemTemplate>
@@ -27,16 +28,16 @@
     </Border>
 
     <StackPanel Spacing="4">
-      <TextBlock Text="Onto" FontSize="12" Foreground="#8A9099" />
+      <TextBlock Text="Onto" FontSize="12" Foreground="{x:Static t:Palette.TextMuted}" />
       <AutoCompleteBox x:Name="TargetBox" Text="{Binding Target}" ItemsSource="{Binding Targets}" FilterMode="Contains"
                        MinimumPrefixLength="0" MaxDropDownHeight="260" PlaceholderText="main" />
-      <TextBlock Text="{Binding TargetDescription}" FontSize="11" Foreground="#6B727C" TextTrimming="CharacterEllipsis"
+      <TextBlock Text="{Binding TargetDescription}" FontSize="11" Foreground="{x:Static t:Palette.TextDim}" TextTrimming="CharacterEllipsis"
                  IsVisible="{Binding TargetDescription, Converter={x:Static ObjectConverters.IsNotNull}}" />
     </StackPanel>
 
     <StackPanel Spacing="6">
-      <TextBlock Text="Put the result in" FontSize="12" Foreground="#8A9099" />
-      <TextBlock Text="{Binding NotATipNote}" FontSize="12" Foreground="#A9AFB8" TextWrapping="Wrap"
+      <TextBlock Text="Put the result in" FontSize="12" Foreground="{x:Static t:Palette.TextMuted}" />
+      <TextBlock Text="{Binding NotATipNote}" FontSize="12" Foreground="{x:Static t:Palette.TextSecondary}" TextWrapping="Wrap"
                  IsVisible="{Binding NotATipNote, Converter={x:Static ObjectConverters.IsNotNull}}" />
       <StackPanel Spacing="6" IsVisible="{Binding CanMoveExisting}">
         <RadioButton GroupName="result" IsChecked="{Binding MoveExisting}" Content="{Binding MoveExistingText}" />
@@ -53,20 +54,20 @@
       <TextBox Text="{Binding NewBranchName}" IsVisible="{Binding MoveNew}" Margin="28,0,0,0" PlaceholderText="new-branch-name" />
     </StackPanel>
 
-    <Border Background="#1C1F24" CornerRadius="4" Padding="12">
+    <Border Background="{x:Static t:Palette.Well}" CornerRadius="4" Padding="12">
       <StackPanel Spacing="6">
-        <TextBlock Text="{Binding Preview}" FontSize="12" Foreground="#D5D8DD" TextWrapping="Wrap" />
+        <TextBlock Text="{Binding Preview}" FontSize="12" Foreground="{x:Static t:Palette.TextStrong}" TextWrapping="Wrap" />
         <ItemsControl ItemsSource="{Binding Warnings}" IsVisible="{Binding HasWarnings}">
           <ItemsControl.ItemTemplate>
             <DataTemplate x:DataType="x:String">
-              <TextBlock Text="{Binding}" FontSize="12" Foreground="#E8B339" TextWrapping="Wrap" Margin="0,2,0,0" />
+              <TextBlock Text="{Binding}" FontSize="12" Foreground="{x:Static t:Palette.Pending}" TextWrapping="Wrap" Margin="0,2,0,0" />
             </DataTemplate>
           </ItemsControl.ItemTemplate>
         </ItemsControl>
       </StackPanel>
     </Border>
 
-    <TextBlock Text="{Binding Error}" Foreground="#F26B6B" TextWrapping="Wrap"
+    <TextBlock Text="{Binding Error}" Foreground="{x:Static t:Palette.Error}" TextWrapping="Wrap"
                IsVisible="{Binding Error, Converter={x:Static ObjectConverters.IsNotNull}}" />
 
     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">

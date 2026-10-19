@@ -32,7 +32,7 @@ public sealed class PullRequestWindow : Window, IReviewDialogs
         // Over the main window, on its screen, and no bigger than that screen (once shown, when sizes are known).
         WindowStartupLocation = WindowStartupLocation.Manual;
         Opened += (_, _) => PlaceOver(owner);
-        Background = new SolidColorBrush(Color.Parse("#1C1F24"));
+        Background = Palette.Surface;
         if (owner?.Icon is { } icon) Icon = icon;
 
         _view = new PullRequestReviewView();

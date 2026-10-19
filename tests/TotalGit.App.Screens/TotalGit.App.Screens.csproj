@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Draws Total Git's windows off-screen (Avalonia's headless platform with Skia) and saves them as PNGs, in the
+       dark and light themes, so the look can be checked without a window on anyone's desktop. Not run by dotnet test. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Avalonia.Headless" Version="12.1.3" />
+    <PackageReference Include="Avalonia.Skia" Version="12.1.3" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\TotalGit.App\TotalGit.App.csproj" />
+  </ItemGroup>
+</Project>

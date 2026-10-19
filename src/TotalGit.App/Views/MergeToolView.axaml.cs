@@ -6,6 +6,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Threading;
+using TotalGit.App.Services;
 using TotalGit.App.ViewModels;
 using TotalGit.Core.Git;
 
@@ -239,8 +240,8 @@ public partial class MergeToolView : UserControl
             TextWrapping = TextWrapping.NoWrap,
             FontFamily = new FontFamily("Cascadia Mono, Consolas, monospace"),
             FontSize = 12.5,
-            Background = new SolidColorBrush(Color.Parse("#16191D")),
-            BorderBrush = new SolidColorBrush(Color.Parse("#A371F7")),
+            Background = Palette.Input,
+            BorderBrush = Palette.Purple,
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(0),
             Padding = new Thickness(62, 0, 4, 0),

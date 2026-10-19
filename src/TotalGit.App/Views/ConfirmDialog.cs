@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
+using TotalGit.App.Services;
 using TotalGit.App.ViewModels;
 
 namespace TotalGit.App.Views;
@@ -26,7 +27,7 @@ public sealed class ConfirmDialog : Window
         window.SizeToContent = SizeToContent.Height;
         window.CanResize = false;
         window.WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        window.Background = new SolidColorBrush(Color.Parse("#23272D"));
+        window.Background = Palette.Dialog;
 
         var panel = new StackPanel { Margin = new Thickness(20), Spacing = 12 };
         panel.Children.Add(new TextBlock { Text = title, FontSize = 18, FontWeight = FontWeight.SemiBold });
@@ -35,7 +36,7 @@ public sealed class ConfirmDialog : Window
         {
             panel.Children.Add(new Border
             {
-                Background = new SolidColorBrush(Color.Parse("#1C1F24")),
+                Background = Palette.Well,
                 CornerRadius = new CornerRadius(4),
                 Padding = new Thickness(10),
                 Child = new ScrollViewer
@@ -47,7 +48,7 @@ public sealed class ConfirmDialog : Window
                         FontFamily = new FontFamily("Cascadia Mono, Consolas, monospace"),
                         FontSize = 12,
                         TextWrapping = TextWrapping.Wrap,
-                        Foreground = new SolidColorBrush(Color.Parse("#C2C7CE")),
+                        Foreground = Palette.TextSoft,
                     },
                 },
             });
@@ -62,7 +63,7 @@ public sealed class ConfirmDialog : Window
 /// <summary>A question with several answers (e.g. "Force push" or "Pull"); closes with the chosen index, or null for Cancel.</summary>
 public sealed class ChoiceDialog : Window
 {
-    private static readonly IBrush DangerBrush = new SolidColorBrush(Color.Parse("#B4373C"));
+    private static readonly IBrush DangerBrush = Palette.DangerButton;
 
     public ChoiceDialog(string title, string message, IReadOnlyList<string>? details, IReadOnlyList<DialogChoice> choices)
     {

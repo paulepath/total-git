@@ -67,6 +67,9 @@ public sealed class AppSettings
     /// <summary>The solution last opened in Visual Studio, by worktree folder (when it has several).</summary>
     public Dictionary<string, string> LastSolutions { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>"Dark", "Light" or "System" (follow Windows' app mode).</summary>
+    public string Theme { get; set; } = "Dark";
+
     /// <summary>Whole-UI zoom (1 = 100%), changed with Ctrl + wheel or Ctrl +/-.</summary>
     public double Zoom { get; set; } = 1.0;
 

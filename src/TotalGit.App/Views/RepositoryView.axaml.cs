@@ -333,8 +333,8 @@ public partial class RepositoryView : UserControl
             case string key when Application.Current?.FindResource(key) is Geometry geometry:
                 var icon = new PathIcon { Data = geometry, Width = 14 * z, Height = 14 * z };
                 // VS Code keeps its blue, as on the toolbar.
-                if (key == MenuIcons.Code) icon.Foreground = new SolidColorBrush(Color.Parse("#3FA0F0"));
-                else if (key == MenuIcons.VisualStudio) icon.Foreground = new SolidColorBrush(Color.Parse("#A77BDB"));
+                if (key == MenuIcons.Code) icon.Foreground = Palette.VsCodeBlue;
+                else if (key == MenuIcons.VisualStudio) icon.Foreground = Palette.VisualStudioPurple;
                 return icon;
             default:
                 return null;

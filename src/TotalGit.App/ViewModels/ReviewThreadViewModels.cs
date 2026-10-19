@@ -544,8 +544,8 @@ public sealed record HunkLine(string Text, IBrush Background);
 /// <summary>A review thread: its comments, who's in it, a reply box, and resolve / unresolve.</summary>
 public sealed partial class ReviewThreadViewModel : ObservableObject
 {
-    private static readonly IBrush AddedBrush = new SolidColorBrush(Color.Parse("#1D3A26"));
-    private static readonly IBrush RemovedBrush = new SolidColorBrush(Color.Parse("#3A1D20"));
+    private static readonly IBrush AddedBrush = Palette.AddedLine;
+    private static readonly IBrush RemovedBrush = Palette.RemovedLine;
 
     private readonly ICommentHost? _host;
 

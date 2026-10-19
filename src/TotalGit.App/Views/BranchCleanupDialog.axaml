@@ -1,4 +1,5 @@
 <Window xmlns="https://github.com/avaloniaui"
+        xmlns:t="using:TotalGit.App.Services"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:TotalGit.App.ViewModels"
         x:Class="TotalGit.App.Views.BranchCleanupDialog"
@@ -6,14 +7,14 @@
         Title="Clean up branches"
         Width="760" Height="560" MinWidth="520" MinHeight="360"
         WindowStartupLocation="CenterOwner"
-        Background="#23272D">
+        Background="{x:Static t:Palette.Dialog}">
   <DockPanel Margin="20">
     <StackPanel DockPanel.Dock="Top" Spacing="8" Margin="0,0,0,12">
-      <TextBlock Text="Clean up branches" FontSize="18" FontWeight="SemiBold" Foreground="#E6E8EB" />
-      <TextBlock Foreground="#A9AFB8" TextWrapping="Wrap"
+      <TextBlock Text="Clean up branches" FontSize="18" FontWeight="SemiBold" Foreground="{x:Static t:Palette.TextPrimary}" />
+      <TextBlock Foreground="{x:Static t:Palette.TextSecondary}" TextWrapping="Wrap"
                  Text="These local branches tracked a remote branch that has since been deleted (usually after a PR was merged). Deleting is a force delete: commits that are only on these branches are lost." />
-      <Border Background="#4A3A12" CornerRadius="4" Padding="10,6" IsVisible="{Binding FetchFailed}" HorizontalAlignment="Left">
-        <TextBlock Foreground="#F5D48B" TextWrapping="Wrap" Text="Couldn't reach the remote, so this list is from the last fetch." />
+      <Border Background="{x:Static t:Palette.WarningFill}" CornerRadius="4" Padding="10,6" IsVisible="{Binding FetchFailed}" HorizontalAlignment="Left">
+        <TextBlock Foreground="{x:Static t:Palette.WarningText}" TextWrapping="Wrap" Text="Couldn't reach the remote, so this list is from the last fetch." />
       </Border>
     </StackPanel>
 
@@ -23,11 +24,11 @@
     </StackPanel>
 
     <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*" Margin="10,0,0,4">
-      <CheckBox IsChecked="{Binding AllChecked}" Content="Select all" Foreground="#E6E8EB" />
-      <TextBlock Grid.Column="1" Text="{Binding SelectionText}" Foreground="#8A9099" HorizontalAlignment="Right" VerticalAlignment="Center" />
+      <CheckBox IsChecked="{Binding AllChecked}" Content="Select all" Foreground="{x:Static t:Palette.TextPrimary}" />
+      <TextBlock Grid.Column="1" Text="{Binding SelectionText}" Foreground="{x:Static t:Palette.TextMuted}" HorizontalAlignment="Right" VerticalAlignment="Center" />
     </Grid>
 
-    <Border Background="#1C1F24" CornerRadius="4">
+    <Border Background="{x:Static t:Palette.Well}" CornerRadius="4">
       <ListBox ItemsSource="{Binding Items}" Background="Transparent" SelectionMode="Single">
         <ListBox.Styles>
           <Style Selector="ListBoxItem">
@@ -44,14 +45,14 @@
                   <Image DockPanel.Dock="Left" Source="{Binding KindIcon}" IsVisible="{Binding HasKindIcon}" Width="14" Height="14"
                          VerticalAlignment="Top" Margin="0,3,6,0" />
                   <TextBlock TextWrapping="Wrap">
-                    <Run Text="{Binding Name}" FontWeight="SemiBold" Foreground="#E6E8EB" /><Run Text="  " /><Run Text="{Binding Upstream}" FontSize="12" Foreground="#8A9099" />
+                    <Run Text="{Binding Name}" FontWeight="SemiBold" Foreground="{x:Static t:Palette.TextPrimary}" /><Run Text="  " /><Run Text="{Binding Upstream}" FontSize="12" Foreground="{x:Static t:Palette.TextMuted}" />
                   </TextBlock>
                 </DockPanel>
-                <TextBlock Text="{Binding Subject}" FontSize="12" Foreground="#A9AFB8" TextTrimming="CharacterEllipsis" />
-                <TextBlock Text="{Binding UnpushedText}" IsVisible="{Binding HasUnpushed}" FontSize="12" Foreground="#F5C26B" />
-                <TextBlock Text="{Binding Reason}" IsVisible="{Binding HasReason}" FontSize="12" Foreground="#F5C26B" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding Subject}" FontSize="12" Foreground="{x:Static t:Palette.TextSecondary}" TextTrimming="CharacterEllipsis" />
+                <TextBlock Text="{Binding UnpushedText}" IsVisible="{Binding HasUnpushed}" FontSize="12" Foreground="{x:Static t:Palette.Warning}" />
+                <TextBlock Text="{Binding Reason}" IsVisible="{Binding HasReason}" FontSize="12" Foreground="{x:Static t:Palette.Warning}" TextWrapping="Wrap" />
               </StackPanel>
-              <TextBlock Grid.Column="2" Text="{Binding When}" FontSize="12" Foreground="#8A9099" VerticalAlignment="Top" Margin="12,0,0,0" />
+              <TextBlock Grid.Column="2" Text="{Binding When}" FontSize="12" Foreground="{x:Static t:Palette.TextMuted}" VerticalAlignment="Top" Margin="12,0,0,0" />
             </Grid>
           </DataTemplate>
         </ListBox.ItemTemplate>

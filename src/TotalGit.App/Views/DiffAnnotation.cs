@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.VisualTree;
+using TotalGit.App.Services;
 using TotalGit.App.ViewModels;
 using TotalGit.Core.Git;
 using TotalGit.Core.Hosting;
@@ -33,9 +34,9 @@ public sealed partial class DiffView
     private const double GapRightMargin = 12;
     private const double AddButtonSize = 16;
 
-    private static readonly IBrush GapBrush = new SolidColorBrush(Color.Parse("#1E2126"));
-    private static readonly IBrush GapBorderBrush = new SolidColorBrush(Color.Parse("#2A2F36"));
-    private static readonly IBrush AddButtonBrush = new SolidColorBrush(Color.Parse("#3B82F6"));
+    private static readonly IBrush GapBrush = Palette.DiffGap;
+    private static readonly IBrush GapBorderBrush = Palette.DiffGapBorder;
+    private static readonly IBrush AddButtonBrush = Palette.AccentStrong;
     private static readonly IPen AddButtonPen = new Pen(Brushes.White, 1.6);
 
     /// <summary>A code line that can be commented on: its row, side, and index in the diff's lines.</summary>

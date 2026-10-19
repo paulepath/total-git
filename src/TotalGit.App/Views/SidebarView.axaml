@@ -1,4 +1,5 @@
 <UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:t="using:TotalGit.App.Services"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:TotalGit.App.ViewModels"
              xmlns:views="using:TotalGit.App.Views"
@@ -27,7 +28,7 @@
       <Setter Property="MaxWidth" Value="420" />
     </Style>
     <Style Selector="TextBlock.label.group">
-      <Setter Property="Foreground" Value="#8A9099" />
+      <Setter Property="Foreground" Value="{x:Static t:Palette.TextMuted}" />
       <Setter Property="FontSize" Value="11" />
       <Setter Property="FontWeight" Value="SemiBold" />
     </Style>
@@ -38,8 +39,8 @@
       <Setter Property="MinWidth" Value="52" />
       <Setter Property="Margin" Value="0,0,6,0" />
       <Setter Property="CornerRadius" Value="3" />
-      <Setter Property="Background" Value="#2C3440" />
-      <Setter Property="Foreground" Value="#9DB8D6" />
+      <Setter Property="Background" Value="{x:Static t:Palette.SidebarChip}" />
+      <Setter Property="Foreground" Value="{x:Static t:Palette.ChipText}" />
       <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, monospace" />
       <Setter Property="FontSize" Value="10" />
       <Setter Property="HorizontalContentAlignment" Value="Center" />
@@ -47,8 +48,8 @@
       <Setter Property="Cursor" Value="Hand" />
     </Style>
     <Style Selector="Button.ticket:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-      <Setter Property="Background" Value="#34506E" />
-      <Setter Property="Foreground" Value="#D6E7F8" />
+      <Setter Property="Background" Value="{x:Static t:Palette.SidebarChipActive}" />
+      <Setter Property="Foreground" Value="{x:Static t:Palette.ChipActiveText}" />
     </Style>
     <Style Selector="TreeViewItem" x:DataType="vm:SidebarNode">
       <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
@@ -64,16 +65,16 @@
       <Setter Property="Background" Value="{Binding IsCurrent, Converter={x:Static vm:Converters.CurrentRowBrush}}" />
     </Style>
     <Style Selector="TextBlock.label">
-      <Setter Property="Foreground" Value="#D5D8DD" />
+      <Setter Property="Foreground" Value="{x:Static t:Palette.TextStrong}" />
     </Style>
     <Style Selector="TextBlock.label.section">
       <Setter Property="FontWeight" Value="SemiBold" />
     </Style>
     <Style Selector="TextBlock.label.dimmed">
-      <Setter Property="Foreground" Value="#6B727C" />
+      <Setter Property="Foreground" Value="{x:Static t:Palette.TextDim}" />
     </Style>
     <Style Selector="TextBlock.label.current">
-      <Setter Property="Foreground" Value="#4CC38A" />
+      <Setter Property="Foreground" Value="{x:Static t:Palette.Success}" />
       <Setter Property="FontWeight" Value="SemiBold" />
     </Style>
     <Style Selector="TreeViewItem /template/ Border#PART_LayoutRoot">
@@ -83,30 +84,30 @@
       <Setter Property="Width" Value="12" />
       <Setter Property="Height" Value="12" />
       <Setter Property="Margin" Value="0,0,6,0" />
-      <Setter Property="Foreground" Value="#8A9099" />
+      <Setter Property="Foreground" Value="{x:Static t:Palette.TextMuted}" />
     </Style>
   </UserControl.Styles>
 
-  <DockPanel Background="#23272D">
+  <DockPanel Background="{x:Static t:Palette.Panel}">
     <Border DockPanel.Dock="Top" Padding="8,8,8,6">
       <Grid ColumnDefinitions="*,Auto,Auto">
         <TextBox x:Name="FilterBox" Text="{Binding Filter}" PlaceholderText="Filter (Ctrl+Alt+F)" FontSize="12"
                  MinHeight="28" Padding="6,4">
           <TextBox.InnerRightContent>
-            <PathIcon Data="{StaticResource SearchIcon}" Width="12" Height="12" Margin="0,0,8,0" Foreground="#8A9099" />
+            <PathIcon Data="{StaticResource SearchIcon}" Width="12" Height="12" Margin="0,0,8,0" Foreground="{x:Static t:Palette.TextMuted}" />
           </TextBox.InnerRightContent>
         </TextBox>
         <!-- Pinned: the sidebar stays open. Unpinned: it folds to a thin rail and opens while the pointer is over it. -->
         <Button Grid.Column="1" Margin="6,0,0,0" Padding="6,0" MinHeight="28" Background="Transparent" Click="OnRulesClick"
                 ToolTip.Tip="Branch icons and grouping">
-          <PathIcon Data="{StaticResource CogIcon}" Width="13" Height="13" Foreground="#A9AFB8" />
+          <PathIcon Data="{StaticResource CogIcon}" Width="13" Height="13" Foreground="{x:Static t:Palette.TextSecondary}" />
         </Button>
         <ToggleButton Grid.Column="2" x:Name="PinButton" Margin="6,0,0,0" Padding="6,0" MinHeight="28" Background="Transparent"
                       ToolTip.Tip="Keep the sidebar open (unpin to fold it away until you point at it)">
           <Panel>
             <PathIcon Data="{StaticResource PinIcon}" Width="13" Height="13"
                       IsVisible="{Binding $parent[ToggleButton].IsChecked}" />
-            <PathIcon Data="{StaticResource PinOffIcon}" Width="13" Height="13" Foreground="#8A9099"
+            <PathIcon Data="{StaticResource PinOffIcon}" Width="13" Height="13" Foreground="{x:Static t:Palette.TextMuted}"
                       IsVisible="{Binding !$parent[ToggleButton].IsChecked}" />
           </Panel>
         </ToggleButton>
@@ -144,7 +145,7 @@
                   </Panel>
                 </Border>
                 <TextBlock Text="{Binding NumberText}" IsVisible="{Binding IsPullRequest}" Width="26" Margin="0,0,5,0" TextAlignment="Right" VerticalAlignment="Center"
-                           FontFamily="Cascadia Mono, Consolas, monospace" FontSize="10" Foreground="#8A9099" />
+                           FontFamily="Cascadia Mono, Consolas, monospace" FontSize="10" Foreground="{x:Static t:Palette.TextMuted}" />
                 <Button Classes="ticket" Content="{Binding Ticket}" IsVisible="{Binding HasTicket}" Click="OnTicketClick"
                         ToolTip.Tip="{Binding Ticket, StringFormat='Open {0} in Jira (right-click to change the Jira address)'}" />
               </StackPanel>
@@ -157,44 +158,44 @@
             <views:PriorityRowPanel Grid.Column="1" VerticalAlignment="Center" ClipToBounds="True">
               <TextBlock Classes="label" Classes.section="{Binding IsSection}" Classes.dimmed="{Binding IsDimmed}" Classes.group="{Binding IsPrGroup}"
                          Classes.current="{Binding IsCurrent}" FontSize="12" TextTrimming="CharacterEllipsis">
-                <Run Text="{Binding LabelBefore}" /><Run Text="{Binding LabelKey}" Foreground="#5AA9F2" FontWeight="SemiBold" /><Run Text="{Binding LabelAfter}" />
+                <Run Text="{Binding LabelBefore}" /><Run Text="{Binding LabelKey}" Foreground="{x:Static t:Palette.Accent}" FontWeight="SemiBold" /><Run Text="{Binding LabelAfter}" />
               </TextBlock>
-              <PathIcon Data="{StaticResource CheckIcon}" Width="11" Height="11" Foreground="#4CC38A" IsVisible="{Binding IsCurrent}" />
-              <PathIcon Data="{StaticResource WorktreeIcon}" Width="11" Height="11" Foreground="#8A9099" IsVisible="{Binding HasWorktree}" />
-              <TextBlock Text="{Binding Subtitle}" FontSize="11" Foreground="#6B727C" IsVisible="{Binding HasSubtitle}" />
+              <PathIcon Data="{StaticResource CheckIcon}" Width="11" Height="11" Foreground="{x:Static t:Palette.Success}" IsVisible="{Binding IsCurrent}" />
+              <PathIcon Data="{StaticResource WorktreeIcon}" Width="11" Height="11" Foreground="{x:Static t:Palette.TextMuted}" IsVisible="{Binding HasWorktree}" />
+              <TextBlock Text="{Binding Subtitle}" FontSize="11" Foreground="{x:Static t:Palette.TextDim}" IsVisible="{Binding HasSubtitle}" />
             </views:PriorityRowPanel>
 
             <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" Margin="4,0,8,0" VerticalAlignment="Center">
-              <Border Width="16" Height="16" CornerRadius="8" Background="#2EA043" VerticalAlignment="Center" IsVisible="{Binding IsReadyToMerge}"
+              <Border Width="16" Height="16" CornerRadius="8" Background="{x:Static t:Palette.ReadyBadge}" VerticalAlignment="Center" IsVisible="{Binding IsReadyToMerge}"
                       ToolTip.Tip="Ready to merge: approved, checks passed, and GitHub has nothing against merging it">
                 <PathIcon Data="{StaticResource CheckIcon}" Width="10" Height="10" Foreground="White" />
               </Border>
-              <Ellipse Width="7" Height="7" Fill="#4CC38A" VerticalAlignment="Center" IsVisible="{Binding ShowCurrentDot}"
+              <Ellipse Width="7" Height="7" Fill="{x:Static t:Palette.Success}" VerticalAlignment="Center" IsVisible="{Binding ShowCurrentDot}"
                        ToolTip.Tip="Contains the current branch" />
-              <PathIcon Data="{StaticResource RefreshIcon}" Width="10" Height="10" Foreground="#E8B339" VerticalAlignment="Center"
+              <PathIcon Data="{StaticResource RefreshIcon}" Width="10" Height="10" Foreground="{x:Static t:Palette.Pending}" VerticalAlignment="Center"
                         IsVisible="{Binding HasActiveRun}" ToolTip.Tip="{Binding ActiveRunsTip}" Background="Transparent" />
-              <TextBlock Text="{Binding ElapsedText}" FontSize="10.5" Foreground="#8A9099" IsVisible="{Binding HasElapsed}"
+              <TextBlock Text="{Binding ElapsedText}" FontSize="10.5" Foreground="{x:Static t:Palette.TextMuted}" IsVisible="{Binding HasElapsed}"
                          FontFamily="Cascadia Mono, Consolas, monospace" />
               <StackPanel Orientation="Horizontal" Spacing="3" IsVisible="{Binding HasChanges}" Background="Transparent"
                           ToolTip.Tip="{Binding ChangesTip}">
-                <PathIcon Data="{StaticResource PencilIcon}" Width="10" Height="10" Foreground="#E8B339" VerticalAlignment="Center" />
-                <TextBlock Text="{Binding ChangesText}" FontSize="11" Foreground="#E8B339" VerticalAlignment="Center" />
+                <PathIcon Data="{StaticResource PencilIcon}" Width="10" Height="10" Foreground="{x:Static t:Palette.Pending}" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding ChangesText}" FontSize="11" Foreground="{x:Static t:Palette.Pending}" VerticalAlignment="Center" />
               </StackPanel>
-              <TextBlock Classes="ahead" Text="{Binding Ahead}" FontSize="11" Foreground="#4CC38A" IsVisible="{Binding HasAhead}"
+              <TextBlock Classes="ahead" Text="{Binding Ahead}" FontSize="11" Foreground="{x:Static t:Palette.Success}" IsVisible="{Binding HasAhead}"
                          Background="Transparent" ToolTip.Tip="Commits not on the remote branch yet. Double-click to push them." />
-              <TextBlock Classes="behind" Text="{Binding Behind}" FontSize="11" Foreground="#E8B339" IsVisible="{Binding HasBehind}"
+              <TextBlock Classes="behind" Text="{Binding Behind}" FontSize="11" Foreground="{x:Static t:Palette.Pending}" IsVisible="{Binding HasBehind}"
                          Background="Transparent" ToolTip.Tip="New commits on the remote branch. Double-click to bring them into this branch." />
-              <PathIcon Classes="gone" Data="{StaticResource CloseIcon}" Width="9" Height="9" Foreground="#E5484D" VerticalAlignment="Center"
+              <PathIcon Classes="gone" Data="{StaticResource CloseIcon}" Width="9" Height="9" Foreground="{x:Static t:Palette.Failure}" VerticalAlignment="Center"
                         IsVisible="{Binding IsUpstreamGone}" Background="Transparent"
                         ToolTip.Tip="Deleted on the remote. Double-click to clean up branches deleted on the remote." />
-              <TextBlock Text="{Binding Count}" FontSize="11" Foreground="#5AA9F2" IsVisible="{Binding ShowCount}" />
+              <TextBlock Text="{Binding Count}" FontSize="11" Foreground="{x:Static t:Palette.Accent}" IsVisible="{Binding ShowCount}" />
               <Button IsVisible="{Binding IsPullRequestsSection}" Padding="4,0" MinHeight="0" Height="18" Background="Transparent"
                       ToolTip.Tip="Refresh pull requests" Click="OnRefreshPullRequestsClick">
-                <PathIcon Data="{StaticResource RefreshIcon}" Width="11" Height="11" Foreground="#A9AFB8" />
+                <PathIcon Data="{StaticResource RefreshIcon}" Width="11" Height="11" Foreground="{x:Static t:Palette.TextSecondary}" />
               </Button>
               <Button IsVisible="{Binding IsWorkflowsSection}" Padding="4,0" MinHeight="0" Height="18" Background="Transparent"
                       ToolTip.Tip="Refresh workflow runs" Click="OnRefreshWorkflowsClick">
-                <PathIcon Data="{StaticResource RefreshIcon}" Width="11" Height="11" Foreground="#A9AFB8" />
+                <PathIcon Data="{StaticResource RefreshIcon}" Width="11" Height="11" Foreground="{x:Static t:Palette.TextSecondary}" />
               </Button>
               <Button Content="+" IsVisible="{Binding IsWorktreesSection}" Padding="6,0" MinHeight="0" Height="18" FontSize="12"
                       ToolTip.Tip="Create worktree with new branch" Click="OnAddWorktreeClick" />

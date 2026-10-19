@@ -1,4 +1,5 @@
 <Window xmlns="https://github.com/avaloniaui"
+        xmlns:t="using:TotalGit.App.Services"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:TotalGit.App.ViewModels"
         x:Class="TotalGit.App.Views.BranchRulesDialog"
@@ -6,16 +7,16 @@
         Title="Branch rules"
         Width="940" Height="680" MinWidth="720" MinHeight="520"
         WindowStartupLocation="CenterOwner"
-        Background="#23272D">
+        Background="{x:Static t:Palette.Dialog}">
   <Window.Styles>
     <Style Selector="TextBlock.field">
-      <Setter Property="Foreground" Value="#E6E8EB" />
+      <Setter Property="Foreground" Value="{x:Static t:Palette.TextPrimary}" />
       <Setter Property="FontWeight" Value="SemiBold" />
       <Setter Property="FontSize" Value="12" />
       <Setter Property="Margin" Value="0,10,0,4" />
     </Style>
     <Style Selector="TextBlock.hint">
-      <Setter Property="Foreground" Value="#8A9099" />
+      <Setter Property="Foreground" Value="{x:Static t:Palette.TextMuted}" />
       <Setter Property="FontSize" Value="11" />
       <Setter Property="TextWrapping" Value="Wrap" />
       <Setter Property="Margin" Value="0,3,0,0" />
@@ -44,8 +45,8 @@
 
   <DockPanel Margin="20">
     <StackPanel DockPanel.Dock="Top" Spacing="6" Margin="0,0,0,12">
-      <TextBlock Text="Branch rules" FontSize="18" FontWeight="SemiBold" Foreground="#E6E8EB" />
-      <TextBlock Foreground="#A9AFB8" TextWrapping="Wrap"
+      <TextBlock Text="Branch rules" FontSize="18" FontWeight="SemiBold" Foreground="{x:Static t:Palette.TextPrimary}" />
+      <TextBlock Foreground="{x:Static t:Palette.TextSecondary}" TextWrapping="Wrap"
                  Text="Rules give branches an icon in place of their prefix, and can nest them under another name in the sidebar (bug/* under bugs). The first rule that matches a branch is used." />
     </StackPanel>
 
@@ -67,7 +68,7 @@
           <Button Classes="small" Content="↑" Command="{Binding MoveUpCommand}" ToolTip.Tip="Move up (checked earlier)" />
           <Button Classes="small" Content="↓" Command="{Binding MoveDownCommand}" ToolTip.Tip="Move down" />
         </StackPanel>
-        <Border Background="#1C1F24" CornerRadius="4">
+        <Border Background="{x:Static t:Palette.Well}" CornerRadius="4">
           <ListBox ItemsSource="{Binding Rules}" SelectedItem="{Binding Selected}" Background="Transparent">
             <ListBox.ItemTemplate>
               <DataTemplate x:DataType="vm:BranchRuleItem">
@@ -89,7 +90,7 @@
           <TextBlock Classes="field" Text="Branches matching" Margin="0,0,0,4" />
           <TextBox Text="{Binding Pattern}" FontFamily="Cascadia Mono, Consolas, monospace" PlaceholderText="bug/*" />
           <TextBlock Classes="hint" Text="* matches anything and ? one character. A pattern like bugs/* also covers a branch called just bugs." />
-          <TextBlock Classes="hint" Foreground="#5AA9F2" Text="{Binding $parent[Window].((vm:BranchRulesViewModel)DataContext).MatchText}" />
+          <TextBlock Classes="hint" Foreground="{x:Static t:Palette.Accent}" Text="{Binding $parent[Window].((vm:BranchRulesViewModel)DataContext).MatchText}" />
 
           <TextBlock Classes="field" Text="Nest under" />
           <TextBox Text="{Binding GroupUnder}" FontFamily="Cascadia Mono, Consolas, monospace" PlaceholderText="(by the slashes in the name)" />
@@ -107,10 +108,10 @@
             <Button Grid.Column="2" Classes="small" Content="No icon" Margin="6,0,0,0"
                     Command="{Binding $parent[Window].((vm:BranchRulesViewModel)DataContext).ClearIconCommand}" />
           </Grid>
-          <TextBlock Classes="hint" Foreground="#E5484D" Margin="0,0,0,4"
+          <TextBlock Classes="hint" Foreground="{x:Static t:Palette.Failure}" Margin="0,0,0,4"
                      Text="{Binding $parent[Window].((vm:BranchRulesViewModel)DataContext).UploadError}"
                      IsVisible="{Binding $parent[Window].((vm:BranchRulesViewModel)DataContext).UploadError, Converter={x:Static ObjectConverters.IsNotNull}}" />
-          <Border Background="#1C1F24" CornerRadius="4" Height="190">
+          <Border Background="{x:Static t:Palette.Well}" CornerRadius="4" Height="190">
             <ListBox Classes="icons" Background="Transparent"
                      ItemsSource="{Binding $parent[Window].((vm:BranchRulesViewModel)DataContext).Icons}"
                      SelectedItem="{Binding $parent[Window].((vm:BranchRulesViewModel)DataContext).SelectedIcon}"
@@ -152,15 +153,15 @@
 
           <TextBlock Classes="field" Text="Preview" />
           <StackPanel Orientation="Horizontal" Spacing="16">
-            <Border Background="#1E2227" CornerRadius="4" Padding="10,5">
+            <Border Background="{x:Static t:Palette.PreviewBox}" CornerRadius="4" Padding="10,5">
               <StackPanel Orientation="Horizontal" Spacing="6">
                 <Image Source="{Binding IconBitmap}" Width="14" Height="14" IsVisible="{Binding HasIcon}" />
-                <TextBlock Text="fix-login" FontSize="12" Foreground="#D5D9DE" VerticalAlignment="Center" />
+                <TextBlock Text="fix-login" FontSize="12" Foreground="{x:Static t:Palette.TextStrongAlt}" VerticalAlignment="Center" />
               </StackPanel>
             </Border>
-            <Border Background="#1F6FB5" CornerRadius="9" Padding="4,2,10,2" VerticalAlignment="Center">
+            <Border Background="{x:Static t:Palette.PreviewChip}" CornerRadius="9" Padding="4,2,10,2" VerticalAlignment="Center">
               <StackPanel Orientation="Horizontal" Spacing="5">
-                <Border Background="#16191D" CornerRadius="7" Width="14" Height="14">
+                <Border Background="{x:Static t:Palette.PreviewChipHole}" CornerRadius="7" Width="14" Height="14">
                   <Image Source="{Binding IconBitmap}" Width="12" Height="12" IsVisible="{Binding HasIcon}" />
                 </Border>
                 <TextBlock Text="fix-login" FontSize="11" Foreground="White" VerticalAlignment="Center" />

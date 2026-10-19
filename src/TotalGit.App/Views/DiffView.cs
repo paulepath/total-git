@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Media;
+using TotalGit.App.Services;
 using TotalGit.App.ViewModels;
 using TotalGit.Core.Git;
 
@@ -22,26 +23,26 @@ public sealed partial class DiffView : Control
     private const double GutterWidth = 46;
     private const double FontSize = 12.5;
 
-    private static readonly IBrush Background = new SolidColorBrush(Color.Parse("#1C1F24"));
-    private static readonly IBrush GutterBrush = new SolidColorBrush(Color.Parse("#20242A"));
-    private static readonly IBrush AddedBrush = new SolidColorBrush(Color.Parse("#2FBF71"), 0.10);
-    private static readonly IBrush RemovedBrush = new SolidColorBrush(Color.Parse("#E5392F"), 0.11);
+    private static readonly IBrush Background = Palette.Surface;
+    private static readonly IBrush GutterBrush = Palette.Gutter;
+    private static readonly IBrush AddedBrush = Palette.DiffAdded;
+    private static readonly IBrush RemovedBrush = Palette.DiffRemoved;
     // The words that changed within a changed line.
-    private static readonly IBrush AddedWordBrush = new SolidColorBrush(Color.Parse("#2FBF71"), 0.48);
-    private static readonly IBrush RemovedWordBrush = new SolidColorBrush(Color.Parse("#E5392F"), 0.52);
-    private static readonly IBrush AddedGutterBrush = new SolidColorBrush(Color.Parse("#2FBF71"), 0.28);
-    private static readonly IBrush RemovedGutterBrush = new SolidColorBrush(Color.Parse("#E5392F"), 0.3);
-    private static readonly IBrush HunkBrush = new SolidColorBrush(Color.Parse("#2D7BF4"), 0.14);
-    private static readonly IBrush TextBrush = new SolidColorBrush(Color.Parse("#DCDFE4"));
-    private static readonly IBrush HunkTextBrush = new SolidColorBrush(Color.Parse("#7FA8E8"));
-    private static readonly IBrush NumberBrush = new SolidColorBrush(Color.Parse("#6B727C"));
-    private static readonly IBrush AddedSignBrush = new SolidColorBrush(Color.Parse("#4CC38A"));
-    private static readonly IBrush RemovedSignBrush = new SolidColorBrush(Color.Parse("#F26B6B"));
-    private static readonly IBrush NoticeBrush = new SolidColorBrush(Color.Parse("#8A9099"));
-    private static readonly IBrush FillerBrush = new SolidColorBrush(Color.Parse("#131518"));
-    private static readonly IBrush DividerBrush = new SolidColorBrush(Color.Parse("#30353C"));
-    private static readonly IBrush SinceReviewBrush = new SolidColorBrush(Color.Parse("#A371F7"));
-    private static readonly IBrush SinceReviewTint = new SolidColorBrush(Color.FromArgb(0x30, 0xA3, 0x71, 0xF7));
+    private static readonly IBrush AddedWordBrush = Palette.DiffAddedWord;
+    private static readonly IBrush RemovedWordBrush = Palette.DiffRemovedWord;
+    private static readonly IBrush AddedGutterBrush = Palette.DiffAddedGutter;
+    private static readonly IBrush RemovedGutterBrush = Palette.DiffRemovedGutter;
+    private static readonly IBrush HunkBrush = Palette.DiffHunk;
+    private static readonly IBrush TextBrush = Palette.TextCode;
+    private static readonly IBrush HunkTextBrush = Palette.HunkText;
+    private static readonly IBrush NumberBrush = Palette.TextDim;
+    private static readonly IBrush AddedSignBrush = Palette.Success;
+    private static readonly IBrush RemovedSignBrush = Palette.Error;
+    private static readonly IBrush NoticeBrush = Palette.TextMuted;
+    private static readonly IBrush FillerBrush = Palette.DiffFiller;
+    private static readonly IBrush DividerBrush = Palette.Border;
+    private static readonly IBrush SinceReviewBrush = Palette.Purple;
+    private static readonly IBrush SinceReviewTint = Palette.DiffSinceReview;
 
     public static readonly StyledProperty<TotalGit.Core.Hosting.ReviewDelta?> SinceReviewProperty =
         AvaloniaProperty.Register<DiffView, TotalGit.Core.Hosting.ReviewDelta?>(nameof(SinceReview));

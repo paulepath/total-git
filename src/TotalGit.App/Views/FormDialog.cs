@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
+using TotalGit.App.Services;
 using TotalGit.App.ViewModels;
 
 namespace TotalGit.App.Views;
@@ -25,7 +26,7 @@ public sealed class FormDialog : Window
         SizeToContent = SizeToContent.Height;
         CanResize = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        Background = new SolidColorBrush(Color.Parse("#23272D"));
+        Background = Palette.Dialog;
 
         _confirm = new Button { Content = spec.ConfirmText, IsDefault = true, Classes = { "accent" } };
         var cancel = new Button { Content = "Cancel", IsCancel = true };
@@ -35,12 +36,12 @@ public sealed class FormDialog : Window
             if (Validate()) Close(true);
         };
         cancel.Click += (_, _) => Close(false);
-        _error = new TextBlock { Foreground = new SolidColorBrush(Color.Parse("#F26B6B")), TextWrapping = TextWrapping.Wrap, IsVisible = false };
+        _error = new TextBlock { Foreground = Palette.Error, TextWrapping = TextWrapping.Wrap, IsVisible = false };
 
         var panel = new StackPanel { Margin = new Thickness(20), Spacing = 12 };
         panel.Children.Add(new TextBlock { Text = spec.Title, FontSize = 18, FontWeight = FontWeight.SemiBold });
         if (spec.Message is { } message)
-            panel.Children.Add(new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap, Foreground = new SolidColorBrush(Color.Parse("#A9AFB8")) });
+            panel.Children.Add(new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap, Foreground = Palette.TextSecondary });
 
         foreach (var field in spec.Fields) panel.Children.Add(Build(field));
 
@@ -105,7 +106,7 @@ public sealed class FormDialog : Window
                 Spacing = 4,
                 Children =
                 {
-                    new TextBlock { Text = field.Label, FontSize = 12, Foreground = new SolidColorBrush(Color.Parse("#8A9099")) },
+                    new TextBlock { Text = field.Label, FontSize = 12, Foreground = Palette.TextMuted },
                     combo,
                 },
             };
@@ -136,7 +137,7 @@ public sealed class FormDialog : Window
             Spacing = 4,
             Children =
             {
-                new TextBlock { Text = field.Label, FontSize = 12, Foreground = new SolidColorBrush(Color.Parse("#8A9099")) },
+                new TextBlock { Text = field.Label, FontSize = 12, Foreground = Palette.TextMuted },
                 text,
             },
         };
@@ -147,7 +148,7 @@ public sealed class FormDialog : Window
     {
         var group = $"choice-{_controls.Count}";
         var panel = new StackPanel { Spacing = 6 };
-        panel.Children.Add(new TextBlock { Text = field.Label, FontSize = 12, Foreground = new SolidColorBrush(Color.Parse("#8A9099")) });
+        panel.Children.Add(new TextBlock { Text = field.Label, FontSize = 12, Foreground = Palette.TextMuted });
         for (var i = 0; i < field.Choices.Count; i++)
         {
             var choice = field.Choices[i];
@@ -167,7 +168,7 @@ public sealed class FormDialog : Window
                             Text = choice.Description,
                             FontSize = 12,
                             TextWrapping = TextWrapping.Wrap,
-                            Foreground = new SolidColorBrush(Color.Parse(choice.IsWarning ? "#F26B6B" : "#8A9099")),
+                            Foreground = choice.IsWarning ? Palette.Error : Palette.TextMuted,
                         },
                     },
                 },

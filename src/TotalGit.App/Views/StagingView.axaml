@@ -1,4 +1,5 @@
 <UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:t="using:TotalGit.App.Services"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:TotalGit.App.ViewModels"
              x:Class="TotalGit.App.Views.StagingView"
@@ -26,7 +27,7 @@
     <Style Selector="TextBlock.header">
       <Setter Property="FontSize" Value="11" />
       <Setter Property="FontWeight" Value="SemiBold" />
-      <Setter Property="Foreground" Value="#8A9099" />
+      <Setter Property="Foreground" Value="{x:Static t:Palette.TextMuted}" />
       <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
   </UserControl.Styles>
@@ -36,13 +37,13 @@
       <Grid Classes="row" ColumnDefinitions="18,Auto,*,Auto" Height="24" Background="Transparent" ToolTip.Tip="{Binding ToolTip}">
         <TextBlock Text="{Binding StatusLetter}" Foreground="{Binding StatusBrush}" FontWeight="Bold" FontSize="12"
                    VerticalAlignment="Center" IsVisible="{Binding IsFile}" />
-        <PathIcon Data="{StaticResource FolderIcon}" Width="12" Height="12" Foreground="#8A9099" HorizontalAlignment="Left"
+        <PathIcon Data="{StaticResource FolderIcon}" Width="12" Height="12" Foreground="{x:Static t:Palette.TextMuted}" HorizontalAlignment="Left"
                   VerticalAlignment="Center" IsVisible="{Binding IsFolder}" />
-        <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="12" Foreground="#E6E8EB" VerticalAlignment="Center"
+        <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="12" Foreground="{x:Static t:Palette.TextPrimary}" VerticalAlignment="Center"
                    TextTrimming="CharacterEllipsis" />
-        <TextBlock Grid.Column="2" Text="{Binding Subtitle}" FontSize="11" Foreground="#6B727C" IsVisible="{Binding HasSubtitle}"
+        <TextBlock Grid.Column="2" Text="{Binding Subtitle}" FontSize="11" Foreground="{x:Static t:Palette.TextDim}" IsVisible="{Binding HasSubtitle}"
                    TextTrimming="LeadingCharacterEllipsis" VerticalAlignment="Center" Margin="6,0,0,0" />
-        <TextBlock Grid.Column="2" Text="{Binding FileCount}" FontSize="11" Foreground="#6B727C" IsVisible="{Binding IsFolder}"
+        <TextBlock Grid.Column="2" Text="{Binding FileCount}" FontSize="11" Foreground="{x:Static t:Palette.TextDim}" IsVisible="{Binding IsFolder}"
                    VerticalAlignment="Center" Margin="6,0,0,0" />
         <Button Grid.Column="3" Classes="fileAction" Content="{Binding ActionText}" Margin="0,0,6,0"
                 Command="{Binding $parent[UserControl].((vm:StagingViewModel)DataContext).StageNodeCommand}"
@@ -55,7 +56,7 @@
     <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="10,8,10,0">
       <TextBox x:Name="FilterBox" Text="{Binding Filter}" PlaceholderText="Filter files" FontSize="12" MinHeight="28" Padding="6,4">
         <TextBox.InnerRightContent>
-          <PathIcon Data="{StaticResource SearchIcon}" Width="12" Height="12" Margin="0,0,8,0" Foreground="#8A9099" />
+          <PathIcon Data="{StaticResource SearchIcon}" Width="12" Height="12" Margin="0,0,8,0" Foreground="{x:Static t:Palette.TextMuted}" />
         </TextBox.InnerRightContent>
       </TextBox>
       <ToggleButton Grid.Column="1" IsChecked="{Binding ShowAsTree}" Margin="6,0,0,0" Padding="7,0" MinHeight="28"
@@ -83,7 +84,7 @@
                 ScrollViewer.HorizontalScrollBarVisibility="Disabled" />
     </Grid>
 
-    <Border Grid.Row="3" Padding="14,10" BorderBrush="#30353C" BorderThickness="0,1,0,0">
+    <Border Grid.Row="3" Padding="14,10" BorderBrush="{x:Static t:Palette.Border}" BorderThickness="0,1,0,0">
       <StackPanel Spacing="8">
         <Grid ColumnDefinitions="*,Auto">
           <TextBlock Classes="header" Text="Commit" />

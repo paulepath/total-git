@@ -1,11 +1,12 @@
 <UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:t="using:TotalGit.App.Services"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:TotalGit.App.ViewModels"
              xmlns:views="using:TotalGit.App.Views"
              xmlns:git="using:TotalGit.Core.Git"
              x:Class="TotalGit.App.Views.MergeToolView"
              x:DataType="vm:MergeToolViewModel"
-             Background="#1C1F24">
+             Background="{x:Static t:Palette.Surface}">
   <UserControl.Styles>
     <Style Selector="TextBlock.paneTitle">
       <Setter Property="FontSize" Value="12" />
@@ -14,7 +15,7 @@
     </Style>
     <Style Selector="TextBlock.hint">
       <Setter Property="FontSize" Value="11" />
-      <Setter Property="Foreground" Value="#7A818B" />
+      <Setter Property="Foreground" Value="{x:Static t:Palette.TextHint}" />
       <Setter Property="VerticalAlignment" Value="Center" />
       <Setter Property="Margin" Value="10,0,0,0" />
     </Style>
@@ -31,31 +32,31 @@
       <Setter Property="Margin" Value="0,0,6,0" />
     </Style>
     <Style Selector="ToggleButton.base:checked /template/ ContentPresenter#PART_ContentPresenter">
-      <Setter Property="Background" Value="#8A6420" />
+      <Setter Property="Background" Value="{x:Static t:Palette.BaseActive}" />
     </Style>
     <Style Selector="ToggleButton.ours:checked /template/ ContentPresenter#PART_ContentPresenter">
-      <Setter Property="Background" Value="#24497A" />
+      <Setter Property="Background" Value="{x:Static t:Palette.OursActive}" />
     </Style>
     <Style Selector="ToggleButton.theirs:checked /template/ ContentPresenter#PART_ContentPresenter">
-      <Setter Property="Background" Value="#1F6146" />
+      <Setter Property="Background" Value="{x:Static t:Palette.TheirsActive}" />
     </Style>
   </UserControl.Styles>
 
   <DockPanel>
     <!-- Header: file, navigation, whole-file choices, save -->
-    <Border DockPanel.Dock="Top" Background="#23272D" Padding="12,6" BorderBrush="#30353C" BorderThickness="0,0,0,1">
+    <Border DockPanel.Dock="Top" Background="{x:Static t:Palette.Panel}" Padding="12,6" BorderBrush="{x:Static t:Palette.Border}" BorderThickness="0,0,0,1">
       <Grid ColumnDefinitions="Auto,*,Auto">
         <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-          <PathIcon Data="{StaticResource MergeIcon}" Width="14" Height="14" Foreground="#F5C26B" />
-          <TextBlock Text="{Binding Path}" FontFamily="Cascadia Mono, Consolas, monospace" FontSize="12" Foreground="#E6E8EB"
+          <PathIcon Data="{StaticResource MergeIcon}" Width="14" Height="14" Foreground="{x:Static t:Palette.Warning}" />
+          <TextBlock Text="{Binding Path}" FontFamily="Cascadia Mono, Consolas, monospace" FontSize="12" Foreground="{x:Static t:Palette.TextPrimary}"
                      VerticalAlignment="Center" />
         </StackPanel>
         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" Margin="16,0" VerticalAlignment="Center" IsVisible="{Binding HasConflicts}">
           <Button Classes="small" Command="{Binding PreviousCommand}" ToolTip.Tip="Previous conflict (Ctrl+Up)">‹</Button>
-          <TextBlock Text="{Binding PositionText}" FontSize="12" Foreground="#A9AFB8" VerticalAlignment="Center" />
+          <TextBlock Text="{Binding PositionText}" FontSize="12" Foreground="{x:Static t:Palette.TextSecondary}" VerticalAlignment="Center" />
           <Button Classes="small" Command="{Binding NextCommand}" ToolTip.Tip="Next conflict (Ctrl+Down)">›</Button>
           <Button Classes="small" Command="{Binding NextUnresolvedCommand}" ToolTip.Tip="Next unresolved conflict (Ctrl+Shift+Down)">Next unresolved</Button>
-          <TextBlock Text="{Binding UnresolvedText}" FontSize="11" Foreground="#8A9099" VerticalAlignment="Center" Margin="6,0,0,0" />
+          <TextBlock Text="{Binding UnresolvedText}" FontSize="11" Foreground="{x:Static t:Palette.TextMuted}" VerticalAlignment="Center" Margin="6,0,0,0" />
         </StackPanel>
         <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
           <Button Classes="small" Content="Whole file ▾" ToolTip.Tip="Resolve the whole file with one side's version">
@@ -79,11 +80,11 @@
 
     <!-- Binary files can only take one side. -->
     <TextBlock IsVisible="{Binding IsBinary}" Text="This is a binary file. Use the Whole file menu above to choose which side's version to keep."
-               HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="#8A9099" />
+               HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{x:Static t:Palette.TextMuted}" />
 
     <Grid x:Name="TextPanes" IsVisible="{Binding IsText}" RowDefinitions="Auto,*,4,Auto,*,Auto" ColumnDefinitions="*,Auto">
       <!-- What goes into the result for the current conflict -->
-      <Border Grid.Row="0" Grid.ColumnSpan="2" Background="#1F2328" Padding="12,5" BorderBrush="#30353C" BorderThickness="0,0,0,1">
+      <Border Grid.Row="0" Grid.ColumnSpan="2" Background="{x:Static t:Palette.SubHeader}" Padding="12,5" BorderBrush="{x:Static t:Palette.Border}" BorderThickness="0,0,0,1">
         <Grid ColumnDefinitions="Auto,*,Auto">
           <StackPanel Orientation="Horizontal" Spacing="6" IsEnabled="{Binding HasConflicts}" IsVisible="{Binding IsPaneMode}">
             <ToggleButton Classes="small pick base" IsVisible="{Binding HasBase}" IsChecked="{Binding IsBasePicked, Mode=OneWay}"
@@ -101,11 +102,11 @@
                           ToolTip.Tip="Add this side to the result, after what's picked (Ctrl+3)">
               <StackPanel Orientation="Horizontal"><TextBlock Classes="key" Text="C" /><TextBlock Text="{Binding TheirsLabel}" MaxWidth="220" TextTrimming="CharacterEllipsis" /></StackPanel>
             </ToggleButton>
-            <Border Width="1" Background="#3A3F47" Margin="4,2" />
+            <Border Width="1" Background="{x:Static t:Palette.Separator}" Margin="4,2" />
             <Button Classes="small" Command="{Binding SwapOrderCommand}" ToolTip.Tip="Put the picked sides the other way round">Swap order</Button>
             <Button Classes="small" Command="{Binding UseNothingCommand}" ToolTip.Tip="Leave this conflict's lines out of the result">Use nothing</Button>
             <Button Classes="small" Command="{Binding ClearChoiceCommand}" ToolTip.Tip="Unresolve this conflict">Clear</Button>
-            <TextBlock Text="{Binding CurrentChoiceText}" FontSize="12" Foreground="#A9AFB8" VerticalAlignment="Center" Margin="8,0,0,0"
+            <TextBlock Text="{Binding CurrentChoiceText}" FontSize="12" Foreground="{x:Static t:Palette.TextSecondary}" VerticalAlignment="Center" Margin="8,0,0,0"
                        TextTrimming="CharacterEllipsis" MaxWidth="420" />
           </StackPanel>
           <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6">
@@ -122,31 +123,31 @@
       <ScrollBar DockPanel.Dock="Bottom" x:Name="SourceHScroll" Orientation="Horizontal" IsVisible="False" AllowAutoHide="False" />
       <Grid x:Name="SourcePanes" ColumnDefinitions="*,4,*,4,*">
         <DockPanel Grid.Column="0" x:Name="BaseColumn">
-          <Border DockPanel.Dock="Top" Background="#3A2E17" Padding="10,4" Height="26">
+          <Border DockPanel.Dock="Top" Background="{x:Static t:Palette.BaseFill}" Padding="10,4" Height="26">
             <StackPanel Orientation="Horizontal">
-              <TextBlock Classes="paneTitle" Foreground="#F0C27A" Text="A  Base" />
+              <TextBlock Classes="paneTitle" Foreground="{x:Static t:Palette.BaseTitle}" Text="A  Base" />
               <TextBlock Classes="hint" Text="common ancestor" />
             </StackPanel>
           </Border>
           <views:MergePaneView x:Name="BasePane" Pane="Base" />
         </DockPanel>
-        <GridSplitter Grid.Column="1" x:Name="BaseSplitter" ResizeDirection="Columns" Background="#2B2F36" />
+        <GridSplitter Grid.Column="1" x:Name="BaseSplitter" ResizeDirection="Columns" Background="{x:Static t:Palette.Splitter}" />
         <DockPanel Grid.Column="2">
-          <Border DockPanel.Dock="Top" Background="#1B2C40" Padding="10,4" Height="26" ToolTip.Tip="{Binding OursRole}">
+          <Border DockPanel.Dock="Top" Background="{x:Static t:Palette.OursFill}" Padding="10,4" Height="26" ToolTip.Tip="{Binding OursRole}">
             <StackPanel Orientation="Horizontal">
-              <TextBlock Classes="paneTitle" Foreground="#8CC4FF" Text="{Binding OursLabel, StringFormat='B  {0}'}" TextTrimming="CharacterEllipsis" />
-              <TextBlock Classes="hint" Text="{Binding OursRole}" Foreground="#A9C8E8" IsVisible="{Binding OursRole, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+              <TextBlock Classes="paneTitle" Foreground="{x:Static t:Palette.OursTitle}" Text="{Binding OursLabel, StringFormat='B  {0}'}" TextTrimming="CharacterEllipsis" />
+              <TextBlock Classes="hint" Text="{Binding OursRole}" Foreground="{x:Static t:Palette.GhostText}" IsVisible="{Binding OursRole, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
               <TextBlock Classes="hint" Text="click a line to pick it · click the margin for the whole side" />
             </StackPanel>
           </Border>
           <views:MergePaneView x:Name="OursPane" Pane="Ours" />
         </DockPanel>
-        <GridSplitter Grid.Column="3" ResizeDirection="Columns" Background="#2B2F36" />
+        <GridSplitter Grid.Column="3" ResizeDirection="Columns" Background="{x:Static t:Palette.Splitter}" />
         <DockPanel Grid.Column="4">
-          <Border DockPanel.Dock="Top" Background="#1B3329" Padding="10,4" Height="26" ToolTip.Tip="{Binding TheirsRole}">
+          <Border DockPanel.Dock="Top" Background="{x:Static t:Palette.TheirsFill}" Padding="10,4" Height="26" ToolTip.Tip="{Binding TheirsRole}">
             <StackPanel Orientation="Horizontal">
-              <TextBlock Classes="paneTitle" Foreground="#7FE0B2" Text="{Binding TheirsLabel, StringFormat='C  {0}'}" TextTrimming="CharacterEllipsis" />
-              <TextBlock Classes="hint" Text="{Binding TheirsRole}" Foreground="#A3DCC2" />
+              <TextBlock Classes="paneTitle" Foreground="{x:Static t:Palette.TheirsTitle}" Text="{Binding TheirsLabel, StringFormat='C  {0}'}" TextTrimming="CharacterEllipsis" />
+              <TextBlock Classes="hint" Text="{Binding TheirsRole}" Foreground="{x:Static t:Palette.TheirsHint}" />
             </StackPanel>
           </Border>
           <views:MergePaneView x:Name="TheirsPane" Pane="Theirs" />
@@ -154,12 +155,12 @@
       </Grid>
       </DockPanel>
 
-      <GridSplitter Grid.Row="2" ResizeDirection="Rows" Background="#2B2F36" />
+      <GridSplitter Grid.Row="2" ResizeDirection="Rows" Background="{x:Static t:Palette.Splitter}" />
 
       <!-- Result -->
-      <Border Grid.Row="3" Background="#23272D" Padding="10,4" Height="26">
+      <Border Grid.Row="3" Background="{x:Static t:Palette.Panel}" Padding="10,4" Height="26">
         <StackPanel Orientation="Horizontal">
-          <TextBlock Classes="paneTitle" Foreground="#E6E8EB" Text="Result" />
+          <TextBlock Classes="paneTitle" Foreground="{x:Static t:Palette.TextPrimary}" Text="Result" />
           <TextBlock Classes="hint" Text="double-click a block to type over it" IsVisible="{Binding IsPaneMode}" />
         </StackPanel>
       </Border>
@@ -167,7 +168,7 @@
         <views:MergePaneView x:Name="ResultPane" Pane="Result" IsVisible="{Binding IsPaneMode}" />
         <Canvas x:Name="EditLayer" IsVisible="{Binding IsPaneMode}" />
         <TextBox Text="{Binding Result}" IsVisible="{Binding IsTextMode}" AcceptsReturn="True" AcceptsTab="True" TextWrapping="NoWrap"
-                 FontFamily="Cascadia Mono, Consolas, monospace" FontSize="12" Background="#16191D" BorderThickness="0"
+                 FontFamily="Cascadia Mono, Consolas, monospace" FontSize="12" Background="{x:Static t:Palette.Input}" BorderThickness="0"
                  CornerRadius="0" VerticalContentAlignment="Top"
                  ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.VerticalScrollBarVisibility="Auto" />
       </Panel>

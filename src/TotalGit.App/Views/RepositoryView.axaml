@@ -1,4 +1,5 @@
 <UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:t="using:TotalGit.App.Services"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:TotalGit.App.ViewModels"
              xmlns:views="using:TotalGit.App.Views"
@@ -7,14 +8,14 @@
   <!-- One repository tab: toolbar, banner, sidebar, graph/diff and details. -->
   <UserControl.Styles>
     <Style Selector="Button.recentTile">
-      <Setter Property="Background" Value="#23272D" />
-      <Setter Property="BorderBrush" Value="#30353C" />
+      <Setter Property="Background" Value="{x:Static t:Palette.Panel}" />
+      <Setter Property="BorderBrush" Value="{x:Static t:Palette.Border}" />
       <Setter Property="BorderThickness" Value="1" />
       <Setter Property="CornerRadius" Value="6" />
     </Style>
     <Style Selector="Button.recentTile:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-      <Setter Property="Background" Value="#2B3038" />
-      <Setter Property="BorderBrush" Value="#4A505A" />
+      <Setter Property="Background" Value="{x:Static t:Palette.TileHover}" />
+      <Setter Property="BorderBrush" Value="{x:Static t:Palette.BorderInput}" />
     </Style>
     <Style Selector="Button.tileRemove">
       <Setter Property="Background" Value="Transparent" />
@@ -29,7 +30,7 @@
   </UserControl.Styles>
   <DockPanel>
     <!-- Toolbar -->
-    <Border DockPanel.Dock="Top" Background="{StaticResource ToolbarBackgroundBrush}" Padding="10,6">
+    <Border DockPanel.Dock="Top" Background="{x:Static t:Palette.Toolbar}" Padding="10,6">
       <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto">
         <Button Grid.Column="0" Classes="tool" Command="{Binding OpenRepositoryCommand}" ToolTip.Tip="Open repository (Ctrl+O)">
           <StackPanel>
@@ -40,24 +41,24 @@
 
         <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="14,0,0,0" VerticalAlignment="Center">
           <StackPanel>
-            <TextBlock Text="repository" FontSize="11" Foreground="{StaticResource MutedTextBrush}" />
-            <TextBlock Text="{Binding RepositoryName}" FontSize="16" FontWeight="SemiBold" Foreground="{StaticResource PrimaryTextBrush}" />
+            <TextBlock Text="repository" FontSize="11" Foreground="{x:Static t:Palette.TextMuted}" />
+            <TextBlock Text="{Binding RepositoryName}" FontSize="16" FontWeight="SemiBold" Foreground="{x:Static t:Palette.TextPrimary}" />
           </StackPanel>
-          <PathIcon Width="10" Height="10" Margin="14,14,14,0" Foreground="{StaticResource MutedTextBrush}" Data="{StaticResource ChevronIcon}"
+          <PathIcon Width="10" Height="10" Margin="14,14,14,0" Foreground="{x:Static t:Palette.TextMuted}" Data="{StaticResource ChevronIcon}"
                     IsVisible="{Binding HasWorktreeName}" />
           <StackPanel IsVisible="{Binding HasWorktreeName}">
-            <TextBlock Text="worktree" FontSize="11" Foreground="{StaticResource MutedTextBrush}" />
+            <TextBlock Text="worktree" FontSize="11" Foreground="{x:Static t:Palette.TextMuted}" />
             <StackPanel Orientation="Horizontal" Spacing="6">
               <Image Source="{Binding CurrentBranchIcon}" IsVisible="{Binding HasCurrentBranchIcon}" Width="16" Height="16" VerticalAlignment="Center" />
-              <TextBlock Text="{Binding WorktreeName}" FontSize="16" FontWeight="SemiBold" Foreground="#B084F5" />
+              <TextBlock Text="{Binding WorktreeName}" FontSize="16" FontWeight="SemiBold" Foreground="{x:Static t:Palette.WorktreeName}" />
             </StackPanel>
           </StackPanel>
-          <PathIcon Width="10" Height="10" Margin="14,14,14,0" Foreground="{StaticResource MutedTextBrush}" Data="{StaticResource ChevronIcon}" />
+          <PathIcon Width="10" Height="10" Margin="14,14,14,0" Foreground="{x:Static t:Palette.TextMuted}" Data="{StaticResource ChevronIcon}" />
           <StackPanel>
-            <TextBlock Text="branch" FontSize="11" Foreground="{StaticResource MutedTextBrush}" />
+            <TextBlock Text="branch" FontSize="11" Foreground="{x:Static t:Palette.TextMuted}" />
             <StackPanel Orientation="Horizontal" Spacing="6" ToolTip.Tip="{Binding CurrentBranch}">
               <Image Source="{Binding CurrentBranchIcon}" IsVisible="{Binding HasCurrentBranchIcon}" Width="16" Height="16" VerticalAlignment="Center" />
-              <TextBlock Text="{Binding CurrentBranchDisplay}" FontSize="16" FontWeight="SemiBold" Foreground="{StaticResource PrimaryTextBrush}" />
+              <TextBlock Text="{Binding CurrentBranchDisplay}" FontSize="16" FontWeight="SemiBold" Foreground="{x:Static t:Palette.TextPrimary}" />
             </StackPanel>
           </StackPanel>
         </StackPanel>
@@ -107,7 +108,7 @@
               <TextBlock Classes="label" Text="Pop" />
             </StackPanel>
           </Button>
-          <Border Width="1" Background="#3A3F47" Margin="8,6" />
+          <Border Width="1" Background="{x:Static t:Palette.Separator}" Margin="8,6" />
           <Button Classes="tool" Command="{Binding CreateBranchAtHeadCommand}" ToolTip.Tip="Create a branch from HEAD">
             <StackPanel>
               <PathIcon Data="{StaticResource BranchIcon}" />
@@ -122,14 +123,14 @@
           </Button>
           <Button Classes="tool" Command="{Binding OpenInVsCodeCommand}" ToolTip.Tip="Open this worktree in VS Code">
             <StackPanel>
-              <PathIcon Data="{StaticResource CodeIcon}" Foreground="#3FA0F0" />
+              <PathIcon Data="{StaticResource CodeIcon}" Foreground="{x:Static t:Palette.VsCodeBlue}" />
               <TextBlock Classes="label" Text="VS Code" />
             </StackPanel>
           </Button>
           <!-- The Total Git extension for VS Code (worktrees in VS Code), bundled with each release. -->
           <Button Classes="tool" MinWidth="0" Padding="2,4" Margin="-6,0,0,0" IsVisible="{Binding OffersVsCodeExtension}"
                   ToolTip.Tip="The Total Git extension for VS Code">
-            <PathIcon Data="{StaticResource ChevronIcon}" Width="10" Height="10" Foreground="#A9AFB8">
+            <PathIcon Data="{StaticResource ChevronIcon}" Width="10" Height="10" Foreground="{x:Static t:Palette.TextSecondary}">
               <PathIcon.RenderTransform>
                 <RotateTransform Angle="90" />
               </PathIcon.RenderTransform>
@@ -143,14 +144,14 @@
           </Button>
           <Button Classes="tool" Command="{Binding OpenInVisualStudioCommand}" ToolTip.Tip="Open this worktree's solution (.sln/.slnx) in Visual Studio">
             <StackPanel>
-              <PathIcon Data="{StaticResource VisualStudioIcon}" Foreground="#A77BDB" />
+              <PathIcon Data="{StaticResource VisualStudioIcon}" Foreground="{x:Static t:Palette.VisualStudioPurple}" />
               <TextBlock Classes="label" Text="Visual Studio" />
             </StackPanel>
           </Button>
           <!-- The Total Git extension for Visual Studio (a Worktrees window), bundled with each release. -->
           <Button Classes="tool" MinWidth="0" Padding="2,4" Margin="-6,0,0,0" IsVisible="{Binding OffersVisualStudioExtension}"
                   ToolTip.Tip="The Total Git extension for Visual Studio">
-            <PathIcon Data="{StaticResource ChevronIcon}" Width="10" Height="10" Foreground="#A9AFB8">
+            <PathIcon Data="{StaticResource ChevronIcon}" Width="10" Height="10" Foreground="{x:Static t:Palette.TextSecondary}">
               <PathIcon.RenderTransform>
                 <RotateTransform Angle="90" />
               </PathIcon.RenderTransform>
@@ -167,8 +168,8 @@
 
         <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center" Spacing="8" Margin="0,0,10,0">
           <ProgressBar IsIndeterminate="True" Width="60" IsVisible="{Binding IsBusy}" />
-          <TextBlock Text="{Binding BusyText}" Foreground="{StaticResource MutedTextBrush}" IsVisible="{Binding IsBusy}" />
-          <TextBlock Text="{Binding CommitCountText}" Foreground="{StaticResource MutedTextBrush}" IsVisible="{Binding !IsBusy}" />
+          <TextBlock Text="{Binding BusyText}" Foreground="{x:Static t:Palette.TextMuted}" IsVisible="{Binding IsBusy}" />
+          <TextBlock Text="{Binding CommitCountText}" Foreground="{x:Static t:Palette.TextMuted}" IsVisible="{Binding !IsBusy}" />
         </StackPanel>
 
         <StackPanel Grid.Column="4" Orientation="Horizontal">
@@ -184,10 +185,10 @@
 
     <!-- Merge / rebase in progress -->
     <Border DockPanel.Dock="Top" IsVisible="{Binding OperationBanner, Converter={x:Static ObjectConverters.IsNotNull}}"
-            Background="#5B4513" Padding="14,8">
+            Background="{x:Static t:Palette.OperationBanner}" Padding="14,8">
       <Grid ColumnDefinitions="Auto,*,Auto">
-        <PathIcon Data="{StaticResource MergeIcon}" Width="16" Height="16" Foreground="#F5C26B" Margin="0,0,10,0" />
-        <TextBlock Grid.Column="1" Text="{Binding OperationBanner.Message}" TextWrapping="Wrap" VerticalAlignment="Center" Foreground="#F0F2F5" />
+        <PathIcon Data="{StaticResource MergeIcon}" Width="16" Height="16" Foreground="{x:Static t:Palette.Warning}" Margin="0,0,10,0" />
+        <TextBlock Grid.Column="1" Text="{Binding OperationBanner.Message}" TextWrapping="Wrap" VerticalAlignment="Center" Foreground="{x:Static t:Palette.BannerText}" />
         <ItemsControl Grid.Column="2" ItemsSource="{Binding OperationBanner.Actions}" Margin="12,0,0,0">
           <ItemsControl.ItemsPanel>
             <ItemsPanelTemplate>
@@ -209,9 +210,9 @@
       <Panel>
       <!-- Counts down to the banner closing itself (banners with actions stay). -->
       <ProgressBar VerticalAlignment="Bottom" Height="2" MinHeight="0" Minimum="0" Maximum="1" Value="{Binding BannerTimeLeft}"
-                   IsVisible="{Binding BannerClosesItself}" Foreground="#66FFFFFF" Background="Transparent" CornerRadius="0" />
+                   IsVisible="{Binding BannerClosesItself}" Foreground="{x:Static t:Palette.BannerCountdown}" Background="Transparent" CornerRadius="0" />
       <Grid ColumnDefinitions="*,Auto,Auto" Margin="14,8">
-        <SelectableTextBlock Text="{Binding Banner.Message}" TextWrapping="Wrap" VerticalAlignment="Center" Foreground="#F0F2F5" />
+        <SelectableTextBlock Text="{Binding Banner.Message}" TextWrapping="Wrap" VerticalAlignment="Center" Foreground="{x:Static t:Palette.BannerText}" />
         <ItemsControl Grid.Column="1" ItemsSource="{Binding Banner.Actions}" Margin="12,0,0,0">
           <ItemsControl.ItemsPanel>
             <ItemsPanelTemplate>
@@ -233,15 +234,15 @@
 
     <Grid x:Name="MainGrid" ColumnDefinitions="240,4,*,4,380">
       <!-- The folded sidebar (when unpinned): a thin rail; pointing at it opens the sidebar over the graph. -->
-      <Border Grid.Column="0" x:Name="SidebarRail" IsVisible="False" Background="#23272D" Cursor="Hand"
-              BorderBrush="#30353C" BorderThickness="0,0,1,0" ToolTip.Tip="Branches, worktrees and pull requests (point to open)">
+      <Border Grid.Column="0" x:Name="SidebarRail" IsVisible="False" Background="{x:Static t:Palette.Panel}" Cursor="Hand"
+              BorderBrush="{x:Static t:Palette.Border}" BorderThickness="0,0,1,0" ToolTip.Tip="Branches, worktrees and pull requests (point to open)">
         <StackPanel Spacing="14" Margin="0,12,0,0" HorizontalAlignment="Center">
-          <PathIcon Data="{StaticResource ChevronIcon}" Width="14" Height="14" Foreground="#A9AFB8" />
-          <PathIcon Data="{StaticResource BranchIcon}" Width="14" Height="14" Foreground="#8A9099" />
-          <PathIcon Data="{StaticResource TagIcon}" Width="14" Height="14" Foreground="#8A9099" />
-          <PathIcon Data="{StaticResource StashIcon}" Width="14" Height="14" Foreground="#8A9099" />
-          <PathIcon Data="{StaticResource WorktreeIcon}" Width="14" Height="14" Foreground="#8A9099" />
-          <PathIcon Data="{StaticResource PullRequestIcon}" Width="14" Height="14" Foreground="#8A9099" />
+          <PathIcon Data="{StaticResource ChevronIcon}" Width="14" Height="14" Foreground="{x:Static t:Palette.TextSecondary}" />
+          <PathIcon Data="{StaticResource BranchIcon}" Width="14" Height="14" Foreground="{x:Static t:Palette.TextMuted}" />
+          <PathIcon Data="{StaticResource TagIcon}" Width="14" Height="14" Foreground="{x:Static t:Palette.TextMuted}" />
+          <PathIcon Data="{StaticResource StashIcon}" Width="14" Height="14" Foreground="{x:Static t:Palette.TextMuted}" />
+          <PathIcon Data="{StaticResource WorktreeIcon}" Width="14" Height="14" Foreground="{x:Static t:Palette.TextMuted}" />
+          <PathIcon Data="{StaticResource PullRequestIcon}" Width="14" Height="14" Foreground="{x:Static t:Palette.TextMuted}" />
         </StackPanel>
       </Border>
       <views:SidebarView Grid.Column="0" x:Name="Sidebar" DataContext="{Binding Sidebar}" ZIndex="10" />
@@ -250,7 +251,7 @@
       <Panel Grid.Column="2">
         <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,*" IsVisible="{Binding HasRepository}">
           <!-- Graph filters: one developer, the current branch's line, folding rebased runs. -->
-          <Border Grid.ColumnSpan="2" Background="#1F2328" BorderBrush="#30353C" BorderThickness="0,0,0,1" Padding="8,4">
+          <Border Grid.ColumnSpan="2" Background="{x:Static t:Palette.SubHeader}" BorderBrush="{x:Static t:Palette.Border}" BorderThickness="0,0,0,1" Padding="8,4">
             <Border.Styles>
               <Style Selector="ToggleButton.filter">
                 <Setter Property="Padding" Value="10,3" />
@@ -258,12 +259,13 @@
                 <Setter Property="FontSize" Value="12" />
                 <Setter Property="CornerRadius" Value="13" />
                 <Setter Property="Background" Value="Transparent" />
-                <Setter Property="BorderBrush" Value="#3A4048" />
+                <Setter Property="BorderBrush" Value="{x:Static t:Palette.BorderControl}" />
                 <Setter Property="BorderThickness" Value="1" />
               </Style>
               <Style Selector="ToggleButton.filter:checked /template/ ContentPresenter#PART_ContentPresenter">
-                <Setter Property="Background" Value="#1F4E7A" />
-                <Setter Property="BorderBrush" Value="#3B82C4" />
+                <Setter Property="Background" Value="{x:Static t:Palette.SelectedFill}" />
+                <Setter Property="Foreground" Value="{x:Static t:Palette.SelectedFillText}" />
+                <Setter Property="BorderBrush" Value="{x:Static t:Palette.AccentBorder}" />
               </Style>
             </Border.Styles>
             <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="4">
@@ -277,7 +279,7 @@
                 </TextBox>
                 <Button Content="&#x2191;" Command="{Binding PreviousHistoryMatchCommand}" FontSize="12" Padding="7,2" MinHeight="26" ToolTip.Tip="Previous match (Shift+Enter)" />
                 <Button Content="&#x2193;" Command="{Binding NextHistoryMatchCommand}" FontSize="12" Padding="7,2" MinHeight="26" ToolTip.Tip="Next match (Enter)" />
-                <TextBlock Text="{Binding HistorySearchSummary}" ToolTip.Tip="{Binding HistorySearchDetail}" Foreground="#8A9099" FontSize="12"
+                <TextBlock Text="{Binding HistorySearchSummary}" ToolTip.Tip="{Binding HistorySearchDetail}" Foreground="{x:Static t:Palette.TextMuted}" FontSize="12"
                            VerticalAlignment="Center" Width="74" TextTrimming="CharacterEllipsis" />
               </StackPanel>
               <ComboBox ItemsSource="{Binding Authors}" SelectedItem="{Binding SelectedAuthor}" MinWidth="190" MaxDropDownHeight="420"
@@ -293,10 +295,10 @@
                           <Image Source="{Binding Avatar}" Stretch="UniformToFill" IsVisible="{Binding HasAvatar}" />
                         </Panel>
                       </Border>
-                      <PathIcon Data="{StaticResource PersonIcon}" Width="14" Height="14" Margin="2,0,10,0" Foreground="#8A9099"
+                      <PathIcon Data="{StaticResource PersonIcon}" Width="14" Height="14" Margin="2,0,10,0" Foreground="{x:Static t:Palette.TextMuted}"
                                 IsVisible="{Binding IsEveryone}" />
                       <TextBlock Grid.Column="1" Text="{Binding Label}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                      <TextBlock Grid.Column="2" Text="{Binding CountText}" Foreground="#6B727C" Margin="12,0,0,0" VerticalAlignment="Center"
+                      <TextBlock Grid.Column="2" Text="{Binding CountText}" Foreground="{x:Static t:Palette.TextDim}" Margin="12,0,0,0" VerticalAlignment="Center"
                                  FontFamily="Cascadia Mono, Consolas, monospace" FontSize="11" />
                     </Grid>
                   </DataTemplate>
@@ -317,7 +319,7 @@
                 </StackPanel>
               </ToggleButton>
               <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" IsVisible="{Binding HasFilters}">
-                <TextBlock Text="{Binding FilterSummary}" Foreground="#8A9099" FontSize="12" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding FilterSummary}" Foreground="{x:Static t:Palette.TextMuted}" FontSize="12" VerticalAlignment="Center" />
                 <Button Content="Clear filters" Command="{Binding ClearFiltersCommand}" FontSize="12" Padding="8,2" MinHeight="24" />
               </StackPanel>
             </WrapPanel>
@@ -339,17 +341,18 @@
         </Panel>
 
         <!-- Diff replaces the graph while a file is open, like GitKraken. -->
-        <DockPanel IsVisible="{Binding HasDiff}" Background="#1C1F24">
-          <Border DockPanel.Dock="Top" Background="#23272D" Padding="12,6" BorderBrush="#30353C" BorderThickness="0,0,0,1">
+        <DockPanel IsVisible="{Binding HasDiff}" Background="{x:Static t:Palette.Surface}">
+          <Border DockPanel.Dock="Top" Background="{x:Static t:Palette.Panel}" Padding="12,6" BorderBrush="{x:Static t:Palette.Border}" BorderThickness="0,0,0,1">
             <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto">
               <TextBlock Text="{Binding DiffTitle}" VerticalAlignment="Center" FontFamily="Cascadia Mono, Consolas, monospace" FontSize="12"
-                         Foreground="#E6E8EB" TextTrimming="CharacterEllipsis" />
+                         Foreground="{x:Static t:Palette.TextPrimary}" TextTrimming="CharacterEllipsis" />
               <!-- Changes only | whole file -->
               <ToggleButton Grid.Column="1" IsChecked="{Binding WholeFileDiff}" Padding="10,3" Margin="12,0,0,0" CornerRadius="4"
                             ToolTip.Tip="Show the whole file with the changes marked, not just the changed parts">
                 <ToggleButton.Styles>
                   <Style Selector="ToggleButton:checked /template/ ContentPresenter#PART_ContentPresenter">
-                    <Setter Property="Background" Value="#1F4E7A" />
+                    <Setter Property="Background" Value="{x:Static t:Palette.SelectedFill}" />
+                    <Setter Property="Foreground" Value="{x:Static t:Palette.SelectedFillText}" />
                   </Style>
                 </ToggleButton.Styles>
                 <StackPanel Orientation="Horizontal" Spacing="6">
@@ -380,7 +383,8 @@
                             ToolTip.Tip="Hide whitespace-only changes (git diff -w). Files and staging are unchanged.">
                 <ToggleButton.Styles>
                   <Style Selector="ToggleButton:checked /template/ ContentPresenter#PART_ContentPresenter">
-                    <Setter Property="Background" Value="#1F4E7A" />
+                    <Setter Property="Background" Value="{x:Static t:Palette.SelectedFill}" />
+                    <Setter Property="Foreground" Value="{x:Static t:Palette.SelectedFillText}" />
                   </Style>
                 </ToggleButton.Styles>
                 <TextBlock Text="Ignore whitespace" FontSize="12" />
@@ -410,8 +414,8 @@
           <StackPanel Margin="40,36" Spacing="14" MaxWidth="1180" HorizontalAlignment="Center">
             <Grid ColumnDefinitions="*,Auto">
               <StackPanel Spacing="4">
-                <TextBlock Text="Open a repository" FontSize="20" FontWeight="SemiBold" Foreground="#E6E8EB" />
-                <TextBlock Text="Pick one you've opened before, or open another folder." Foreground="{StaticResource MutedTextBrush}" />
+                <TextBlock Text="Open a repository" FontSize="20" FontWeight="SemiBold" Foreground="{x:Static t:Palette.TextPrimary}" />
+                <TextBlock Text="Pick one you've opened before, or open another folder." Foreground="{x:Static t:Palette.TextMuted}" />
               </StackPanel>
               <Button Grid.Column="1" Classes="accent" Command="{Binding OpenRepositoryCommand}" VerticalAlignment="Center">
                 <StackPanel Orientation="Horizontal" Spacing="8">
@@ -422,7 +426,7 @@
             </Grid>
 
             <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding HasRecent}" Margin="0,10,0,0">
-              <TextBlock Text="RECENT" FontSize="10.5" FontWeight="SemiBold" Foreground="#7D848E" LetterSpacing="0.8" VerticalAlignment="Center" />
+              <TextBlock Text="RECENT" FontSize="10.5" FontWeight="SemiBold" Foreground="{x:Static t:Palette.TextHeader}" LetterSpacing="0.8" VerticalAlignment="Center" />
               <TextBox Grid.Column="1" Text="{Binding RecentFilter}" PlaceholderText="Filter" Width="220" IsVisible="{Binding ShowRecentFilter}" />
             </Grid>
 
@@ -445,13 +449,13 @@
                       <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,*,Auto" Margin="14,10,10,10">
                         <Panel Grid.RowSpan="2" Width="28" Height="28" Margin="0,2,10,0" VerticalAlignment="Top">
                           <Image Source="{Binding Icon}" Width="22" Height="22" IsVisible="{Binding HasIcon}" />
-                          <PathIcon Data="{StaticResource FolderIcon}" Width="20" Height="20" Foreground="#8A9099" IsVisible="{Binding HasNoIcon}" />
+                          <PathIcon Data="{StaticResource FolderIcon}" Width="20" Height="20" Foreground="{x:Static t:Palette.TextMuted}" IsVisible="{Binding HasNoIcon}" />
                         </Panel>
-                        <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" Foreground="#E6E8EB"
+                        <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" Foreground="{x:Static t:Palette.TextPrimary}"
                                    TextTrimming="CharacterEllipsis" Margin="0,0,22,0" />
                         <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Spacing="5" Margin="0,3,0,0">
                           <Image Source="{Binding BranchIcon}" Width="12" Height="12" IsVisible="{Binding HasBranchIcon}" VerticalAlignment="Center" />
-                          <PathIcon Data="{StaticResource BranchIcon}" Width="11" Height="11" Foreground="#8A9099" VerticalAlignment="Center">
+                          <PathIcon Data="{StaticResource BranchIcon}" Width="11" Height="11" Foreground="{x:Static t:Palette.TextMuted}" VerticalAlignment="Center">
                             <PathIcon.IsVisible>
                               <MultiBinding Converter="{x:Static BoolConverters.And}">
                                 <Binding Path="HasBranch" />
@@ -459,13 +463,13 @@
                               </MultiBinding>
                             </PathIcon.IsVisible>
                           </PathIcon>
-                          <TextBlock Text="{Binding BranchDisplay}" FontSize="12" Foreground="#9DC4EA" IsVisible="{Binding HasBranch}"
+                          <TextBlock Text="{Binding BranchDisplay}" FontSize="12" Foreground="{x:Static t:Palette.BranchText}" IsVisible="{Binding HasBranch}"
                                      FontFamily="Cascadia Mono, Consolas, monospace" TextTrimming="CharacterEllipsis" MaxWidth="190" />
-                          <TextBlock Text="Folder not found" FontSize="12" Foreground="#E5484D" IsVisible="{Binding IsMissing}" />
+                          <TextBlock Text="Folder not found" FontSize="12" Foreground="{x:Static t:Palette.Failure}" IsVisible="{Binding IsMissing}" />
                         </StackPanel>
-                        <TextBlock Grid.Row="3" Grid.ColumnSpan="2" Text="{Binding Path}" FontSize="11" Foreground="#6B727C"
+                        <TextBlock Grid.Row="3" Grid.ColumnSpan="2" Text="{Binding Path}" FontSize="11" Foreground="{x:Static t:Palette.TextDim}"
                                    TextTrimming="LeadingCharacterEllipsis" />
-                        <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Text="{Binding OpenedText}" FontSize="11" Foreground="#8A9099"
+                        <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Text="{Binding OpenedText}" FontSize="11" Foreground="{x:Static t:Palette.TextMuted}"
                                    VerticalAlignment="Bottom" Margin="0,0,0,2" />
                       </Grid>
                       <!-- Forget this repository (only the entry; nothing on disk changes). -->
@@ -484,11 +488,11 @@
         </ScrollViewer>
 
         <TextBlock IsVisible="{Binding IsLoading}" Text="Loading repository..." FontSize="16"
-                   Foreground="{StaticResource MutedTextBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                   Foreground="{x:Static t:Palette.TextMuted}" HorizontalAlignment="Center" VerticalAlignment="Center" />
 
         <StackPanel IsVisible="{Binding LoadError, Converter={x:Static ObjectConverters.IsNotNull}}"
                     HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12" MaxWidth="600">
-          <TextBlock Text="{Binding LoadError}" Foreground="#F26B6B" TextWrapping="Wrap" HorizontalAlignment="Center" />
+          <TextBlock Text="{Binding LoadError}" Foreground="{x:Static t:Palette.Error}" TextWrapping="Wrap" HorizontalAlignment="Center" />
           <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
             <Button Content="Trust this folder" Command="{Binding TrustFolderCommand}" Classes="accent" IsVisible="{Binding CanTrustFolder}"
                     ToolTip.Tip="{Binding UntrustedPath, StringFormat='Adds {0} to the safe.directory list in your global git config'}" />
@@ -499,13 +503,13 @@
 
       <GridSplitter Grid.Column="3" ResizeDirection="Columns" />
 
-      <Panel Grid.Column="4" Background="#23272D">
+      <Panel Grid.Column="4" Background="{x:Static t:Palette.Panel}">
         <views:CommitDetailsView x:Name="DetailsView" DataContext="{Binding Details}" IsVisible="{Binding $parent[views:RepositoryView].((vm:RepositoryViewModel)DataContext).ShowDetails}" />
         <views:StagingView x:Name="StagingPane" DataContext="{Binding Staging}" IsVisible="{Binding $parent[views:RepositoryView].((vm:RepositoryViewModel)DataContext).ShowStaging}" />
         <views:WorktreeChangesView x:Name="WorktreeChangesPane" DataContext="{Binding WorktreeChanges}" IsVisible="{Binding $parent[views:RepositoryView].((vm:RepositoryViewModel)DataContext).ShowWorktreeChanges}" />
         <views:CommitRangeView DataContext="{Binding Range}" IsVisible="{Binding $parent[views:RepositoryView].((vm:RepositoryViewModel)DataContext).ShowRange}" />
         <views:NewBranchView DataContext="{Binding NewBranch}" IsVisible="{Binding $parent[views:RepositoryView].((vm:RepositoryViewModel)DataContext).ShowNewBranch}" />
-        <TextBlock Text="Select a commit to see its details" Foreground="{StaticResource MutedTextBrush}"
+        <TextBlock Text="Select a commit to see its details" Foreground="{x:Static t:Palette.TextMuted}"
                    HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="12">
           <TextBlock.IsVisible>
             <MultiBinding Converter="{x:Static BoolConverters.And}">

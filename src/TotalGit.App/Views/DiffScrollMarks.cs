@@ -5,6 +5,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.VisualTree;
+using TotalGit.App.Services;
 using TotalGit.Core.Git;
 
 namespace TotalGit.App.Views;
@@ -22,12 +23,12 @@ public sealed class DiffScrollMarks : Control
     private const double DotSize = 7;
 
     // The scroll bar's own track colour, which it no longer paints (so the marks show through).
-    private static readonly IBrush TrackBrush = new SolidColorBrush(Color.Parse("#1F1F1F"));
-    private static readonly IBrush RemovedBrush = new SolidColorBrush(Color.Parse("#E5392F"), 0.85);
-    private static readonly IBrush AddedBrush = new SolidColorBrush(Color.Parse("#2FBF71"), 0.85);
-    private static readonly IBrush SinceReviewBrush = new SolidColorBrush(Color.Parse("#A371F7"));
-    private static readonly IBrush CommentBrush = new SolidColorBrush(Color.Parse("#2D7BF4"));
-    private static readonly IPen CommentRing = new Pen(new SolidColorBrush(Color.Parse("#16181C")), 1.5);
+    private static readonly IBrush TrackBrush = Palette.ScrollTrack;
+    private static readonly IBrush RemovedBrush = Palette.MarkRemoved;
+    private static readonly IBrush AddedBrush = Palette.MarkAdded;
+    private static readonly IBrush SinceReviewBrush = Palette.Purple;
+    private static readonly IBrush CommentBrush = Palette.Blue;
+    private static readonly IPen CommentRing = new Pen(Palette.CommentRing, 1.5);
 
     private DiffView? _view;
     private ScrollBar? _bar;

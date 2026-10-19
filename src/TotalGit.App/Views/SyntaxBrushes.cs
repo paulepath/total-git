@@ -1,9 +1,13 @@
 using Avalonia.Media;
+using TotalGit.App.Services;
 using TotalGit.Core.Git;
 
 namespace TotalGit.App.Views;
 
-/// <summary>Applies syntax colours to a line's text, as drawn by the diff and merge views (tabs as four spaces).</summary>
+/// <summary>
+/// Applies syntax colours to a line's text, as drawn by the diff and merge views (tabs as four spaces), in the
+/// current theme's version of each colour.
+/// </summary>
 internal static class SyntaxBrushes
 {
     private static readonly Dictionary<uint, IBrush> Brushes = [];
@@ -18,7 +22,7 @@ internal static class SyntaxBrushes
             var start = hasTabs ? DisplayIndex(raw, s.Start) : s.Start;
             var end = hasTabs ? DisplayIndex(raw, s.Start + s.Length) : s.Start + s.Length;
             if (end <= start) continue;
-            if (s.Argb != 0) text.SetForegroundBrush(Brush(s.Argb), start, end - start);
+            if (s.Argb != 0) text.SetForegroundBrush(Brush(Palette.Syntax(s.Argb)), start, end - start);
             if (s.Bold) text.SetFontWeight(FontWeight.Bold, start, end - start);
             if (s.Italic) text.SetFontStyle(FontStyle.Italic, start, end - start);
         }

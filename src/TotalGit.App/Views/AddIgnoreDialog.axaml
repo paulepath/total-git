@@ -1,4 +1,5 @@
 <Window xmlns="https://github.com/avaloniaui"
+        xmlns:t="using:TotalGit.App.Services"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:TotalGit.App.ViewModels"
         x:Class="TotalGit.App.Views.AddIgnoreDialog"
@@ -6,26 +7,26 @@
         Title="Add to .gitignore"
         Width="780" Height="600" MinWidth="520" MinHeight="380"
         WindowStartupLocation="CenterOwner"
-        Background="#23272D">
+        Background="{x:Static t:Palette.Dialog}">
   <DockPanel Margin="20">
     <StackPanel DockPanel.Dock="Top" Spacing="8" Margin="0,0,0,12">
-      <TextBlock Text="Add to .gitignore" FontSize="18" FontWeight="SemiBold" Foreground="#E6E8EB" />
-      <TextBlock Foreground="#A9AFB8" TextWrapping="Wrap"
+      <TextBlock Text="Add to .gitignore" FontSize="18" FontWeight="SemiBold" Foreground="{x:Static t:Palette.TextPrimary}" />
+      <TextBlock Foreground="{x:Static t:Palette.TextSecondary}" TextWrapping="Wrap"
                  Text="One rule per line. A leading / anchors to the repository root, a trailing / matches folders, * matches anything but /, and ! re-includes." />
       <TextBox x:Name="RulesBox" Text="{Binding Rules}" AcceptsReturn="True" TextWrapping="NoWrap" Height="88"
                FontFamily="Cascadia Mono, Consolas, monospace" FontSize="12" />
       <StackPanel Orientation="Horizontal" Spacing="8">
-        <TextBlock Text="Add to" Foreground="#A9AFB8" VerticalAlignment="Center" />
+        <TextBlock Text="Add to" Foreground="{x:Static t:Palette.TextSecondary}" VerticalAlignment="Center" />
         <ComboBox ItemsSource="{x:Static vm:AddIgnoreViewModel.Targets}" SelectedIndex="{Binding TargetIndex}" MinWidth="280" />
       </StackPanel>
     </StackPanel>
 
     <StackPanel DockPanel.Dock="Bottom" Spacing="10" Margin="0,10,0,0">
       <Grid ColumnDefinitions="*,Auto">
-        <Border Background="#4A3A12" CornerRadius="4" Padding="10,6" IsVisible="{Binding HasTracked}" HorizontalAlignment="Left">
-          <TextBlock Foreground="#F5D48B" TextWrapping="Wrap" Text="{Binding TrackedText}" />
+        <Border Background="{x:Static t:Palette.WarningFill}" CornerRadius="4" Padding="10,6" IsVisible="{Binding HasTracked}" HorizontalAlignment="Left">
+          <TextBlock Foreground="{x:Static t:Palette.WarningText}" TextWrapping="Wrap" Text="{Binding TrackedText}" />
         </Border>
-        <TextBlock Grid.Column="1" Text="{Binding MatchText}" Foreground="#A9AFB8" VerticalAlignment="Top" Margin="12,0,0,0" />
+        <TextBlock Grid.Column="1" Text="{Binding MatchText}" Foreground="{x:Static t:Palette.TextSecondary}" VerticalAlignment="Top" Margin="12,0,0,0" />
       </Grid>
       <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
         <Button Content="Cancel" IsCancel="True" Click="OnCancel" />
@@ -34,9 +35,9 @@
     </StackPanel>
 
     <DockPanel>
-      <TextBlock DockPanel.Dock="Top" Text="Files that will be ignored" FontSize="11" FontWeight="SemiBold" Foreground="#8A9099"
+      <TextBlock DockPanel.Dock="Top" Text="Files that will be ignored" FontSize="11" FontWeight="SemiBold" Foreground="{x:Static t:Palette.TextMuted}"
                  Margin="0,0,0,4" />
-      <Border Background="#1C1F24" CornerRadius="4">
+      <Border Background="{x:Static t:Palette.Well}" CornerRadius="4">
         <ListBox ItemsSource="{Binding Matches}" Background="Transparent">
           <ListBox.Styles>
             <Style Selector="ListBoxItem">
@@ -46,7 +47,7 @@
           </ListBox.Styles>
           <ListBox.ItemTemplate>
             <DataTemplate x:DataType="x:String">
-              <TextBlock Text="{Binding}" FontFamily="Cascadia Mono, Consolas, monospace" FontSize="12" Foreground="#D5D8DD" />
+              <TextBlock Text="{Binding}" FontFamily="Cascadia Mono, Consolas, monospace" FontSize="12" Foreground="{x:Static t:Palette.TextStrong}" />
             </DataTemplate>
           </ListBox.ItemTemplate>
         </ListBox>

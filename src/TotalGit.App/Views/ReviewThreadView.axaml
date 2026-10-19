@@ -1,4 +1,5 @@
 <UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:t="using:TotalGit.App.Services"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:TotalGit.App.ViewModels"
              xmlns:views="using:TotalGit.App.Views"
@@ -8,34 +9,34 @@
              Padding="0,4,12,4">
   <UserControl.Styles>
     <Style Selector="Border.card">
-      <Setter Property="Background" Value="#1F2328" />
-      <Setter Property="BorderBrush" Value="#3A404A" />
+      <Setter Property="Background" Value="{x:Static t:Palette.Card}" />
+      <Setter Property="BorderBrush" Value="{x:Static t:Palette.BorderStrong}" />
       <Setter Property="BorderThickness" Value="1" />
       <Setter Property="CornerRadius" Value="10" />
     </Style>
     <Style Selector="Border.box">
-      <Setter Property="Background" Value="#262A31" />
-      <Setter Property="BorderBrush" Value="#3A404A" />
+      <Setter Property="Background" Value="{x:Static t:Palette.Raised}" />
+      <Setter Property="BorderBrush" Value="{x:Static t:Palette.BorderStrong}" />
       <Setter Property="BorderThickness" Value="1" />
       <Setter Property="CornerRadius" Value="8" />
       <Setter Property="ClipToBounds" Value="True" />
     </Style>
     <Style Selector="Border.box.author">
-      <Setter Property="BorderBrush" Value="#2F4F7A" />
+      <Setter Property="BorderBrush" Value="{x:Static t:Palette.AuthorBorder}" />
     </Style>
     <Style Selector="Border.boxHead">
-      <Setter Property="Background" Value="#2A2F37" />
-      <Setter Property="BorderBrush" Value="#3A404A" />
+      <Setter Property="Background" Value="{x:Static t:Palette.BoxHeader}" />
+      <Setter Property="BorderBrush" Value="{x:Static t:Palette.BorderStrong}" />
       <Setter Property="BorderThickness" Value="0,0,0,1" />
       <Setter Property="Padding" Value="12,3,4,3" />
       <Setter Property="MinHeight" Value="34" />
     </Style>
     <Style Selector="Border.boxHead.author">
-      <Setter Property="Background" Value="#1E2D42" />
-      <Setter Property="BorderBrush" Value="#2F4F7A" />
+      <Setter Property="Background" Value="{x:Static t:Palette.AuthorHeader}" />
+      <Setter Property="BorderBrush" Value="{x:Static t:Palette.AuthorBorder}" />
     </Style>
     <Style Selector="Border.badge">
-      <Setter Property="BorderBrush" Value="#4A515C" />
+      <Setter Property="BorderBrush" Value="{x:Static t:Palette.BorderBadge}" />
       <Setter Property="BorderThickness" Value="1" />
       <Setter Property="CornerRadius" Value="9" />
       <Setter Property="Padding" Value="7,0" />
@@ -43,11 +44,11 @@
     </Style>
     <Style Selector="Border.badge > TextBlock">
       <Setter Property="FontSize" Value="11" />
-      <Setter Property="Foreground" Value="#B4BAC3" />
+      <Setter Property="Foreground" Value="{x:Static t:Palette.TextBadge}" />
     </Style>
     <Style Selector="TextBlock.muted">
       <Setter Property="FontSize" Value="12" />
-      <Setter Property="Foreground" Value="#969CA5" />
+      <Setter Property="Foreground" Value="{x:Static t:Palette.TextMeta}" />
       <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
     <Style Selector="Button.icon">
@@ -57,7 +58,7 @@
       <Setter Property="Height" Value="28" />
       <Setter Property="MinHeight" Value="0" />
       <Setter Property="CornerRadius" Value="6" />
-      <Setter Property="Foreground" Value="#A9AFB8" />
+      <Setter Property="Foreground" Value="{x:Static t:Palette.TextSecondary}" />
       <Setter Property="HorizontalContentAlignment" Value="Center" />
       <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
@@ -76,19 +77,19 @@
       <Setter Property="Padding" Value="4,2" />
       <Setter Property="MinHeight" Value="0" />
       <Setter Property="FontSize" Value="12" />
-      <Setter Property="Foreground" Value="#A9AFB8" />
+      <Setter Property="Foreground" Value="{x:Static t:Palette.TextSecondary}" />
     </Style>
     <Style Selector="Button.link">
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="Padding" Value="0,2" />
       <Setter Property="MinHeight" Value="0" />
       <Setter Property="FontSize" Value="12" />
-      <Setter Property="Foreground" Value="#5AA9F2" />
+      <Setter Property="Foreground" Value="{x:Static t:Palette.Accent}" />
     </Style>
     <!-- Reaction chips: yours are filled in blue. -->
     <Style Selector="Button.chip">
-      <Setter Property="Background" Value="#262A31" />
-      <Setter Property="BorderBrush" Value="#474E59" />
+      <Setter Property="Background" Value="{x:Static t:Palette.Chip}" />
+      <Setter Property="BorderBrush" Value="{x:Static t:Palette.BorderPopup}" />
       <Setter Property="BorderThickness" Value="1" />
       <Setter Property="CornerRadius" Value="13" />
       <Setter Property="Height" Value="26" />
@@ -98,15 +99,15 @@
       <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
     <Style Selector="Button.chip.mine">
-      <Setter Property="Background" Value="#1F3A5F" />
-      <Setter Property="BorderBrush" Value="#2F6FBF" />
-      <Setter Property="Foreground" Value="#C9DDF5" />
+      <Setter Property="Background" Value="{x:Static t:Palette.ReactedFill}" />
+      <Setter Property="BorderBrush" Value="{x:Static t:Palette.ReactedBorder}" />
+      <Setter Property="Foreground" Value="{x:Static t:Palette.ReactedText}" />
     </Style>
     <Style Selector="Button.addReaction">
       <Setter Property="Width" Value="26" />
       <Setter Property="Height" Value="26" />
       <Setter Property="CornerRadius" Value="13" />
-      <Setter Property="BorderBrush" Value="#444B56" />
+      <Setter Property="BorderBrush" Value="{x:Static t:Palette.BorderHover}" />
       <Setter Property="BorderThickness" Value="1" />
     </Style>
     <Style Selector="Button.pick">
@@ -121,7 +122,7 @@
       <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
     <Style Selector="Button.pick.mine">
-      <Setter Property="Background" Value="#1F3A5F" />
+      <Setter Property="Background" Value="{x:Static t:Palette.ReactedFill}" />
     </Style>
     <!-- The hover bar shows over a comment while the pointer is on it. -->
     <Style Selector="Grid.commentRow Border.hoverBar">
@@ -132,7 +133,7 @@
     </Style>
     <Style Selector="Rectangle.rail">
       <Setter Property="Width" Value="2" />
-      <Setter Property="Fill" Value="#353B44" />
+      <Setter Property="Fill" Value="{x:Static t:Palette.RailLine}" />
       <Setter Property="HorizontalAlignment" Value="Center" />
     </Style>
     <Style Selector="TextBox.reply">
@@ -158,20 +159,20 @@
             </Button>
             <WrapPanel VerticalAlignment="Center">
             <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="4,4,8,4" ToolTip.Tip="{Binding FilePath}">
-              <PathIcon Data="{StaticResource FileIcon}" Width="12" Height="12" Foreground="#969CA5" />
-              <TextBlock Text="{Binding FileName}" FontFamily="Cascadia Mono, Consolas, monospace" FontSize="12" Foreground="#E6E8EB" VerticalAlignment="Center" />
+              <PathIcon Data="{StaticResource FileIcon}" Width="12" Height="12" Foreground="{x:Static t:Palette.TextMeta}" />
+              <TextBlock Text="{Binding FileName}" FontFamily="Cascadia Mono, Consolas, monospace" FontSize="12" Foreground="{x:Static t:Palette.TextPrimary}" VerticalAlignment="Center" />
             </StackPanel>
             <TextBlock Classes="muted" Text="{Binding LinesText}" Margin="0,0,10,0" />
             <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="0,0,8,0">
-              <Border CornerRadius="10" Background="#1B3524" Padding="6,1,9,1" IsVisible="{Binding IsResolved}">
+              <Border CornerRadius="10" Background="{x:Static t:Palette.ResolvedFill}" Padding="6,1,9,1" IsVisible="{Binding IsResolved}">
                 <StackPanel Orientation="Horizontal" Spacing="4">
-                  <PathIcon Data="{StaticResource CheckIcon}" Width="11" Height="11" Foreground="#7EE2A0" />
-                  <TextBlock Text="Resolved" FontSize="12" FontWeight="SemiBold" Foreground="#7EE2A0" />
+                  <PathIcon Data="{StaticResource CheckIcon}" Width="11" Height="11" Foreground="{x:Static t:Palette.ResolvedText}" />
+                  <TextBlock Text="Resolved" FontSize="12" FontWeight="SemiBold" Foreground="{x:Static t:Palette.ResolvedText}" />
                 </StackPanel>
               </Border>
-              <Border CornerRadius="10" Background="#3A3018" Padding="9,1" IsVisible="{Binding IsOutdated}"
+              <Border CornerRadius="10" Background="{x:Static t:Palette.OutdatedFill}" Padding="9,1" IsVisible="{Binding IsOutdated}"
                       ToolTip.Tip="The lines it was made on have changed since">
-                <TextBlock Text="Outdated" FontSize="12" FontWeight="SemiBold" Foreground="#F0C35A" />
+                <TextBlock Text="Outdated" FontSize="12" FontWeight="SemiBold" Foreground="{x:Static t:Palette.OutdatedText}" />
               </Border>
             </StackPanel>
             <ItemsControl ItemsSource="{Binding Participants}" VerticalAlignment="Center" Margin="0,2,8,2"
@@ -183,14 +184,14 @@
               </ItemsControl.ItemsPanel>
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vm:PersonViewModel">
-                  <Border CornerRadius="12" BorderBrush="#1F2328" BorderThickness="2">
+                  <Border CornerRadius="12" BorderBrush="{x:Static t:Palette.Card}" BorderThickness="2">
                     <views:PersonAvatar Width="20" Height="20" />
                   </Border>
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
             </ItemsControl>
             <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center" ToolTip.Tip="{Binding CountToolTip}">
-              <PathIcon Data="{StaticResource CommentIcon}" Width="12" Height="12" Foreground="#969CA5" />
+              <PathIcon Data="{StaticResource CommentIcon}" Width="12" Height="12" Foreground="{x:Static t:Palette.TextMeta}" />
               <TextBlock Classes="muted" Text="{Binding CommentCount}" />
             </StackPanel>
             </WrapPanel>
@@ -200,24 +201,24 @@
           <Button Classes="plain" Command="{Binding ToggleExpandedCommand}" IsVisible="{Binding IsFolded}"
                   HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Padding="44,0,14,10">
             <TextBlock TextWrapping="Wrap">
-              <Run Text="{Binding Title}" FontWeight="SemiBold" Foreground="#E6E8EB" />
+              <Run Text="{Binding Title}" FontWeight="SemiBold" Foreground="{x:Static t:Palette.TextPrimary}" />
               <Run Text="  " />
-              <Run Text="{Binding LastReplyText}" Foreground="#969CA5" />
+              <Run Text="{Binding LastReplyText}" Foreground="{x:Static t:Palette.TextMeta}" />
             </TextBlock>
           </Button>
 
           <StackPanel IsVisible="{Binding IsExpanded}" Margin="14,4,14,4">
-            <Border Height="1" Background="#3A404A" Margin="-14,0,-14,12" />
+            <Border Height="1" Background="{x:Static t:Palette.BorderStrong}" Margin="-14,0,-14,12" />
 
             <!-- Outdated: the code the comment was made on -->
             <StackPanel IsVisible="{Binding HasOriginalCode}" Margin="52,0,0,10" Spacing="6">
               <Button Classes="link" Content="{Binding OriginalCodeText}" Command="{Binding ToggleOriginalCodeCommand}" HorizontalAlignment="Left" />
-              <Border IsVisible="{Binding ShowOriginalCode}" Background="#161A1F" CornerRadius="6" Padding="0,6" ClipToBounds="True">
+              <Border IsVisible="{Binding ShowOriginalCode}" Background="{x:Static t:Palette.CodeBlock}" CornerRadius="6" Padding="0,6" ClipToBounds="True">
                 <ItemsControl ItemsSource="{Binding OriginalCode}">
                   <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="vm:HunkLine">
                       <Border Background="{Binding Background}" Padding="10,0">
-                        <TextBlock Text="{Binding Text}" FontFamily="Cascadia Mono, Consolas, monospace" FontSize="12" Foreground="#C9CED6" />
+                        <TextBlock Text="{Binding Text}" FontFamily="Cascadia Mono, Consolas, monospace" FontSize="12" Foreground="{x:Static t:Palette.TextBody}" />
                       </Border>
                     </DataTemplate>
                   </ItemsControl.ItemTemplate>
@@ -265,22 +266,22 @@
                                     <MenuItem Header="Unhide" Command="{Binding UnhideCommand}" IsVisible="{Binding CanUnhide}">
                                       <MenuItem.Icon><PathIcon Data="{StaticResource EyeIcon}" Width="14" Height="14" /></MenuItem.Icon>
                                     </MenuItem>
-                                    <MenuItem Header="Delete" Command="{Binding DeleteCommand}" IsVisible="{Binding CanDelete}" Foreground="#F47067">
-                                      <MenuItem.Icon><PathIcon Data="{StaticResource DeleteIcon}" Width="14" Height="14" Foreground="#F47067" /></MenuItem.Icon>
+                                    <MenuItem Header="Delete" Command="{Binding DeleteCommand}" IsVisible="{Binding CanDelete}" Foreground="{x:Static t:Palette.DangerText}">
+                                      <MenuItem.Icon><PathIcon Data="{StaticResource DeleteIcon}" Width="14" Height="14" Foreground="{x:Static t:Palette.DangerText}" /></MenuItem.Icon>
                                     </MenuItem>
                                   </MenuFlyout>
                                 </Button.Flyout>
                               </Button>
                               <WrapPanel VerticalAlignment="Center">
-                                <TextBlock Text="{Binding AuthorName}" FontWeight="SemiBold" Foreground="#E6E8EB" FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                <TextBlock Text="{Binding AuthorName}" FontWeight="SemiBold" Foreground="{x:Static t:Palette.TextPrimary}" FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0" />
                                 <TextBlock Classes="muted" Text="{Binding AuthorLogin}" IsVisible="{Binding ShowLogin}" Margin="0,0,6,0" />
                                 <Border Classes="badge" IsVisible="{Binding IsBot}" Margin="0,0,6,0"><TextBlock Text="bot" /></Border>
-                                <Border Classes="badge" IsVisible="{Binding IsPullRequestAuthor}" BorderBrush="#3F6699" Margin="0,0,6,0"><TextBlock Text="Author" /></Border>
+                                <Border Classes="badge" IsVisible="{Binding IsPullRequestAuthor}" BorderBrush="{x:Static t:Palette.AuthorBadgeBorder}" Margin="0,0,6,0"><TextBlock Text="Author" /></Border>
                                 <Border Classes="badge" IsVisible="{Binding HasRole}" Margin="0,0,6,0"><TextBlock Text="{Binding RoleText}" /></Border>
                                 <TextBlock Classes="muted" Text="{Binding When}" ToolTip.Tip="{Binding WhenToolTip}" Margin="0,0,6,0" />
                                 <Button Classes="plain" IsVisible="{Binding IsEdited}" ToolTip.Tip="{Binding EditedToolTip}" Command="{Binding LoadEditsCommand}"
                                         IsEnabled="{Binding CanSeeEdits}" Padding="2,0">
-                                  <TextBlock Text="· edited ▾" FontSize="12" Foreground="#969CA5" />
+                                  <TextBlock Text="· edited ▾" FontSize="12" Foreground="{x:Static t:Palette.TextMeta}" />
                                   <Button.Flyout>
                                     <Flyout Placement="BottomEdgeAlignedLeft">
                                       <StackPanel Spacing="4" MinWidth="220">
@@ -289,9 +290,9 @@
                                           <ItemsControl.ItemTemplate>
                                             <DataTemplate x:DataType="vm:EditEntry">
                                               <TextBlock Margin="0,2" FontSize="12.5">
-                                                <Run Text="{Binding Who}" FontWeight="SemiBold" Foreground="#E6E8EB" />
-                                                <Run Text="{Binding What}" Foreground="#A9AFB8" />
-                                                <Run Text="{Binding When}" Foreground="#969CA5" />
+                                                <Run Text="{Binding Who}" FontWeight="SemiBold" Foreground="{x:Static t:Palette.TextPrimary}" />
+                                                <Run Text="{Binding What}" Foreground="{x:Static t:Palette.TextSecondary}" />
+                                                <Run Text="{Binding When}" Foreground="{x:Static t:Palette.TextMeta}" />
                                               </TextBlock>
                                             </DataTemplate>
                                           </ItemsControl.ItemTemplate>
@@ -306,7 +307,7 @@
 
                           <!-- Hidden by someone: one line, and a way to look -->
                           <Grid ColumnDefinitions="Auto,*,Auto" Margin="12,8" IsVisible="{Binding Comment.IsHidden}">
-                            <PathIcon Data="{StaticResource IgnoreIcon}" Width="14" Height="14" Foreground="#969CA5" Margin="0,0,8,0" />
+                            <PathIcon Data="{StaticResource IgnoreIcon}" Width="14" Height="14" Foreground="{x:Static t:Palette.TextMeta}" Margin="0,0,8,0" />
                             <TextBlock Grid.Column="1" Classes="muted" Text="{Binding HiddenText}" TextWrapping="Wrap" />
                             <Button Grid.Column="2" Classes="small" Content="{Binding ShowHiddenText}" Command="{Binding ToggleShowHiddenCommand}" Padding="10,3" />
                           </Grid>
@@ -365,7 +366,7 @@
 
                       <!-- On hover: react, quote reply, copy link -->
                       <Border Classes="hoverBar" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-14,40,0"
-                              Background="#2B3038" BorderBrush="#474E59" BorderThickness="1" CornerRadius="8" Padding="2"
+                              Background="{x:Static t:Palette.Popup}" BorderBrush="{x:Static t:Palette.BorderPopup}" BorderThickness="1" CornerRadius="8" Padding="2"
                               BoxShadow="0 4 12 0 #66000000">
                         <StackPanel Orientation="Horizontal" Spacing="2">
                           <Button Classes="icon" ToolTip.Tip="Add a reaction" IsVisible="{Binding CanReact}">
@@ -403,8 +404,8 @@
             <!-- Resolved: an event on the rail -->
             <Grid ColumnDefinitions="40,*" RowDefinitions="Auto,16" IsVisible="{Binding IsResolved}">
               <Rectangle Classes="rail" Grid.RowSpan="2" IsVisible="{Binding CanReply}" />
-              <Border Width="26" Height="26" CornerRadius="13" Background="#1B3524" BorderBrush="#1F2328" BorderThickness="2" HorizontalAlignment="Center">
-                <PathIcon Data="{StaticResource CheckIcon}" Width="12" Height="12" Foreground="#7EE2A0" />
+              <Border Width="26" Height="26" CornerRadius="13" Background="{x:Static t:Palette.ResolvedFill}" BorderBrush="{x:Static t:Palette.Card}" BorderThickness="2" HorizontalAlignment="Center">
+                <PathIcon Data="{StaticResource CheckIcon}" Width="12" Height="12" Foreground="{x:Static t:Palette.ResolvedText}" />
               </Border>
               <TextBlock Grid.Column="1" Classes="muted" Text="{Binding ResolvedText}" Margin="12,0,0,0" />
             </Grid>
@@ -415,9 +416,9 @@
                 <views:PersonAvatar DataContext="{Binding Viewer}" Width="32" Height="32" />
               </Panel>
               <Button Grid.Column="1" Margin="12,0,0,0" IsVisible="{Binding IsReplyClosed}" Command="{Binding StartReplyCommand}"
-                      HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Background="#16191D" BorderBrush="#474E59" BorderThickness="1"
+                      HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Background="{x:Static t:Palette.Input}" BorderBrush="{x:Static t:Palette.BorderPopup}" BorderThickness="1"
                       CornerRadius="6" Padding="10,7" Cursor="IBeam">
-                <TextBlock Text="Write a reply" Foreground="#969CA5" FontSize="12.5" />
+                <TextBlock Text="Write a reply" Foreground="{x:Static t:Palette.TextMeta}" FontSize="12.5" />
               </Button>
               <StackPanel Grid.Column="1" Margin="12,0,0,0" Spacing="8" IsVisible="{Binding IsReplyOpen}">
                 <views:CommentEditor DataContext="{Binding ReplyEditor}" />
@@ -435,13 +436,13 @@
 
     <!-- A suggested change's buttons, under the change in the comment. -->
     <DataTemplate DataType="vm:SuggestionBlockViewModel">
-      <Border Background="#22262C" BorderBrush="#3A404A" BorderThickness="0,1,0,0" Padding="10,8">
+      <Border Background="{x:Static t:Palette.EditorToolbar}" BorderBrush="{x:Static t:Palette.BorderStrong}" BorderThickness="0,1,0,0" Padding="10,8">
         <Panel>
           <TextBlock Classes="muted" Text="{Binding BlockedReason}" TextWrapping="Wrap" IsVisible="{Binding !CanApply}" />
           <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" IsVisible="{Binding CanApply}">
             <Button Classes="small" Content="{Binding BatchText}" Command="{Binding ToggleBatchCommand}"
                     ToolTip.Tip="Gather several suggestions and commit them together" />
-            <Button Classes="small" Background="#238636" Foreground="White" Content="Commit suggestion" Command="{Binding CommitCommand}"
+            <Button Classes="small" Background="{x:Static t:Palette.GreenButton}" Foreground="White" Content="Commit suggestion" Command="{Binding CommitCommand}"
                     ToolTip.Tip="Commit this change to the pull request's branch and push it" />
           </StackPanel>
         </Panel>
@@ -450,7 +451,7 @@
 
     <!-- A new comment being written. -->
     <DataTemplate DataType="vm:CommentComposerViewModel">
-      <Border Classes="card" BorderBrush="#3B82F6">
+      <Border Classes="card" BorderBrush="{x:Static t:Palette.AccentStrong}">
         <Grid ColumnDefinitions="Auto,*" Margin="12">
           <Panel VerticalAlignment="Top" Margin="0,0,12,0" IsVisible="{Binding HasViewer}">
             <views:PersonAvatar DataContext="{Binding Viewer}" Width="32" Height="32" />
@@ -471,7 +472,7 @@
 
     <!-- A comment waiting to be sent with the review. -->
     <DataTemplate DataType="vm:PendingCommentViewModel">
-      <Border Classes="card" BorderBrush="#6B5A2A">
+      <Border Classes="card" BorderBrush="{x:Static t:Palette.PendingBorder}">
         <Grid ColumnDefinitions="Auto,*" Margin="12,10">
           <Panel VerticalAlignment="Top" Margin="0,0,10,0" IsVisible="{Binding HasViewer}">
             <views:PersonAvatar DataContext="{Binding Viewer}" Width="28" Height="28" />
@@ -483,9 +484,9 @@
                 <Button Classes="icon" ToolTip.Tip="Remove from the review" Command="{Binding RemoveCommand}"><PathIcon Data="{StaticResource DeleteIcon}" /></Button>
               </StackPanel>
               <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                <TextBlock Text="{Binding ViewerName}" FontWeight="SemiBold" Foreground="#E6E8EB" VerticalAlignment="Center" />
-                <Border CornerRadius="9" Background="#E8B339" Padding="8,0" VerticalAlignment="Center">
-                  <TextBlock Text="Pending" FontSize="11" FontWeight="SemiBold" Foreground="#1C1F24" />
+                <TextBlock Text="{Binding ViewerName}" FontWeight="SemiBold" Foreground="{x:Static t:Palette.TextPrimary}" VerticalAlignment="Center" />
+                <Border CornerRadius="9" Background="{x:Static t:Palette.PendingBadge}" Padding="8,0" VerticalAlignment="Center">
+                  <TextBlock Text="Pending" FontSize="11" FontWeight="SemiBold" Foreground="{x:Static t:Palette.PendingBadgeText}" />
                 </Border>
               </StackPanel>
             </DockPanel>

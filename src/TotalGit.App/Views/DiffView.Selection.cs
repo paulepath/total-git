@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Media;
+using TotalGit.App.Services;
 using TotalGit.App.ViewModels;
 using TotalGit.Core.Git;
 
@@ -13,7 +14,7 @@ namespace TotalGit.App.Views;
 // the code; hunk headers, fillers and the +/- signs and line numbers are never part of it.
 public sealed partial class DiffView
 {
-    private static readonly IBrush SelectionBrush = new SolidColorBrush(Color.Parse("#3B82F6"), 0.38);
+    private static readonly IBrush SelectionBrush = Palette.DiffSelection;
 
     /// <summary>A place in the text: a row of the view and a character offset in that line's (raw) text.</summary>
     private readonly record struct TextPos(int Row, int Col)

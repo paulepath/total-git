@@ -1,5 +1,6 @@
 using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
+using TotalGit.App.Services;
 using TotalGit.Core.Git;
 using TotalGit.Core.Hosting;
 
@@ -8,10 +9,10 @@ namespace TotalGit.App.ViewModels;
 /// <summary>One changed file in the pull request review window: the change, how far it's been reviewed, and size.</summary>
 public sealed partial class ReviewFileItem(FileChange change, bool isGenerated) : ObservableObject
 {
-    private static readonly IBrush ReviewedBrush = new SolidColorBrush(Color.Parse("#4CC38A"));
-    private static readonly IBrush ChangedBrush = new SolidColorBrush(Color.Parse("#E8B339"));
-    private static readonly IBrush RejectedBrush = new SolidColorBrush(Color.Parse("#E5484D"));
-    private static readonly IBrush NotReviewedBrush = new SolidColorBrush(Color.Parse("#6B727C"));
+    private static readonly IBrush ReviewedBrush = Palette.Success;
+    private static readonly IBrush ChangedBrush = Palette.Pending;
+    private static readonly IBrush RejectedBrush = Palette.Failure;
+    private static readonly IBrush NotReviewedBrush = Palette.TextDim;
 
     public FileChange Change { get; } = change;
     public FileChangeItem Item { get; } = new(change, false);

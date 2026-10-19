@@ -1,19 +1,20 @@
 <UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:t="using:TotalGit.App.Services"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:TotalGit.App.ViewModels"
              xmlns:views="using:TotalGit.App.Views"
              x:Class="TotalGit.App.Views.WorktreeChangesView"
              x:DataType="vm:WorktreeChangesViewModel">
   <Grid RowDefinitions="Auto,*">
-    <Border Grid.Row="0" Padding="14,12" BorderBrush="#30353C" BorderThickness="0,0,0,1">
+    <Border Grid.Row="0" Padding="14,12" BorderBrush="{x:Static t:Palette.Border}" BorderThickness="0,0,0,1">
       <StackPanel Spacing="8">
         <StackPanel Orientation="Horizontal" Spacing="8">
-          <PathIcon Data="{StaticResource WorktreeIcon}" Width="14" Height="14" Foreground="#8A9099" />
-          <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" Foreground="#E6E8EB" />
+          <PathIcon Data="{StaticResource WorktreeIcon}" Width="14" Height="14" Foreground="{x:Static t:Palette.TextMuted}" />
+          <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" Foreground="{x:Static t:Palette.TextPrimary}" />
         </StackPanel>
-        <TextBlock Text="{Binding BranchText}" FontSize="12" Foreground="#A9AFB8" />
-        <SelectableTextBlock Text="{Binding Path}" FontSize="11" Foreground="#6B727C" TextWrapping="Wrap" />
-        <TextBlock FontSize="12" Foreground="#A9AFB8" TextWrapping="Wrap"
+        <TextBlock Text="{Binding BranchText}" FontSize="12" Foreground="{x:Static t:Palette.TextSecondary}" />
+        <SelectableTextBlock Text="{Binding Path}" FontSize="11" Foreground="{x:Static t:Palette.TextDim}" TextWrapping="Wrap" />
+        <TextBlock FontSize="12" Foreground="{x:Static t:Palette.TextSecondary}" TextWrapping="Wrap"
                    Text="Uncommitted changes in another worktree. Open it in a tab to stage and commit them." />
         <StackPanel Orientation="Horizontal" Spacing="8">
           <Button x:Name="OpenTabButton" Content="Open worktree in tab" Classes="accent" />

@@ -3,6 +3,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Data.Converters;
 using Avalonia.Media;
+using TotalGit.App.Services;
 using TotalGit.Core.Hosting;
 
 namespace TotalGit.App.Views;
@@ -16,9 +17,9 @@ public sealed class ReviewBox : Control
     public static readonly StyledProperty<FileReviewState> StateProperty =
         AvaloniaProperty.Register<ReviewBox, FileReviewState>(nameof(State));
 
-    private static readonly IPen EmptyPen = new Pen(new SolidColorBrush(Color.Parse("#6B727C")), 1.3);
-    internal static readonly IBrush ReviewedBrush = new SolidColorBrush(Color.Parse("#2FA36B"));
-    internal static readonly IBrush RejectedBrush = new SolidColorBrush(Color.Parse("#D9474D"));
+    private static readonly IPen EmptyPen = new Pen(Palette.TextDim, 1.3);
+    internal static readonly IBrush ReviewedBrush = Palette.ApproveButton;
+    internal static readonly IBrush RejectedBrush = Palette.RejectButton;
     private static readonly IPen ReviewedPen = new Pen(ReviewedBrush, 1.3);
     private static readonly IPen RejectedPen = new Pen(RejectedBrush, 1.3);
     private static readonly IPen TickPen = new Pen(Brushes.White, 1.8, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
@@ -99,8 +100,8 @@ public sealed class ReviewProgressBar : Control
     public static readonly StyledProperty<int> ChangedProperty = AvaloniaProperty.Register<ReviewProgressBar, int>(nameof(Changed));
     public static readonly StyledProperty<int> TotalProperty = AvaloniaProperty.Register<ReviewProgressBar, int>(nameof(Total));
 
-    private static readonly IBrush TrackBrush = new SolidColorBrush(Color.Parse("#30353C"));
-    private static readonly IBrush ChangedBrush = new SolidColorBrush(Color.Parse("#8A9099"));
+    private static readonly IBrush TrackBrush = Palette.Border;
+    private static readonly IBrush ChangedBrush = Palette.TextMuted;
 
     static ReviewProgressBar() => AffectsRender<ReviewProgressBar>(ApprovedProperty, RejectedProperty, ChangedProperty, TotalProperty);
 
@@ -134,7 +135,7 @@ public sealed class ReviewProgressBar : Control
 public static class ReviewConverters
 {
     public static readonly IValueConverter MessageBackground = new FuncValueConverter<bool, IBrush>(isError =>
-        new SolidColorBrush(Color.Parse(isError ? "#5A2427" : "#1F3A2C")));
+        (isError ? Palette.ErrorFill : Palette.OkFill));
 
     public static readonly IValueConverter GeneratedOpacity = new FuncValueConverter<bool, double>(generated => generated ? 0.55 : 1);
 

@@ -210,7 +210,7 @@ public sealed partial class PrPerson : ObservableObject
 
     public bool HasState => StateBrush is not null;
 
-    private static readonly IBrush PendingBrush = new SolidColorBrush(Color.Parse("#8A9099"));
+    private static readonly IBrush PendingBrush = Palette.TextMuted;
 
     public static string Describe(Reviewer r) => r.State switch
     {

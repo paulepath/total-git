@@ -23,7 +23,7 @@ public sealed class MergeWindow : Window
         Width = area is { } a ? Math.Min(1400, a.Width / scale - 40) : 1400;
         Height = area is { } b ? Math.Min(900, b.Height / scale - 40) : 900;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
-        Background = new SolidColorBrush(Color.Parse("#1C1F24"));
+        Background = Palette.Surface;
 
         _zoomHost = new LayoutTransformControl { Child = new MergeToolView() };
         Content = _zoomHost;

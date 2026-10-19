@@ -43,34 +43,20 @@ public sealed class CommitGraphView : Control
     private const double MinColumnWidth = 50;
     private const double CornerRadius = 8;
 
-    private static readonly Color[] LanePalette =
-    [
-        Color.Parse("#1FB6DC"), // cyan
-        Color.Parse("#2D7BF4"), // blue
-        Color.Parse("#9B3FE0"), // purple
-        Color.Parse("#D02DC4"), // magenta
-        Color.Parse("#E8246F"), // pink
-        Color.Parse("#E5392F"), // red
-        Color.Parse("#F07F1F"), // orange
-        Color.Parse("#F2C618"), // yellow
-        Color.Parse("#A3D82C"), // lime
-        Color.Parse("#2FBF71"), // green
-    ];
-
-    private static readonly IBrush BackgroundBrush = new SolidColorBrush(Color.Parse("#1C1F24"));
-    private static readonly IBrush HeaderBrush = new SolidColorBrush(Color.Parse("#23272D"));
-    private static readonly IBrush HeaderTextBrush = new SolidColorBrush(Color.Parse("#7D848E"));
-    private static readonly IBrush PrimaryTextBrush = new SolidColorBrush(Color.Parse("#E6E8EB"));
-    private static readonly IBrush MutedTextBrush = new SolidColorBrush(Color.Parse("#8A9099"));
-    private static readonly IBrush HoverBrush = new SolidColorBrush(Color.FromArgb(0x18, 0xFF, 0xFF, 0xFF));
-    private static readonly IBrush RangeBrush = new SolidColorBrush(Color.FromArgb(0x48, 0x3B, 0x82, 0xF6));
-    private static readonly IBrush RangeAccentBrush = new SolidColorBrush(Color.Parse("#5AA9F2"));
-    private static readonly IPen RangeNodePen = new Pen(new SolidColorBrush(Color.Parse("#E6E8EB")), 2);
-    private static readonly IBrush PillHoverBrush = new SolidColorBrush(Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF));
-    private static readonly IPen SeparatorPen = new Pen(new SolidColorBrush(Color.Parse("#30353C")), 1);
+    private static readonly IBrush BackgroundBrush = Palette.Surface;
+    private static readonly IBrush HeaderBrush = Palette.Panel;
+    private static readonly IBrush HeaderTextBrush = Palette.TextHeader;
+    private static readonly IBrush PrimaryTextBrush = Palette.TextPrimary;
+    private static readonly IBrush MutedTextBrush = Palette.TextMuted;
+    private static readonly IBrush HoverBrush = Palette.HoverOverlay;
+    private static readonly IBrush RangeBrush = Palette.RangeFill;
+    private static readonly IBrush RangeAccentBrush = Palette.Accent;
+    private static readonly IPen RangeNodePen = new Pen(Palette.TextPrimary, 2);
+    private static readonly IBrush PillHoverBrush = Palette.PillHoverOverlay;
+    private static readonly IPen SeparatorPen = new Pen(Palette.Border, 1);
 
     private static readonly Geometry ChevronRightIcon = Geometry.Parse("M8.59,16.58L13.17,12L8.59,7.41L10,6L16,12L10,18L8.59,16.58Z");
-    private static readonly IBrush FoldChipBrush = new SolidColorBrush(Color.FromArgb(0x30, 0xFF, 0xFF, 0xFF));
+    private static readonly IBrush FoldChipBrush = Palette.FoldChip;
     private static readonly Geometry CheckIcon = Geometry.Parse("M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z");
     private static readonly Geometry LaptopIcon = Geometry.Parse(
         "M4,6H20V16H4M20,18A2,2 0 0,0 22,16V6C22,4.89 21.1,4 20,4H4C2.89,4 2,4.89 2,6V16A2,2 0 0,0 4,18H0V20H24V18H20Z");
@@ -89,22 +75,23 @@ public sealed class CommitGraphView : Control
 
     private readonly Typeface _typeface = new("Inter");
     private readonly Typeface _boldTypeface = new("Inter", FontStyle.Normal, FontWeight.SemiBold);
-    private readonly Pen[] _lanePens = LanePalette.Select(c => new Pen(new SolidColorBrush(c), 2, lineCap: PenLineCap.Round)).ToArray();
-    private readonly Pen[] _trunkPens = LanePalette.Select(c => new Pen(new SolidColorBrush(c), 4, lineCap: PenLineCap.Round)).ToArray();
-    private readonly Pen[] _connectorPens = LanePalette.Select(c => new Pen(new SolidColorBrush(c, 0.6), 1)).ToArray();
-    private readonly IBrush[] _laneBrushes = LanePalette.Select(c => (IBrush)new SolidColorBrush(c)).ToArray();
-    private readonly IBrush[] _bandBrushes = LanePalette.Select(c => (IBrush)new SolidColorBrush(c, 0.13)).ToArray();
-    private readonly IBrush[] _strongBandBrushes = LanePalette.Select(c => (IBrush)new SolidColorBrush(c, 0.55)).ToArray();
-    private readonly IBrush[] _pillBrushes = LanePalette.Select(c => (IBrush)new SolidColorBrush(c, 0.35)).ToArray();
+    // The lanes' pens and brushes, in the theme's lane colours (made again when the theme changes).
+    private Pen[] _lanePens = [];
+    private Pen[] _trunkPens = [];
+    private Pen[] _connectorPens = [];
+    private IBrush[] _laneBrushes = [];
+    private IBrush[] _bandBrushes = [];
+    private IBrush[] _strongBandBrushes = [];
+    private IBrush[] _pillBrushes = [];
+    private Pen[] _dashedPens = [];
 
-    private static readonly IPen WipPen = new Pen(new SolidColorBrush(Color.Parse("#A0A7B0")), 1.5, new DashStyle([2, 2], 0));
+    private static readonly IPen WipPen = new Pen(Palette.WipRing, 1.5, new DashStyle([2, 2], 0));
 
     // A highlighted pull request: its "would merge" row, the dashed lines from it, and how much the rest fades.
-    private readonly Pen[] _dashedPens = LanePalette.Select(c => new Pen(new SolidColorBrush(c), 2, new DashStyle([3, 2], 0))).ToArray();
-    private static readonly IBrush GhostBrush = new SolidColorBrush(Color.FromArgb(0x1C, 0x3B, 0x82, 0xF6));
-    private static readonly IPen GhostBorderPen = new Pen(new SolidColorBrush(Color.Parse("#3B5E86")), 1, new DashStyle([4, 3], 0));
-    private static readonly IPen GhostNodePen = new Pen(new SolidColorBrush(Color.Parse("#5AA9F2")), 2, new DashStyle([2, 1.5], 0));
-    private static readonly IBrush GhostTextBrush = new SolidColorBrush(Color.Parse("#A9C8E8"));
+    private static readonly IBrush GhostBrush = Palette.GhostFill;
+    private static readonly IPen GhostBorderPen = new Pen(Palette.GhostBorder, 1, new DashStyle([4, 3], 0));
+    private static readonly IPen GhostNodePen = new Pen(Palette.Accent, 2, new DashStyle([2, 1.5], 0));
+    private static readonly IBrush GhostTextBrush = Palette.GhostText;
     private const double DimOpacity = 0.4;
     private readonly Typeface _italicTypeface = new("Inter", FontStyle.Italic);
     private HashSet<int> _prRows = [];
@@ -152,6 +139,27 @@ public sealed class CommitGraphView : Control
         // A pull request's card goes in the tooltip as data, so each tooltip makes its own card: a control can only
         // be in one popup, and the closing one may still hold it when the next opens.
         DataTemplates.Add(new FuncDataTemplate<PrCardViewModel>((card, _) => new PrHoverCard { DataContext = card }));
+        MakeLaneBrushes();
+    }
+
+    private void MakeLaneBrushes()
+    {
+        var lanes = Palette.Lanes;
+        var (band, strongBand, pill) = Palette.LaneOpacities;
+        _lanePens = lanes.Select(c => new Pen(new SolidColorBrush(c), 2, lineCap: PenLineCap.Round)).ToArray();
+        _trunkPens = lanes.Select(c => new Pen(new SolidColorBrush(c), 4, lineCap: PenLineCap.Round)).ToArray();
+        _connectorPens = lanes.Select(c => new Pen(new SolidColorBrush(c, 0.6), 1)).ToArray();
+        _laneBrushes = lanes.Select(c => (IBrush)new SolidColorBrush(c)).ToArray();
+        _bandBrushes = lanes.Select(c => (IBrush)new SolidColorBrush(c, band)).ToArray();
+        _strongBandBrushes = lanes.Select(c => (IBrush)new SolidColorBrush(c, strongBand)).ToArray();
+        _pillBrushes = lanes.Select(c => (IBrush)new SolidColorBrush(c, pill)).ToArray();
+        _dashedPens = lanes.Select(c => new Pen(new SolidColorBrush(c), 2, new DashStyle([3, 2], 0))).ToArray();
+    }
+
+    private void OnPaletteChanged()
+    {
+        MakeLaneBrushes();
+        InvalidateVisual();
     }
 
     public GraphData? Data
@@ -194,10 +202,10 @@ public sealed class CommitGraphView : Control
     private int _dropRow = -1;
     private const double DragThreshold = 5;
 
-    private static readonly IBrush DropBrush = new SolidColorBrush(Color.FromArgb(0x40, 0x4C, 0xC3, 0x8A));
-    private static readonly IPen DropPen = new Pen(new SolidColorBrush(Color.Parse("#4CC38A")), 2);
-    private static readonly IPen NoDropPen = new Pen(new SolidColorBrush(Color.Parse("#E5484D")), 2, new DashStyle([3, 3], 0));
-    private static readonly IBrush DragLabelBrush = new SolidColorBrush(Color.Parse("#2B2F36"));
+    private static readonly IBrush DropBrush = Palette.DropFill;
+    private static readonly IPen DropPen = new Pen(Palette.Success, 2);
+    private static readonly IPen NoDropPen = new Pen(Palette.Failure, 2, new DashStyle([3, 3], 0));
+    private static readonly IBrush DragLabelBrush = Palette.Toolbar;
 
     /// <summary>The branch to rebase onto when dropping on a row: its local branch, else a remote one; null for none.</summary>
     private string? DropBranch(int row)
@@ -319,12 +327,16 @@ public sealed class CommitGraphView : Control
     {
         base.OnAttachedToVisualTree(e);
         IconLibrary.Changed += OnBranchRulesChanged;
+        Palette.Changed += OnPaletteChanged;
+        // The theme may have changed while this view was out of the tree.
+        if (_lanePens[0].Brush is ISolidColorBrush first && first.Color != Palette.Lanes[0]) MakeLaneBrushes();
     }
 
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnDetachedFromVisualTree(e);
         IconLibrary.Changed -= OnBranchRulesChanged;
+        Palette.Changed -= OnPaletteChanged;
     }
 
     /// <summary>The branch pills' icons and names follow the branch rules.</summary>
@@ -1127,8 +1139,8 @@ public sealed class CommitGraphView : Control
 
         if (_avatarCache?.TryGet(row.Commit.AuthorEmail, Data?.GitHubRepo, row.Commit.Sha) is { } bitmap)
         {
-            // Black behind the avatar so transparent logos don't pick up the lane colour.
-            ctx.DrawEllipse(Brushes.Black, null, center, inner, inner);
+            // Behind the avatar so transparent logos don't pick up the lane colour.
+            ctx.DrawEllipse(Palette.NodeHole, null, center, inner, inner);
             using (ctx.PushGeometryClip(new EllipseGeometry(rect)))
                 ctx.DrawImage(bitmap, rect);
         }
@@ -1227,12 +1239,14 @@ public sealed class CommitGraphView : Control
         if (badge.HasRemote) icons.Add(Data?.GitHubRepo is not null ? GitHubIcon : CloudIcon);
         if (badge.HasWorktree) icons.Add(WorktreeIcon);
         // An open pull request's number goes last, so it's never the part trimmed away.
-        var chip = badge.PullRequest is { } pr ? Text($"#{pr.Number}", 10.5, Brushes.White, _boldTypeface) : null;
+        // White on the current branch's solid pill; on the others, whatever reads on their tint.
+        IBrush onPill = badge.IsCurrent ? Brushes.White : Palette.PillText;
+        var chip = badge.PullRequest is { } pr ? Text($"#{pr.Number}", 10.5, onPill, _boldTypeface) : null;
         // Circle + gap, optional check, name, trailing icons and chip, then padding round the rounded right end.
         var leading = BadgeCircle + 5 + (badge.IsCurrent ? PillIconSize + PillGap : 0);
         var trailing = icons.Count * (PillIconSize + PillGap) + (chip is null ? 0 : chip.Width + ChipPadding * 2 + PillGap) + 6;
 
-        var name = Text(badge.Name, 12, Brushes.White, badge.IsCurrent ? _boldTypeface : _typeface,
+        var name = Text(badge.Name, 12, onPill, badge.IsCurrent ? _boldTypeface : _typeface,
             Math.Max(10, maxWidth - leading - trailing));
         return new PillLayout(icons, name, chip, Math.Max(0, Math.Min(maxWidth, leading + name.Width + trailing)));
     }
@@ -1278,13 +1292,14 @@ public sealed class CommitGraphView : Control
         ctx.DrawRectangle(badge.IsCurrent ? _laneBrushes[colorIndex] : _pillBrushes[colorIndex], null,
             new RoundedRect(box, new CornerRadius(0, PillHeight / 2, PillHeight / 2, 0)));
 
-        // Black circle with a lane-coloured ring holding the branch-kind icon.
+        // A dark (light) circle with a lane-coloured ring holding the branch-kind icon.
         var center = new Point(left + BadgeCircle / 2, cy);
-        ctx.DrawEllipse(Brushes.Black, _lanePens[colorIndex], center, BadgeCircle / 2 - 1, BadgeCircle / 2 - 1);
+        ctx.DrawEllipse(Palette.NodeHole, _lanePens[colorIndex], center, BadgeCircle / 2 - 1, BadgeCircle / 2 - 1);
         if (badge.KindIcon is { } kindIcon)
             ctx.DrawImage(kindIcon, new Rect(center.X - KindIconSize / 2, center.Y - KindIconSize / 2, KindIconSize, KindIconSize));
         else
-            DrawIcon(ctx, badge.IsTag ? TagIcon : BranchGlyph, center.X - 6, center.Y - 6, 12);
+            DrawIcon(ctx, badge.IsTag ? TagIcon : BranchGlyph, center.X - 6, center.Y - 6, 12, Palette.PillText);
+        IBrush onPill = badge.IsCurrent ? Brushes.White : Palette.PillText;
 
         var x = left + BadgeCircle + 5;
         if (badge.IsCurrent)
@@ -1296,7 +1311,7 @@ public sealed class CommitGraphView : Control
         x += layout.Name.Width + PillGap;
         foreach (var icon in layout.Icons)
         {
-            DrawIcon(ctx, icon, x, cy - iconSize / 2, iconSize);
+            DrawIcon(ctx, icon, x, cy - iconSize / 2, iconSize, onPill);
             x += iconSize + PillGap;
         }
 

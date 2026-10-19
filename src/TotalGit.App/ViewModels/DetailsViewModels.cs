@@ -3,6 +3,7 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using TotalGit.App.Services;
 using TotalGit.Core.Git;
 
 namespace TotalGit.App.ViewModels;
@@ -10,11 +11,11 @@ namespace TotalGit.App.ViewModels;
 /// <summary>A file row in the commit details or staging lists.</summary>
 public sealed class FileChangeItem(FileChange change, bool staged)
 {
-    private static readonly IBrush Added = new SolidColorBrush(Color.Parse("#4CC38A"));
-    private static readonly IBrush Modified = new SolidColorBrush(Color.Parse("#E8B339"));
-    private static readonly IBrush Deleted = new SolidColorBrush(Color.Parse("#F26B6B"));
-    private static readonly IBrush Renamed = new SolidColorBrush(Color.Parse("#5AA9F2"));
-    private static readonly IBrush Other = new SolidColorBrush(Color.Parse("#B084F5"));
+    private static readonly IBrush Added = Palette.Success;
+    private static readonly IBrush Modified = Palette.Pending;
+    private static readonly IBrush Deleted = Palette.Error;
+    private static readonly IBrush Renamed = Palette.Accent;
+    private static readonly IBrush Other = Palette.WorktreeName;
 
     public FileChange Change { get; } = change;
     public bool IsStaged { get; } = staged;

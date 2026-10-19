@@ -1,4 +1,5 @@
 <UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:t="using:TotalGit.App.Services"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:TotalGit.App.ViewModels"
              x:Class="TotalGit.App.Views.NewBranchView"
@@ -6,30 +7,30 @@
   <ScrollViewer HorizontalScrollBarVisibility="Disabled">
     <StackPanel Margin="16,14" Spacing="10">
       <WrapPanel Orientation="Horizontal">
-        <PathIcon Data="{StaticResource BranchIcon}" Width="13" Height="13" Foreground="#4CC38A" Margin="0,0,8,0" VerticalAlignment="Center" />
-        <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold" Foreground="#E6E8EB" TextWrapping="Wrap"
+        <PathIcon Data="{StaticResource BranchIcon}" Width="13" Height="13" Foreground="{x:Static t:Palette.Success}" Margin="0,0,8,0" VerticalAlignment="Center" />
+        <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold" Foreground="{x:Static t:Palette.TextPrimary}" TextWrapping="Wrap"
                    VerticalAlignment="Center" Margin="0,0,8,0" />
-        <Border IsVisible="{Binding IsCheckedOutHere}" Background="#123326" CornerRadius="8" Padding="7,1" VerticalAlignment="Center">
-          <TextBlock Text="checked out" FontSize="11" Foreground="#86E3B6" />
+        <Border IsVisible="{Binding IsCheckedOutHere}" Background="{x:Static t:Palette.CheckedOutFill}" CornerRadius="8" Padding="7,1" VerticalAlignment="Center">
+          <TextBlock Text="checked out" FontSize="11" Foreground="{x:Static t:Palette.CheckedOutText}" />
         </Border>
       </WrapPanel>
 
-      <TextBlock Text="No commits yet" FontSize="20" FontWeight="SemiBold" Foreground="#E6E8EB" />
-      <TextBlock Text="{Binding Explanation}" FontSize="12.5" Foreground="#A9AFB8" TextWrapping="Wrap" LineHeight="19" />
+      <TextBlock Text="No commits yet" FontSize="20" FontWeight="SemiBold" Foreground="{x:Static t:Palette.TextPrimary}" />
+      <TextBlock Text="{Binding Explanation}" FontSize="12.5" Foreground="{x:Static t:Palette.TextSecondary}" TextWrapping="Wrap" LineHeight="19" />
 
-      <TextBlock Text="STARTS FROM" FontSize="10.5" Foreground="#8A9099" LetterSpacing="0.6" Margin="0,4,0,0" IsVisible="{Binding HasStart}" />
-      <Border IsVisible="{Binding HasStart}" Background="#1C1F24" BorderBrush="#30353C" BorderThickness="1" CornerRadius="6" Padding="10,8">
+      <TextBlock Text="STARTS FROM" FontSize="10.5" Foreground="{x:Static t:Palette.TextMuted}" LetterSpacing="0.6" Margin="0,4,0,0" IsVisible="{Binding HasStart}" />
+      <Border IsVisible="{Binding HasStart}" Background="{x:Static t:Palette.Surface}" BorderBrush="{x:Static t:Palette.Border}" BorderThickness="1" CornerRadius="6" Padding="10,8">
         <Grid ColumnDefinitions="*,Auto">
           <StackPanel Spacing="2" VerticalAlignment="Center">
-            <TextBlock Text="{Binding StartMessage}" FontSize="12.5" Foreground="#E6E8EB" TextTrimming="CharacterEllipsis" />
-            <TextBlock Text="{Binding StartMeta}" FontSize="11.5" Foreground="#8A9099" TextTrimming="CharacterEllipsis" />
+            <TextBlock Text="{Binding StartMessage}" FontSize="12.5" Foreground="{x:Static t:Palette.TextPrimary}" TextTrimming="CharacterEllipsis" />
+            <TextBlock Text="{Binding StartMeta}" FontSize="11.5" Foreground="{x:Static t:Palette.TextMuted}" TextTrimming="CharacterEllipsis" />
           </StackPanel>
           <Button Grid.Column="1" Content="Show commit" Command="{Binding ShowStartCommand}" Margin="10,0,0,0" VerticalAlignment="Center"
                   ToolTip.Tip="Select the commit this branch starts from" />
         </Grid>
       </Border>
 
-      <TextBlock Text="{Binding NextText}" FontSize="12.5" Foreground="#8A9099" TextWrapping="Wrap" LineHeight="19" Margin="0,4,0,0" />
+      <TextBlock Text="{Binding NextText}" FontSize="12.5" Foreground="{x:Static t:Palette.TextMuted}" TextWrapping="Wrap" LineHeight="19" Margin="0,4,0,0" />
       <WrapPanel Orientation="Horizontal">
         <Button Classes="accent" IsVisible="{Binding CanCheckout}" Command="{Binding CheckoutCommand}" Margin="0,0,8,4">
           <StackPanel Orientation="Horizontal" Spacing="6">

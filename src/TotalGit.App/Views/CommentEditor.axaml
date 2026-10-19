@@ -1,4 +1,5 @@
 <UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:t="using:TotalGit.App.Services"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:TotalGit.App.ViewModels"
              xmlns:views="using:TotalGit.App.Views"
@@ -14,11 +15,11 @@
       <Setter Property="MinHeight" Value="0" />
       <Setter Property="FontSize" Value="12" />
       <Setter Property="FontWeight" Value="SemiBold" />
-      <Setter Property="Foreground" Value="#969CA5" />
+      <Setter Property="Foreground" Value="{x:Static t:Palette.TextMeta}" />
     </Style>
     <Style Selector="Button.tab.on">
-      <Setter Property="BorderBrush" Value="#E8762B" />
-      <Setter Property="Foreground" Value="#E6E8EB" />
+      <Setter Property="BorderBrush" Value="{x:Static t:Palette.TabUnderline}" />
+      <Setter Property="Foreground" Value="{x:Static t:Palette.TextPrimary}" />
     </Style>
     <Style Selector="Button.mdTool">
       <Setter Property="Background" Value="Transparent" />
@@ -28,7 +29,7 @@
       <Setter Property="MinHeight" Value="0" />
       <Setter Property="MinWidth" Value="0" />
       <Setter Property="CornerRadius" Value="5" />
-      <Setter Property="Foreground" Value="#A9AFB8" />
+      <Setter Property="Foreground" Value="{x:Static t:Palette.TextSecondary}" />
       <Setter Property="HorizontalContentAlignment" Value="Center" />
       <Setter Property="VerticalContentAlignment" Value="Center" />
       <Setter Property="Focusable" Value="False" />
@@ -46,9 +47,9 @@
     </Style>
   </UserControl.Styles>
 
-  <Border Background="#1C1F24" BorderBrush="#3A404A" BorderThickness="1" CornerRadius="6" ClipToBounds="True">
+  <Border Background="{x:Static t:Palette.Input}" BorderBrush="{x:Static t:Palette.BorderStrong}" BorderThickness="1" CornerRadius="6" ClipToBounds="True">
     <DockPanel>
-      <Border DockPanel.Dock="Top" Background="#22262C" BorderBrush="#3A404A" BorderThickness="0,0,0,1">
+      <Border DockPanel.Dock="Top" Background="{x:Static t:Palette.EditorToolbar}" BorderBrush="{x:Static t:Palette.BorderStrong}" BorderThickness="0,0,0,1">
         <!-- The toolbar sits beside the tabs, or under them when the box is narrow (see SizeChanged). -->
         <Grid x:Name="Head" ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto">
           <StackPanel Orientation="Horizontal" Margin="4,0,0,0">
@@ -70,7 +71,7 @@
             <Button Classes="mdTool" Tag="mention" ToolTip.Tip="Mention someone">
               <TextBlock Text="@" FontWeight="Bold" FontSize="13" />
             </Button>
-            <Border Width="1" Height="16" Background="#3A404A" Margin="4,0" IsVisible="{Binding CanSuggest}" />
+            <Border Width="1" Height="16" Background="{x:Static t:Palette.BorderStrong}" Margin="4,0" IsVisible="{Binding CanSuggest}" />
             <Button Classes="mdTool" Tag="suggest" Width="NaN" Padding="6,0" IsVisible="{Binding CanSuggest}"
                     ToolTip.Tip="Suggest a change to the commented lines: whoever owns the branch can commit it">
               <StackPanel Orientation="Horizontal" Spacing="5">
@@ -87,20 +88,20 @@
                  ScrollViewer.VerticalScrollBarVisibility="Auto" />
         <Border IsVisible="{Binding IsPreview}" MinHeight="72" Padding="12,10">
           <Panel>
-            <TextBlock Text="Nothing to preview" Foreground="#8A9099" FontSize="12"
+            <TextBlock Text="Nothing to preview" Foreground="{x:Static t:Palette.TextMuted}" FontSize="12"
                        IsVisible="{Binding Text, Converter={x:Static StringConverters.IsNullOrEmpty}}" />
             <views:MarkdownView Markdown="{Binding Text}" BaseFontSize="12.5" />
           </Panel>
         </Border>
         <Popup x:Name="MentionPopup" PlacementTarget="{Binding #Box}" Placement="BottomEdgeAlignedLeft" IsLightDismissEnabled="True">
-          <Border Background="#2B3038" BorderBrush="#474E59" BorderThickness="1" CornerRadius="8" Padding="0,4" MinWidth="240" BoxShadow="0 8 24 0 #66000000">
+          <Border Background="{x:Static t:Palette.Popup}" BorderBrush="{x:Static t:Palette.BorderPopup}" BorderThickness="1" CornerRadius="8" Padding="0,4" MinWidth="240" BoxShadow="0 8 24 0 #66000000">
             <ListBox x:Name="Mentions" Background="Transparent" MaxHeight="260">
               <ListBox.ItemTemplate>
                 <DataTemplate x:DataType="vm:PersonViewModel">
                   <StackPanel Orientation="Horizontal" Spacing="8">
                     <views:PersonAvatar Width="20" Height="20" />
                     <TextBlock Text="{Binding Login}" FontWeight="SemiBold" FontSize="12.5" VerticalAlignment="Center" />
-                    <TextBlock Text="{Binding Name}" Foreground="#A9AFB8" FontSize="12" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding Name}" Foreground="{x:Static t:Palette.TextSecondary}" FontSize="12" VerticalAlignment="Center" />
                   </StackPanel>
                 </DataTemplate>
               </ListBox.ItemTemplate>

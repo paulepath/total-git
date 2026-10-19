@@ -24,7 +24,7 @@ public sealed partial class TabStyleViewModel : ObservableObject
         IconId = iconId;
         Colours =
         [
-            new(null, new SolidColorBrush(Color.Parse("#30353C")), "No colour"),
+            new(null, Services.Palette.Border, "No colour"),
             .. Palette.Select(h => new ColourChoice(h, new SolidColorBrush(Color.Parse(h)), h)),
         ];
         RefreshIcons();

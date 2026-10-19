@@ -3,6 +3,7 @@ using System.Windows.Input;
 using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using TotalGit.App.Services;
 using TotalGit.Core.Git;
 using TotalGit.Core.Hosting;
 
@@ -11,11 +12,11 @@ namespace TotalGit.App.ViewModels;
 /// <summary>Colours for pull request states (checks, reviews, merge state).</summary>
 public static class PrColors
 {
-    public static readonly IBrush Success = new SolidColorBrush(Color.Parse("#4CC38A"));
-    public static readonly IBrush Failure = new SolidColorBrush(Color.Parse("#E5484D"));
-    public static readonly IBrush Pending = new SolidColorBrush(Color.Parse("#E8B339"));
-    public static readonly IBrush Neutral = new SolidColorBrush(Color.Parse("#8A9099"));
-    public static readonly IBrush Merged = new SolidColorBrush(Color.Parse("#A371F7"));
+    public static readonly IBrush Success = Palette.Success;
+    public static readonly IBrush Failure = Palette.Failure;
+    public static readonly IBrush Pending = Palette.Pending;
+    public static readonly IBrush Neutral = Palette.TextMuted;
+    public static readonly IBrush Merged = Palette.Purple;
 }
 
 /// <summary>

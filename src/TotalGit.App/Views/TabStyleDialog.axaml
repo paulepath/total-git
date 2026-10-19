@@ -1,4 +1,5 @@
 <Window xmlns="https://github.com/avaloniaui"
+        xmlns:t="using:TotalGit.App.Services"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:TotalGit.App.ViewModels"
         x:Class="TotalGit.App.Views.TabStyleDialog"
@@ -6,10 +7,10 @@
         Title="{Binding Title}"
         Width="560" Height="600" MinWidth="460" MinHeight="460"
         WindowStartupLocation="CenterOwner"
-        Background="#23272D">
+        Background="{x:Static t:Palette.Dialog}">
   <Window.Styles>
     <Style Selector="TextBlock.field">
-      <Setter Property="Foreground" Value="#E6E8EB" />
+      <Setter Property="Foreground" Value="{x:Static t:Palette.TextPrimary}" />
       <Setter Property="FontWeight" Value="SemiBold" />
       <Setter Property="FontSize" Value="12" />
       <Setter Property="Margin" Value="0,12,0,6" />
@@ -38,22 +39,22 @@
 
   <DockPanel Margin="20">
     <StackPanel DockPanel.Dock="Top" Spacing="6">
-      <TextBlock Text="Tab colour and icon" FontSize="18" FontWeight="SemiBold" Foreground="#E6E8EB" />
-      <TextBlock Foreground="#A9AFB8" TextWrapping="Wrap"
+      <TextBlock Text="Tab colour and icon" FontSize="18" FontWeight="SemiBold" Foreground="{x:Static t:Palette.TextPrimary}" />
+      <TextBlock Foreground="{x:Static t:Palette.TextSecondary}" TextWrapping="Wrap"
                  Text="Remembered for this repository, including its worktrees, and kept when its tab is closed." />
 
       <!-- Live preview of the tab -->
       <TextBlock Classes="field" Text="Preview" />
-      <StackPanel Orientation="Horizontal" Spacing="2" Background="#16191D" HorizontalAlignment="Left">
-        <Border CornerRadius="6,6,0,0" Background="#1F2328" ClipToBounds="True">
+      <StackPanel Orientation="Horizontal" Spacing="2" Background="{x:Static t:Palette.Chrome}" HorizontalAlignment="Left">
+        <Border CornerRadius="6,6,0,0" Background="{x:Static t:Palette.Tab}" ClipToBounds="True">
           <Panel>
             <Border Background="{Binding PreviewTint}" />
             <Border Height="3" VerticalAlignment="Top" Background="{Binding PreviewAccent}" />
             <StackPanel Orientation="Horizontal" Spacing="8" Margin="12,0,16,0" Height="34">
               <Image Source="{Binding PreviewIcon}" Width="14" Height="14" VerticalAlignment="Center" IsVisible="{Binding HasPreviewIcon}" />
-              <PathIcon Data="{StaticResource FolderIcon}" Width="12" Height="12" Foreground="#8A9099" VerticalAlignment="Center"
+              <PathIcon Data="{StaticResource FolderIcon}" Width="12" Height="12" Foreground="{x:Static t:Palette.TextMuted}" VerticalAlignment="Center"
                         IsVisible="{Binding HasNoPreviewIcon}" />
-              <TextBlock Text="{Binding Name}" FontSize="12" Foreground="#E6E8EB" VerticalAlignment="Center" />
+              <TextBlock Text="{Binding Name}" FontSize="12" Foreground="{x:Static t:Palette.TextPrimary}" VerticalAlignment="Center" />
             </StackPanel>
           </Panel>
         </Border>
@@ -71,7 +72,7 @@
             <DataTemplate x:DataType="vm:ColourChoice">
               <Button Classes="swatch" ToolTip.Tip="{Binding ToolTip}"
                       Command="{Binding $parent[Window].((vm:TabStyleViewModel)DataContext).PickColourCommand}" CommandParameter="{Binding}">
-                <Ellipse Width="20" Height="20" Fill="{Binding Brush}" Stroke="#4A505A" StrokeThickness="1" />
+                <Ellipse Width="20" Height="20" Fill="{Binding Brush}" Stroke="{x:Static t:Palette.BorderInput}" StrokeThickness="1" />
               </Button>
             </DataTemplate>
           </ItemsControl.ItemTemplate>
@@ -87,7 +88,7 @@
         <Button Grid.Column="2" Classes="small" Content="Folder icon" Margin="6,0,0,0" Command="{Binding ClearIconCommand}"
                 ToolTip.Tip="No icon of its own: the plain folder icon" />
       </Grid>
-      <TextBlock Foreground="#E5484D" FontSize="11" Margin="0,4,0,0" Text="{Binding UploadError}"
+      <TextBlock Foreground="{x:Static t:Palette.Failure}" FontSize="11" Margin="0,4,0,0" Text="{Binding UploadError}"
                  IsVisible="{Binding UploadError, Converter={x:Static ObjectConverters.IsNotNull}}" />
     </StackPanel>
 
@@ -99,7 +100,7 @@
       </StackPanel>
     </Grid>
 
-    <Border Background="#1C1F24" CornerRadius="4" Margin="0,6,0,0">
+    <Border Background="{x:Static t:Palette.Well}" CornerRadius="4" Margin="0,6,0,0">
       <ListBox Classes="icons" Background="Transparent" ItemsSource="{Binding Icons}" SelectedItem="{Binding SelectedIcon}"
                ScrollViewer.HorizontalScrollBarVisibility="Disabled">
         <ListBox.ItemsPanel>

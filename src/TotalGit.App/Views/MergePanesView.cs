@@ -3,6 +3,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
+using TotalGit.App.Services;
 using TotalGit.App.ViewModels;
 using TotalGit.Core.Git;
 
@@ -108,20 +109,22 @@ public sealed class MergePaneView : Control
     private const double TextPad = 8;
     private const double FontSize = 12.5;
 
-    private static readonly IBrush Background = new SolidColorBrush(Color.Parse("#1C1F24"));
-    private static readonly IBrush GutterBrush = new SolidColorBrush(Color.Parse("#20242A"));
-    private static readonly IBrush FillerBrush = new SolidColorBrush(Color.Parse("#15171B"));
-    private static readonly IPen FillerHatch = new Pen(new SolidColorBrush(Color.Parse("#23272D")), 1);
-    private static readonly IBrush TextBrush = new SolidColorBrush(Color.Parse("#DCDFE4"));
-    private static readonly IBrush DimTextBrush = new SolidColorBrush(Color.Parse("#6B727C"));
-    private static readonly IBrush NumberBrush = new SolidColorBrush(Color.Parse("#6B727C"));
-    private static readonly IBrush NoticeBrush = new SolidColorBrush(Color.Parse("#E8A0A0"));
-    private static readonly Color OursColor = Color.Parse("#2D7BF4");
-    private static readonly Color TheirsColor = Color.Parse("#2FBF71");
-    private static readonly Color BaseColor = Color.Parse("#E5A33B");
-    private static readonly Color CustomColor = Color.Parse("#A371F7");
-    private static readonly Color UnresolvedColor = Color.Parse("#E5392F");
-    private static readonly IPen CurrentPen = new Pen(new SolidColorBrush(Color.Parse("#F5C26B")), 1);
+    private static readonly IBrush Background = Palette.Surface;
+    private static readonly IBrush GutterBrush = Palette.Gutter;
+    private static readonly IBrush FillerBrush = Palette.MergeFiller;
+    private static readonly IPen FillerHatch = new Pen(Palette.FillerHatch, 1);
+    private static readonly IBrush TextBrush = Palette.TextCode;
+    private static readonly IBrush DimTextBrush = Palette.TextDim;
+    private static readonly IBrush NumberBrush = Palette.TextDim;
+    private static readonly IBrush NoticeBrush = Palette.MergeNotice;
+    // Read as drawn: the tints are made from them, and they change with the theme.
+    private static Color OursColor => Palette.Blue.Color;
+    private static Color TheirsColor => Palette.Green.Color;
+    private static Color BaseColor => Palette.MergeBase.Color;
+    private static Color CustomColor => Palette.Purple.Color;
+    private static Color UnresolvedColor => Palette.Red.Color;
+    private static readonly IPen CurrentPen = new Pen(Palette.Warning, 1);
+    private static readonly IPen DividerPen = new Pen(Palette.MergeLineDivider, 1);
 
     private readonly Typeface _mono = new("Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, monospace");
     private readonly Dictionary<int, (List<TextRange> Ours, List<TextRange> Theirs)?> _wordDiffs = [];
@@ -442,7 +445,7 @@ public sealed class MergePaneView : Control
         double width, bool isCurrent)
     {
         var (first, count) = layout.ConflictRows[conflict];
-        var pen = isCurrent ? CurrentPen : new Pen(new SolidColorBrush(Colors.White, 0.08), 1);
+        var pen = isCurrent ? CurrentPen : DividerPen;
         if (row == first) ctx.DrawLine(pen, new Point(0, y + 0.5), new Point(width, y + 0.5));
         if (row == first + count - 1) ctx.DrawLine(pen, new Point(0, y + LineHeight - 0.5), new Point(width, y + LineHeight - 0.5));
     }
@@ -527,11 +530,11 @@ public sealed class MergeOverview : Control
     public static readonly StyledProperty<MergeToolViewModel?> ModelProperty =
         AvaloniaProperty.Register<MergeOverview, MergeToolViewModel?>(nameof(Model));
 
-    private static readonly IBrush Background = new SolidColorBrush(Color.Parse("#181A1E"));
-    private static readonly IBrush UnresolvedBrush = new SolidColorBrush(Color.Parse("#E5392F"));
-    private static readonly IBrush ResolvedBrush = new SolidColorBrush(Color.Parse("#5C636D"));
-    private static readonly IBrush CurrentBrush = new SolidColorBrush(Color.Parse("#F5C26B"));
-    private static readonly IBrush ViewportBrush = new SolidColorBrush(Colors.White, 0.10);
+    private static readonly IBrush Background = Palette.Overview;
+    private static readonly IBrush UnresolvedBrush = Palette.Red;
+    private static readonly IBrush ResolvedBrush = Palette.Draft;
+    private static readonly IBrush CurrentBrush = Palette.Warning;
+    private static readonly IBrush ViewportBrush = Palette.MergeViewport;
 
     private MergeScroll? _scroll;
 

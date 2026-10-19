@@ -39,22 +39,22 @@ public sealed partial class MarkdownView : UserControl
         .Build();
 
     private static readonly FontFamily Mono = new("Cascadia Mono, Consolas, Menlo, monospace");
-    private static readonly IBrush TextBrush = new SolidColorBrush(Color.Parse("#C9CED6"));
-    private static readonly IBrush HeadingBrush = new SolidColorBrush(Color.Parse("#EEF0F2"));
-    private static readonly IBrush MutedBrush = new SolidColorBrush(Color.Parse("#8A9099"));
-    private static readonly IBrush LinkBrush = new SolidColorBrush(Color.Parse("#5AA9F2"));
-    private static readonly IBrush CodeBackground = new SolidColorBrush(Color.Parse("#161A1F"));
-    private static readonly IBrush InlineCodeBackground = new SolidColorBrush(Color.Parse("#2B3038"));
-    private static readonly IBrush QuoteBar = new SolidColorBrush(Color.Parse("#3A4048"));
-    private static readonly IBrush RuleBrush = new SolidColorBrush(Color.Parse("#30353C"));
-    private static readonly IBrush BoxBorder = new SolidColorBrush(Color.Parse("#3A404A"));
-    private static readonly IBrush BoxHeader = new SolidColorBrush(Color.Parse("#2A2F37"));
-    private static readonly IBrush AddedLine = new SolidColorBrush(Color.Parse("#1D3A26"));
-    private static readonly IBrush AddedText = new SolidColorBrush(Color.Parse("#B5E8C3"));
-    private static readonly IBrush AddedSign = new SolidColorBrush(Color.Parse("#4FBF6B"));
-    private static readonly IBrush RemovedLine = new SolidColorBrush(Color.Parse("#3A1D20"));
-    private static readonly IBrush RemovedText = new SolidColorBrush(Color.Parse("#F2B8B5"));
-    private static readonly IBrush RemovedSign = new SolidColorBrush(Color.Parse("#F47067"));
+    private static readonly IBrush TextBrush = Palette.TextBody;
+    private static readonly IBrush HeadingBrush = Palette.TextHeading;
+    private static readonly IBrush MutedBrush = Palette.TextMuted;
+    private static readonly IBrush LinkBrush = Palette.Accent;
+    private static readonly IBrush CodeBackground = Palette.CodeBlock;
+    private static readonly IBrush InlineCodeBackground = Palette.InlineCode;
+    private static readonly IBrush QuoteBar = Palette.BorderControl;
+    private static readonly IBrush RuleBrush = Palette.Border;
+    private static readonly IBrush BoxBorder = Palette.BorderStrong;
+    private static readonly IBrush BoxHeader = Palette.BoxHeader;
+    private static readonly IBrush AddedLine = Palette.AddedLine;
+    private static readonly IBrush AddedText = Palette.AddedLineText;
+    private static readonly IBrush AddedSign = Palette.AddedLineSign;
+    private static readonly IBrush RemovedLine = Palette.RemovedLine;
+    private static readonly IBrush RemovedText = Palette.RemovedLineText;
+    private static readonly IBrush RemovedSign = Palette.DangerText;
 
     /// <summary>Counts the suggestion blocks while rendering, to ask the source for each one's buttons.</summary>
     private int _suggestionIndex;
