@@ -165,6 +165,10 @@
             </views:PriorityRowPanel>
 
             <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" Margin="4,0,8,0" VerticalAlignment="Center">
+              <Border Width="16" Height="16" CornerRadius="8" Background="#2EA043" VerticalAlignment="Center" IsVisible="{Binding IsReadyToMerge}"
+                      ToolTip.Tip="Ready to merge: approved, checks passed, and GitHub has nothing against merging it">
+                <PathIcon Data="{StaticResource CheckIcon}" Width="10" Height="10" Foreground="White" />
+              </Border>
               <Ellipse Width="7" Height="7" Fill="#4CC38A" VerticalAlignment="Center" IsVisible="{Binding ShowCurrentDot}"
                        ToolTip.Tip="Contains the current branch" />
               <PathIcon Data="{StaticResource RefreshIcon}" Width="10" Height="10" Foreground="#E8B339" VerticalAlignment="Center"

@@ -11,6 +11,7 @@ using Markdig.Extensions.Tables;
 using Markdig.Syntax;
 using Markdig.Syntax.Inlines;
 using TotalGit.App.Services;
+using TotalGit.App.ViewModels;
 using MdBlock = Markdig.Syntax.Block;
 using MdInline = Markdig.Syntax.Inlines.Inline;
 
@@ -19,12 +20,16 @@ namespace TotalGit.App.Views;
 /// <summary>
 /// Shows GitHub-flavoured Markdown (pull request descriptions and comments) as formatted text: headings, lists,
 /// quotes, code, tables and links. The HTML that bots put in comments is tidied: comments are dropped,
-/// &lt;details&gt; becomes a collapsible section, images show their alt text, and other tags keep their text.
+/// &lt;details&gt; becomes a folded section, images show their alt text, and other tags keep their text.
+/// <c>```suggestion</c> blocks show as suggested changes, with buttons from <see cref="SuggestionSource"/>.
 /// </summary>
 public sealed partial class MarkdownView : UserControl
 {
     public static readonly StyledProperty<string?> MarkdownProperty =
         AvaloniaProperty.Register<MarkdownView, string?>(nameof(Markdown));
+
+    public static readonly StyledProperty<ISuggestionSource?> SuggestionSourceProperty =
+        AvaloniaProperty.Register<MarkdownView, ISuggestionSource?>(nameof(SuggestionSource));
 
     private static readonly MarkdownPipeline Pipeline = new MarkdownPipelineBuilder()
         .UsePipeTables()
@@ -42,10 +47,29 @@ public sealed partial class MarkdownView : UserControl
     private static readonly IBrush InlineCodeBackground = new SolidColorBrush(Color.Parse("#2B3038"));
     private static readonly IBrush QuoteBar = new SolidColorBrush(Color.Parse("#3A4048"));
     private static readonly IBrush RuleBrush = new SolidColorBrush(Color.Parse("#30353C"));
+    private static readonly IBrush BoxBorder = new SolidColorBrush(Color.Parse("#3A404A"));
+    private static readonly IBrush BoxHeader = new SolidColorBrush(Color.Parse("#2A2F37"));
+    private static readonly IBrush AddedLine = new SolidColorBrush(Color.Parse("#1D3A26"));
+    private static readonly IBrush AddedText = new SolidColorBrush(Color.Parse("#B5E8C3"));
+    private static readonly IBrush AddedSign = new SolidColorBrush(Color.Parse("#4FBF6B"));
+    private static readonly IBrush RemovedLine = new SolidColorBrush(Color.Parse("#3A1D20"));
+    private static readonly IBrush RemovedText = new SolidColorBrush(Color.Parse("#F2B8B5"));
+    private static readonly IBrush RemovedSign = new SolidColorBrush(Color.Parse("#F47067"));
+
+    /// <summary>Counts the suggestion blocks while rendering, to ask the source for each one's buttons.</summary>
+    private int _suggestionIndex;
 
     static MarkdownView()
     {
         MarkdownProperty.Changed.AddClassHandler<MarkdownView>((v, _) => v.Render());
+        SuggestionSourceProperty.Changed.AddClassHandler<MarkdownView>((v, _) => v.Render());
+    }
+
+    /// <summary>Where suggested changes get the lines they replace and their buttons; without one they show as changes only.</summary>
+    public ISuggestionSource? SuggestionSource
+    {
+        get => GetValue(SuggestionSourceProperty);
+        set => SetValue(SuggestionSourceProperty, value);
     }
 
     public string? Markdown
@@ -66,6 +90,7 @@ public sealed partial class MarkdownView : UserControl
             return;
         }
         var root = new StackPanel { Spacing = 8 };
+        _suggestionIndex = 0;
         try
         {
             var doc = Markdig.Markdown.Parse(StripHtmlComments(text), Pipeline);
@@ -120,6 +145,9 @@ public sealed partial class MarkdownView : UserControl
                     Padding = new Thickness(10, 2, 0, 2),
                     Child = inner,
                 });
+                break;
+            case FencedCodeBlock { Info: var info } fenced when string.Equals(info?.Trim(), "suggestion", StringComparison.OrdinalIgnoreCase):
+                target.Children.Add(Suggestion(fenced));
                 break;
             case FencedCodeBlock or CodeBlock:
                 target.Children.Add(Code(((LeafBlock)block).Lines.ToString()));
@@ -177,14 +205,8 @@ public sealed partial class MarkdownView : UserControl
                     header = HtmlText(summary.Groups[1].Value).Trim();
                     pos = summary.Index + summary.Length;
                 }
-                var body = new StackPanel { Spacing = 8, Margin = new Thickness(4, 6, 0, 2) };
-                containers.Peek().Children.Add(new Expander
-                {
-                    Header = new TextBlock { Text = header, FontSize = BaseFontSize, Foreground = HeadingBrush, TextWrapping = TextWrapping.Wrap },
-                    Content = body,
-                    HorizontalAlignment = HorizontalAlignment.Stretch,
-                    Padding = new Thickness(8, 4),
-                });
+                var body = new StackPanel { Spacing = 8, Margin = new Thickness(18, 4, 0, 2), IsVisible = false };
+                containers.Peek().Children.Add(Disclosure(header, body));
                 containers.Push(body);
             }
             else
@@ -194,6 +216,92 @@ public sealed partial class MarkdownView : UserControl
             }
         }
     }
+
+    /// <summary>A folded section, as GitHub draws &lt;details&gt;: a triangle and the summary, the content below when open.</summary>
+    private Control Disclosure(string header, Control body)
+    {
+        var triangle = new PathIcon
+        {
+            Data = Application.Current?.FindResource("DisclosureIcon") as Geometry,
+            Width = 14,
+            Height = 14,
+            Foreground = MutedBrush,
+            RenderTransformOrigin = RelativePoint.Center,
+        };
+        var toggle = new Button
+        {
+            Background = Brushes.Transparent,
+            Padding = new Thickness(0, 2),
+            MinHeight = 0,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Cursor = new Cursor(StandardCursorType.Hand),
+            Content = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 4,
+                Children =
+                {
+                    triangle,
+                    new TextBlock { Text = header, FontSize = BaseFontSize, Foreground = TextBrush, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center },
+                },
+            },
+        };
+        toggle.Click += (_, _) =>
+        {
+            body.IsVisible = !body.IsVisible;
+            triangle.RenderTransform = body.IsVisible ? new RotateTransform(90) : null;
+        };
+        return new StackPanel { Children = { toggle, body } };
+    }
+
+    /// <summary>
+    /// A suggested change: the lines it replaces (when the source knows them) in red, its own in green, and the
+    /// source's buttons (commit it, add it to a batch) underneath.
+    /// </summary>
+    private Control Suggestion(FencedCodeBlock block)
+    {
+        var lines = Enumerable.Range(0, block.Lines.Count).Select(i => block.Lines.Lines[i].ToString()).ToList();
+        var source = SuggestionSource;
+        var panel = new StackPanel();
+        panel.Children.Add(new Border
+        {
+            Background = BoxHeader,
+            BorderBrush = BoxBorder,
+            BorderThickness = new Thickness(0, 0, 0, 1),
+            Padding = new Thickness(10, 5),
+            Child = new TextBlock { Text = "Suggested change", FontSize = BaseFontSize - 1, FontWeight = FontWeight.SemiBold, Foreground = TextBrush },
+        });
+        var code = new StackPanel { Margin = new Thickness(0, 4) };
+        foreach (var line in source?.ReplacedLines ?? []) code.Children.Add(DiffRow("-", line, RemovedLine, RemovedSign, RemovedText));
+        foreach (var line in lines) code.Children.Add(DiffRow("+", line, AddedLine, AddedSign, AddedText));
+        if (lines.Count == 0)
+            code.Children.Add(new TextBlock { Text = "Delete these lines", Foreground = MutedBrush, FontSize = BaseFontSize - 1, Margin = new Thickness(10, 2) });
+        panel.Children.Add(new ScrollViewer
+        {
+            HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
+            VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
+            Content = code,
+        });
+        // The buttons are a view model, drawn by the data templates of the view showing the comment.
+        if (source is not null) panel.Children.Add(new ContentControl { Content = source.Block(_suggestionIndex, lines) });
+        _suggestionIndex++;
+        return new Border { BorderBrush = BoxBorder, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6), ClipToBounds = true, Child = panel };
+    }
+
+    private Control DiffRow(string sign, string text, IBrush background, IBrush signBrush, IBrush textBrush) => new Border
+    {
+        Background = background,
+        Padding = new Thickness(10, 0),
+        Child = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Children =
+            {
+                new TextBlock { Text = sign, Width = 16, FontFamily = Mono, FontSize = BaseFontSize - 1, Foreground = signBrush },
+                new SelectableTextBlock { Text = text, FontFamily = Mono, FontSize = BaseFontSize - 1, Foreground = textBrush },
+            },
+        },
+    };
 
     private void AddHtmlText(string html, Panel target)
     {

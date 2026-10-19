@@ -4,7 +4,8 @@ namespace TotalGit.Core.Hosting.GitHub;
 
 /// <summary>
 /// Pull requests on a github.com repository. Reads use the GraphQL API (one call per list or pull request);
-/// writes use REST, except thread replies and resolving, which only GraphQL can address by thread id.
+/// writes use REST, except those that address something by its GraphQL id: thread replies and resolving, and
+/// reacting to, editing, deleting and hiding comments.
 /// </summary>
 public sealed class GitHubPullRequestProvider : IPullRequestProvider
 {
@@ -24,7 +25,8 @@ public sealed class GitHubPullRequestProvider : IPullRequestProvider
     public PrCapabilities Capabilities =>
         PrCapabilities.List | PrCapabilities.LineComments | PrCapabilities.Replies | PrCapabilities.ResolveThreads |
         PrCapabilities.Reviews | PrCapabilities.RequestChanges | PrCapabilities.Checks | PrCapabilities.Drafts |
-        PrCapabilities.ViewedFiles;
+        PrCapabilities.ViewedFiles | PrCapabilities.Reactions | PrCapabilities.EditComments | PrCapabilities.HideComments |
+        PrCapabilities.Mentions | PrCapabilities.Merge;
 
     /// <summary>Pull request node ids by number, for the viewed-file mutations.</summary>
     private readonly System.Collections.Concurrent.ConcurrentDictionary<int, string> _nodeIds = new();
@@ -56,7 +58,7 @@ public sealed class GitHubPullRequestProvider : IPullRequestProvider
         var data = await _http.GraphQLAsync(GitHubQueries.Details, variables, ct);
         var pr = data.Obj("repository")?.Obj("pullRequest")
             ?? throw new HostException(HostErrorKind.NotFound, $"Pull request #{number} wasn't found on GitHub.");
-        var details = GitHubMapping.Details(pr, Viewer(data));
+        var details = GitHubMapping.Details(pr, Viewer(data)) with { Viewer = data.Obj("viewer") is { } v ? GitHubMapping.User(v) : null };
         if (details.NodeId is { } id) _nodeIds[number] = id;
 
         // Pull requests with more than 100 files: read the rest of the viewed marks.
@@ -105,6 +107,63 @@ public sealed class GitHubPullRequestProvider : IPullRequestProvider
 
     public Task SetResolvedAsync(ReviewThread thread, bool resolved, CancellationToken ct = default) =>
         _http.GraphQLAsync(resolved ? GitHubQueries.Resolve : GitHubQueries.Unresolve, new JsonObject { ["id"] = thread.Id }, ct);
+
+    public Task ReactAsync(PrComment comment, Reaction reaction, bool add, CancellationToken ct = default) =>
+        _http.GraphQLAsync(add ? GitHubQueries.AddReaction : GitHubQueries.RemoveReaction,
+            new JsonObject { ["id"] = comment.Id, ["content"] = GitHubMapping.ReactionContent(reaction) }, ct);
+
+    public Task EditCommentAsync(PrComment comment, string body, CancellationToken ct = default) =>
+        _http.GraphQLAsync(GitHubQueries.EditComment, new JsonObject { ["id"] = comment.Id, ["body"] = body }, ct);
+
+    public Task DeleteCommentAsync(PrComment comment, CancellationToken ct = default) =>
+        _http.GraphQLAsync(GitHubQueries.DeleteComment, new JsonObject { ["id"] = comment.Id }, ct);
+
+    public Task SetHiddenAsync(PrComment comment, HideReason? reason, CancellationToken ct = default) => reason is { } r
+        ? _http.GraphQLAsync(GitHubQueries.Hide, new JsonObject { ["id"] = comment.Id, ["reason"] = GitHubMapping.HideReasonClassifier(r) }, ct)
+        : _http.GraphQLAsync(GitHubQueries.Unhide, new JsonObject { ["id"] = comment.Id }, ct);
+
+    public async Task<IReadOnlyList<CommentEdit>> GetEditsAsync(PrComment comment, CancellationToken ct = default)
+    {
+        var data = await _http.GraphQLAsync(GitHubQueries.Edits, new JsonObject { ["id"] = comment.Id }, ct);
+        return GitHubMapping.Edits(data.Obj("node"));
+    }
+
+    public async Task<MergeOptions> GetMergeOptionsAsync(CancellationToken ct = default)
+    {
+        var data = await _http.GraphQLAsync(GitHubQueries.MergeOptions, RepoVariables(), ct);
+        var repo = data.Obj("repository") ?? throw new HostException(HostErrorKind.NotFound, $"{Host.Owner}/{Host.Repo} wasn't found on GitHub.");
+        var methods = new List<MergeMethod>();
+        if (repo.Bool("mergeCommitAllowed")) methods.Add(MergeMethod.Merge);
+        if (repo.Bool("squashMergeAllowed")) methods.Add(MergeMethod.Squash);
+        if (repo.Bool("rebaseMergeAllowed")) methods.Add(MergeMethod.Rebase);
+        var preferred = repo.Str("viewerDefaultMergeMethod") switch
+        {
+            "SQUASH" => MergeMethod.Squash,
+            "REBASE" => MergeMethod.Rebase,
+            _ => MergeMethod.Merge,
+        };
+        var fallback = methods.Count > 0 ? methods[0] : MergeMethod.Merge;
+        return new MergeOptions(methods, methods.Contains(preferred) ? preferred : fallback, repo.Bool("deleteBranchOnMerge"));
+    }
+
+    public Task MergeAsync(int number, MergeMethod method, string expectedHeadSha, string? title, CancellationToken ct = default)
+    {
+        var body = new JsonObject
+        {
+            ["merge_method"] = method switch { MergeMethod.Squash => "squash", MergeMethod.Rebase => "rebase", _ => "merge" },
+            ["sha"] = expectedHeadSha,
+        };
+        if (!string.IsNullOrWhiteSpace(title) && method != MergeMethod.Rebase) body["commit_title"] = title.Trim();
+        return _http.RestAsync(HttpMethod.Put, $"{_repoPath}/pulls/{number}/merge", body, ct);
+    }
+
+    public async Task<IReadOnlyList<PrUser>> SearchMentionsAsync(string query, CancellationToken ct = default)
+    {
+        var variables = RepoVariables();
+        variables["q"] = query;
+        var data = await _http.GraphQLAsync(GitHubQueries.Mentionable, variables, ct);
+        return GitHubMapping.Users(data.Obj("repository")?.Obj("mentionableUsers"));
+    }
 
     public Task SubmitReviewAsync(int number, ReviewVerdict verdict, string body, IReadOnlyList<DraftComment> comments, string headSha, CancellationToken ct = default)
     {

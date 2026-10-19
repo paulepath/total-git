@@ -114,13 +114,14 @@ public sealed class FormDialog : Window
         var multiline = field.Kind == FormFieldKind.MultilineText;
         var text = new TextBox
         {
-            Text = field.Text,
             PlaceholderText = field.Placeholder,
             AcceptsReturn = multiline,
             TextWrapping = multiline ? TextWrapping.Wrap : TextWrapping.NoWrap,
             Height = multiline ? field.Height : double.NaN,
             VerticalContentAlignment = multiline ? VerticalAlignment.Top : VerticalAlignment.Center,
         };
+        // After AcceptsReturn: a single-line box drops text with line breaks in it.
+        text.Text = field.Text;
         text.TextChanged += (_, _) =>
         {
             // Also raised for the initial text: that isn't the user typing, so don't show errors yet.

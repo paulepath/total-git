@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
+using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -125,4 +126,9 @@ public sealed class PullRequestWindow : Window, IReviewDialogs
     }
 
     public Task<bool> ShowFormAsync(FormSpec spec) => MainWindow.Zoomed(new FormDialog(spec)).ShowDialog<bool>(this);
+
+    public async Task CopyToClipboardAsync(string text)
+    {
+        if (Clipboard is { } clipboard) await clipboard.SetTextAsync(text);
+    }
 }

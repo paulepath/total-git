@@ -1,0 +1,17 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:TotalGit.App.ViewModels"
+             x:Class="TotalGit.App.Views.PersonAvatar"
+             x:DataType="vm:PersonViewModel"
+             ToolTip.Tip="{Binding Name}">
+  <!-- Drawn at 32 and scaled to the size it's given, so the initials scale too. -->
+  <Viewbox Stretch="Uniform">
+    <Border Width="32" Height="32" CornerRadius="16" Background="{Binding Background}" ClipToBounds="True">
+      <Panel>
+        <TextBlock Text="{Binding Initials}" FontSize="12.5" FontWeight="SemiBold" Foreground="White"
+                   HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding !HasAvatar}" />
+        <Image Source="{Binding Avatar}" Stretch="UniformToFill" IsVisible="{Binding HasAvatar}" />
+      </Panel>
+    </Border>
+  </Viewbox>
+</UserControl>

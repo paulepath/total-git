@@ -1,0 +1,113 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:TotalGit.App.ViewModels"
+             xmlns:views="using:TotalGit.App.Views"
+             x:Class="TotalGit.App.Views.CommentEditor"
+             x:DataType="vm:CommentEditorViewModel">
+  <UserControl.Styles>
+    <Style Selector="Button.tab">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0,0,0,2" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="CornerRadius" Value="0" />
+      <Setter Property="Padding" Value="10,6" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="#969CA5" />
+    </Style>
+    <Style Selector="Button.tab.on">
+      <Setter Property="BorderBrush" Value="#E8762B" />
+      <Setter Property="Foreground" Value="#E6E8EB" />
+    </Style>
+    <Style Selector="Button.mdTool">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Width" Value="28" />
+      <Setter Property="Height" Value="28" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="CornerRadius" Value="5" />
+      <Setter Property="Foreground" Value="#A9AFB8" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="Focusable" Value="False" />
+    </Style>
+    <Style Selector="Button.mdTool PathIcon">
+      <Setter Property="Width" Value="14" />
+      <Setter Property="Height" Value="14" />
+    </Style>
+    <Style Selector="TextBox#Box, TextBox#Box:focus, TextBox#Box:pointerover">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="TextBox#Box /template/ Border#PART_BorderElement">
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+  </UserControl.Styles>
+
+  <Border Background="#1C1F24" BorderBrush="#3A404A" BorderThickness="1" CornerRadius="6" ClipToBounds="True">
+    <DockPanel>
+      <Border DockPanel.Dock="Top" Background="#22262C" BorderBrush="#3A404A" BorderThickness="0,0,0,1">
+        <!-- The toolbar sits beside the tabs, or under them when the box is narrow (see SizeChanged). -->
+        <Grid x:Name="Head" ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto">
+          <StackPanel Orientation="Horizontal" Margin="4,0,0,0">
+            <Button Classes="tab" Classes.on="{Binding IsWriting}" Content="Write" Command="{Binding ShowWriteCommand}" />
+            <Button Classes="tab" Classes.on="{Binding IsPreview}" Content="Preview" Command="{Binding ShowPreviewCommand}" />
+          </StackPanel>
+          <WrapPanel x:Name="Toolbar" Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="4,0" IsVisible="{Binding IsWriting}">
+            <Button Classes="mdTool" Tag="heading" ToolTip.Tip="Heading">
+              <TextBlock Text="H" FontWeight="Bold" FontSize="13" />
+            </Button>
+            <Button Classes="mdTool" Tag="bold" ToolTip.Tip="Bold (Ctrl+B)"><PathIcon Data="{StaticResource BoldIcon}" /></Button>
+            <Button Classes="mdTool" Tag="italic" ToolTip.Tip="Italic (Ctrl+I)"><PathIcon Data="{StaticResource ItalicIcon}" /></Button>
+            <Button Classes="mdTool" Tag="quote" ToolTip.Tip="Quote"><PathIcon Data="{StaticResource QuoteIcon}" /></Button>
+            <Button Classes="mdTool" Tag="code" ToolTip.Tip="Code (Ctrl+E)"><PathIcon Data="{StaticResource CodeTagsIcon}" /></Button>
+            <Button Classes="mdTool" Tag="link" ToolTip.Tip="Link (Ctrl+K)"><PathIcon Data="{StaticResource LinkIcon}" /></Button>
+            <Button Classes="mdTool" Tag="bullets" ToolTip.Tip="Bulleted list"><PathIcon Data="{StaticResource BulletListIcon}" /></Button>
+            <Button Classes="mdTool" Tag="numbers" ToolTip.Tip="Numbered list"><PathIcon Data="{StaticResource NumberedListIcon}" /></Button>
+            <Button Classes="mdTool" Tag="tasks" ToolTip.Tip="Task list"><PathIcon Data="{StaticResource TaskListIcon}" /></Button>
+            <Button Classes="mdTool" Tag="mention" ToolTip.Tip="Mention someone">
+              <TextBlock Text="@" FontWeight="Bold" FontSize="13" />
+            </Button>
+            <Border Width="1" Height="16" Background="#3A404A" Margin="4,0" IsVisible="{Binding CanSuggest}" />
+            <Button Classes="mdTool" Tag="suggest" Width="NaN" Padding="6,0" IsVisible="{Binding CanSuggest}"
+                    ToolTip.Tip="Suggest a change to the commented lines: whoever owns the branch can commit it">
+              <StackPanel Orientation="Horizontal" Spacing="5">
+                <PathIcon Data="{StaticResource SuggestIcon}" />
+                <TextBlock x:Name="SuggestText" Text="Suggest change" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+          </WrapPanel>
+        </Grid>
+      </Border>
+      <Panel>
+        <TextBox x:Name="Box" Text="{Binding Text}" PlaceholderText="{Binding Placeholder}" IsVisible="{Binding IsWriting}"
+                 AcceptsReturn="True" TextWrapping="Wrap" MinHeight="72" MaxHeight="320" FontSize="12.5" Padding="10,8"
+                 ScrollViewer.VerticalScrollBarVisibility="Auto" />
+        <Border IsVisible="{Binding IsPreview}" MinHeight="72" Padding="12,10">
+          <Panel>
+            <TextBlock Text="Nothing to preview" Foreground="#8A9099" FontSize="12"
+                       IsVisible="{Binding Text, Converter={x:Static StringConverters.IsNullOrEmpty}}" />
+            <views:MarkdownView Markdown="{Binding Text}" BaseFontSize="12.5" />
+          </Panel>
+        </Border>
+        <Popup x:Name="MentionPopup" PlacementTarget="{Binding #Box}" Placement="BottomEdgeAlignedLeft" IsLightDismissEnabled="True">
+          <Border Background="#2B3038" BorderBrush="#474E59" BorderThickness="1" CornerRadius="8" Padding="0,4" MinWidth="240" BoxShadow="0 8 24 0 #66000000">
+            <ListBox x:Name="Mentions" Background="Transparent" MaxHeight="260">
+              <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:PersonViewModel">
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <views:PersonAvatar Width="20" Height="20" />
+                    <TextBlock Text="{Binding Login}" FontWeight="SemiBold" FontSize="12.5" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding Name}" Foreground="#A9AFB8" FontSize="12" VerticalAlignment="Center" />
+                  </StackPanel>
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+          </Border>
+        </Popup>
+      </Panel>
+    </DockPanel>
+  </Border>
+</UserControl>

@@ -154,6 +154,9 @@ public partial class SidebarNode : ObservableObject
     };
     public bool HasChecks => ChecksBrush is not null;
     public bool IsApproved => PullRequest?.ReviewDecision == ReviewDecision.Approved;
+
+    /// <summary>Approved, checks passed and nothing in the way: a green tick on the row.</summary>
+    public bool IsReadyToMerge { get; init; }
     public bool IsChangesRequested => PullRequest?.ReviewDecision == ReviewDecision.ChangesRequested;
 
     /// <summary>You're asked to review this pull request.</summary>
@@ -631,7 +634,7 @@ public partial class SidebarViewModel : ObservableObject
             return;
         }
         var prs = _pullRequests.Where(p => Match($"#{p.Number} {p.Title}") || Match(p.Author.Login) || Match(p.Author.Name ?? "") || Match(p.HeadRef)).ToList();
-        // Within each group, the most recently updated first (the order GitHub lists them in).
+        // Within each group, those ready to merge first, then the most recently updated (the order GitHub lists them in).
         var prSection = new SidebarNode(SidebarNodeKind.Section, "PULL REQUESTS")
         {
             Count = prs.Count,
@@ -658,7 +661,8 @@ public partial class SidebarViewModel : ObservableObject
                 FolderKey = key,
                 IsExpanded = !_collapsed.Contains(key) || filter.Length > 0,
             };
-            foreach (var p in group)
+            // Ready to merge first; otherwise as GitHub lists them (stable sort).
+            foreach (var p in group.OrderByDescending(PullRequestTriage.IsReadyToMerge))
             {
                 var (ticket, title) = titled[p.Number];
                 ticket ??= PullRequestTriage.TicketFromBranch(p.HeadRef, projects);
@@ -672,9 +676,10 @@ public partial class SidebarViewModel : ObservableObject
                     NumberText = $"#{p.Number}",
                     Ticket = ticket,
                     RailBrush = PrRailColors.For(PullRequestTriage.Rail(p)),
+                    IsReadyToMerge = PullRequestTriage.IsReadyToMerge(p),
                     Card = new PrCardViewModel(p, author, reviewers, ticket),
                     ActiveRunsTip = p.IsCrossRepository ? null : running.GetValueOrDefault(p.HeadRef),
-                    ToolTip = $"#{p.Number} {p.Title}",
+                    ToolTip = $"#{p.Number} {p.Title}" + (PullRequestTriage.IsReadyToMerge(p) ? "\nReady to merge" : ""),
                 });
             }
             prSection.Children.Add(heading);

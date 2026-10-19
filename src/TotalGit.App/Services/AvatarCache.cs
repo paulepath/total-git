@@ -42,6 +42,15 @@ public sealed class AvatarCache(AvatarService service)
         return null;
     }
 
+    /// <summary>An avatar from a known address, loading it when needed (null when there's none).</summary>
+    public Task<Bitmap?> GetUrlAsync(string url)
+    {
+        var key = "url:" + url;
+        if (_bitmaps.TryGetValue(key, out var bitmap)) return Task.FromResult(bitmap);
+        if (!_pending.TryGetValue(key, out var task)) _pending[key] = task = LoadUrlAsync(key, url);
+        return task;
+    }
+
     private async Task<Bitmap?> LoadUrlAsync(string key, string url) => await Decode(key, await service.GetAvatarByUrlAsync(url));
 
     private async Task<Bitmap?> LoadAsync(string key, string email, (string Owner, string Repo)? gitHubRepo, string? sampleSha) =>

@@ -21,12 +21,37 @@ public enum ReviewState { None, Commented, Approved, ChangesRequested, Dismissed
 
 public enum ReviewVerdict { Comment, Approve, RequestChanges }
 
+/// <summary>How a pull request's commits go into its target branch.</summary>
+public enum MergeMethod
+{
+    /// <summary>A merge commit joins the branch, keeping its commits.</summary>
+    Merge,
+
+    /// <summary>All the changes as one new commit.</summary>
+    Squash,
+
+    /// <summary>Each commit replayed on top of the target.</summary>
+    Rebase,
+}
+
+/// <summary>How a repository lets pull requests be merged.</summary>
+/// <param name="Methods">The methods it allows, in GitHub's order (merge commit, squash, rebase).</param>
+/// <param name="Default">The method to offer first: the one the signed-in user last used here.</param>
+/// <param name="DeletesBranchOnMerge">The host deletes a pull request's branch itself once it's merged.</param>
+public sealed record MergeOptions(IReadOnlyList<MergeMethod> Methods, MergeMethod Default, bool DeletesBranchOnMerge);
+
 /// <summary>Which side of the diff a line comment is on: the base (old) or the pull request (new) version.</summary>
 public enum DiffSide { Left, Right }
 
 /// <param name="Name">The name on their profile, when they've set one (bots and organisations have none).</param>
 public sealed record PrUser(string Login, string? AvatarUrl, string? Name = null)
 {
+    /// <summary>An app or bot account (GitHub's "[bot]" users), not a person.</summary>
+    public bool IsBot { get; init; }
+
+    /// <summary>The host's numeric id for a person, when known (GitHub's noreply commit address uses it).</summary>
+    public long? Id { get; init; }
+
     /// <summary>Their name, or their login when they haven't set one.</summary>
     public string DisplayName => string.IsNullOrWhiteSpace(Name) ? Login : Name;
 
@@ -90,7 +115,44 @@ public sealed record Reviewer(string Name, string? AvatarUrl, ReviewState State,
 /// <param name="CommitSha">The commit the comment was made on.</param>
 public sealed record CommentAnchor(string Path, DiffSide Side, int? Line, int? StartLine = null, int? OriginalLine = null, string? CommitSha = null);
 
-public sealed record PrComment(string Id, PrUser Author, string Body, DateTimeOffset CreatedAt);
+/// <summary>How the author of a comment is connected to the repository (shown as a badge, as on GitHub).</summary>
+public enum AuthorRole { None, Owner, Member, Collaborator, Contributor, FirstTimeContributor }
+
+/// <summary>The reactions hosts offer on comments (GitHub's eight).</summary>
+public enum Reaction { ThumbsUp, ThumbsDown, Laugh, Hooray, Confused, Heart, Rocket, Eyes }
+
+/// <summary>Why a comment was hidden (GitHub's "minimized" reasons).</summary>
+public enum HideReason { Spam, Abuse, OffTopic, Outdated, Duplicate, Resolved }
+
+/// <summary>One kind of reaction on a comment.</summary>
+/// <param name="Reactors">Some of the people who reacted; <paramref name="Count"/> counts them all.</param>
+public sealed record ReactionGroup(Reaction Reaction, int Count, bool ViewerReacted, IReadOnlyList<PrUser> Reactors);
+
+/// <summary>A version of a comment: who saved it and when.</summary>
+public sealed record CommentEdit(PrUser Editor, DateTimeOffset At);
+
+public sealed record PrComment(string Id, PrUser Author, string Body, DateTimeOffset CreatedAt)
+{
+    /// <summary>The comment's web address.</summary>
+    public string? Url { get; init; }
+
+    public AuthorRole Role { get; init; }
+
+    /// <summary>When it was last edited; null when it never was.</summary>
+    public DateTimeOffset? EditedAt { get; init; }
+
+    /// <summary>Hidden (minimized) by someone with write access, and why.</summary>
+    public bool IsHidden { get; init; }
+    public HideReason? HiddenReason { get; init; }
+
+    public IReadOnlyList<ReactionGroup> Reactions { get; init; } = [];
+
+    /// <summary>What the signed-in user may do with it.</summary>
+    public bool ViewerCanEdit { get; init; }
+    public bool ViewerCanDelete { get; init; }
+    public bool ViewerCanHide { get; init; }
+    public bool ViewerCanReact { get; init; }
+}
 
 /// <summary>A conversation about one place in the diff: a line comment and its replies.</summary>
 /// <param name="IsOutdated">The lines it was made on have changed since.</param>
@@ -101,7 +163,17 @@ public sealed record ReviewThread(
     bool IsOutdated,
     IReadOnlyList<PrComment> Comments,
     bool ViewerCanReply,
-    bool ViewerCanResolve);
+    bool ViewerCanResolve)
+{
+    /// <summary>Who resolved it, when it's resolved and the host says.</summary>
+    public PrUser? ResolvedBy { get; init; }
+
+    /// <summary>
+    /// The diff the first comment was made on, as a unified-diff hunk ending at the commented line (shows outdated
+    /// comments in their original code, and gives a suggestion its replaced lines).
+    /// </summary>
+    public string? DiffHunk { get; init; }
+}
 
 public enum TimelineKind { Comment, Review }
 
@@ -138,6 +210,9 @@ public sealed record PullRequestDetails(
 
     /// <summary>When the signed-in user's latest review was submitted.</summary>
     public DateTimeOffset? LastViewerReviewAt { get; init; }
+
+    /// <summary>The signed-in user, with their avatar, when the host said.</summary>
+    public PrUser? Viewer { get; init; }
 }
 
 /// <summary>The signed-in user's "viewed" mark on one file of a pull request.</summary>

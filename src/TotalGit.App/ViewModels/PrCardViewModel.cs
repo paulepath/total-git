@@ -37,6 +37,7 @@ public sealed class PrCardViewModel
 
         var rail = PullRequestTriage.Rail(pr);
         RailBrush = PrRailColors.For(rail);
+        IsReadyToMerge = PullRequestTriage.IsReadyToMerge(pr);
         StatusText = rail switch
         {
             PrRail.Draft => "Draft",
@@ -46,7 +47,10 @@ public sealed class PrCardViewModel
             PrRail.Blocked => "Blocked: changes requested",
             PrRail.Waiting when pr.Checks == ChecksState.Pending => "Checks running",
             PrRail.Waiting => "Waiting for review",
-            _ => "Ready to merge",
+            _ when IsReadyToMerge => "Ready to merge",
+            _ when pr.MergeState == MergeState.Behind => $"Behind {pr.BaseRef}: update the branch to merge",
+            _ when pr.MergeState == MergeState.Blocked => "Held by the branch's rules (more approvals needed?)",
+            _ => "Nothing blocking it, but not approved",
         };
 
         var runs = pr.CheckRuns;
@@ -91,6 +95,9 @@ public sealed class PrCardViewModel
 
     public IBrush RailBrush { get; }
     public string StatusText { get; }
+
+    /// <summary>Approved, checks passed and nothing in the way (the status line gets a green tick).</summary>
+    public bool IsReadyToMerge { get; }
 
     public bool HasChecks { get; }
     public string CheckSummary { get; }

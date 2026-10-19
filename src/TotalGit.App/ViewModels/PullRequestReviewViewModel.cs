@@ -13,6 +13,7 @@ namespace TotalGit.App.ViewModels;
 public interface IReviewDialogs
 {
     Task<bool> ShowFormAsync(FormSpec spec);
+    Task CopyToClipboardAsync(string text);
 }
 
 /// <summary>What the review window needs from the repository tab that opened it.</summary>
@@ -23,7 +24,9 @@ public sealed record ReviewContext(
     ReviewMarks Marks,
     AppSettings Settings,
     Func<PullRequestSummary, Task> Checkout,
-    Func<string, Task> OpenTicket)
+    Func<string, Task> OpenTicket,
+    AvatarCache? Avatars = null,
+    Func<string, Task>? AfterMerge = null)
 {
     public RepositorySession Session => CurrentSession();
 }
@@ -34,14 +37,12 @@ public sealed record ReviewContext(
 /// Also reviews changes that haven't gone to a pull request (<see cref="BranchReviewSource"/>,
 /// <see cref="CommitsReviewSource"/>): the same files and review marks, without the host's parts.
 /// </summary>
-public sealed partial class PullRequestReviewViewModel : ObservableObject
+public sealed partial class PullRequestReviewViewModel : ObservableObject, ICommentHost
 {
     private readonly ReviewContext _ctx;
     private readonly ReviewSource _source;
     private readonly string _marksKey;
     private readonly Dictionary<string, FileViewState> _viewed = [];
-    private readonly Dictionary<string, ReviewThreadViewModel> _threadViewModels = [];
-    private PullRequestDetails? _threadViewModelsFor;
     private IReadOnlySet<string> _sinceChanged = new HashSet<string>();
     private int _loadRequest;
     private int _diffRequest;
@@ -117,14 +118,17 @@ public sealed partial class PullRequestReviewViewModel : ObservableObject
         var vm = created = new PullRequestViewModel(summary, false, null)
         {
             Capabilities = provider.Capabilities,
-            Reply = (thread, body) => PostAsync("Replying…", () => provider.ReplyAsync(summary.Number, thread, body)),
-            SetResolved = (thread, resolved) => PostAsync(resolved ? "Resolving…" : "Unresolving…", () => provider.SetResolvedAsync(thread, resolved)),
+            CommentHost = this,
             PostConversationComment = body => PostAsync("Commenting…", () => provider.AddCommentAsync(summary.Number, body)),
         };
         vm.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName is nameof(PullRequestViewModel.Details) or nameof(PullRequestViewModel.Composer)) RebuildDiffThreads();
-            if (e.PropertyName == nameof(PullRequestViewModel.Details)) OnDetailsChanged();
+            if (e.PropertyName == nameof(PullRequestViewModel.Details))
+            {
+                OnDetailsChanged();
+                OnMergeStateChanged();
+            }
         };
         vm.PendingCommentsChanged += () =>
         {
@@ -184,6 +188,8 @@ public sealed partial class PullRequestReviewViewModel : ObservableObject
             if (request != _loadRequest) return;
             var generated = await GitActions.GeneratedAttrAsync(_ctx.WorkingDirectory, files.Select(f => f.Path));
             Pr.SetFiles(files, mergeBase, head);
+            // Suggestions can be committed now the head is known.
+            OnBatchChanged();
             _allFiles = files;
             _generated = generated;
             var commits = await GitActions.CommitListAsync(_ctx.WorkingDirectory, $"{mergeBase}..{head}");
@@ -978,19 +984,13 @@ public sealed partial class PullRequestReviewViewModel : ObservableObject
         }
         // In "since the last review" the old side isn't the pull request's base, so comments would land wrongly.
         CanCommentOnDiff = Pr.CanComment && Pr.HeadSha is not null && !diff.IsBinary && !SinceLastReview;
-        if (_threadViewModelsFor != Pr.Details)
-        {
-            _threadViewModels.Clear();
-            _threadViewModelsFor = Pr.Details;
-        }
         var items = new List<DiffThreadItem>();
         var placement = ThreadAnchoring.Place(diff.Lines, Pr.Details?.Threads ?? [], file.Path);
         foreach (var (line, threads) in placement.ByLine)
         {
             foreach (var thread in threads)
             {
-                if (!_threadViewModels.TryGetValue(thread.Id, out var threadVm)) _threadViewModels[thread.Id] = threadVm = Pr.NewThread(thread);
-                items.Add(new DiffThreadItem(line, threadVm, thread.Anchor.Side));
+                items.Add(new DiffThreadItem(line, Pr.ThreadFor(thread), thread.Anchor.Side));
             }
         }
         foreach (var pending in Pr.Pending.Where(p => p.Draft.Anchor.Path == file.Path))
@@ -1032,7 +1032,10 @@ public sealed partial class PullRequestReviewViewModel : ObservableObject
                 pr.AddPending(new DraftComment(c.Anchor, c.Text.Trim()));
                 pr.Composer = null;
             },
-            cancel: _ => pr.Composer = null);
+            cancel: _ => pr.Composer = null,
+            host: this,
+            suggestionLines: anchor.Side == DiffSide.Right ? [diff.Lines[lineIndex].Text] : null,
+            viewer: pr.Details?.Viewer);
     }
 
     private async Task<bool> PostLineCommentAsync(CommentComposerViewModel composer)

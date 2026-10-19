@@ -129,6 +129,64 @@ public partial class RepositoryViewModel
         OpenReview(new PullRequestSource(provider, summary), ticket);
     }
 
+    /// <summary>Merges a pull request on the host, after asking how; then fetches, so its merge and deleted branch show here.</summary>
+    [RelayCommand]
+    private async Task MergePullRequestAsync(PullRequestSummary pr)
+    {
+        if (_prProvider is not { } provider || Dialogs is null || _state is not { } state) return;
+        MergeOptions options;
+        try
+        {
+            options = await Task.Run(() => provider.GetMergeOptionsAsync());
+        }
+        catch (HostException ex)
+        {
+            ShowError(ex.Message);
+            return;
+        }
+        if (await PullRequestMerging.AskAsync(pr, options, Dialogs.ShowFormAsync) is not { } choice) return;
+
+        string message;
+        IsBusy = true;
+        BusyText = $"Merging #{pr.Number}…";
+        try
+        {
+            message = await PullRequestMerging.MergeAsync(provider, pr, choice, state.WorkingDirectory);
+        }
+        catch (HostException ex)
+        {
+            ShowError($"Couldn't merge #{pr.Number}: {ex.Message}");
+            return;
+        }
+        finally
+        {
+            IsBusy = false;
+            BusyText = null;
+        }
+        await AfterPullRequestMergedAsync(message);
+    }
+
+    /// <summary>
+    /// After a merge (here or in a review window): fetches, so the merge and any deleted branch show, lists the
+    /// pull requests again, and offers to clean up local branches whose remote branch went.
+    /// </summary>
+    private async Task AfterPullRequestMergedAsync(string message)
+    {
+        ShowInfo(message);
+        if (_state is not { } state) return;
+        try
+        {
+            await GitActions.FetchAsync(state.WorkingDirectory);
+        }
+        catch (GitCommandException)
+        {
+            // Offline for a moment: the next fetch shows it.
+        }
+        await RefreshRefsAsync();
+        await RefreshPullRequestsAsync();
+        OfferCleanUp(message);
+    }
+
     /// <summary>
     /// Selects a pull request's newest commit in the graph. When that commit isn't on a branch here yet (not fetched,
     /// or from a fork), shows its branch's tip instead if there is one, else says why it can't.
@@ -224,7 +282,8 @@ public partial class RepositoryViewModel
             return;
         }
         // The tab's session as it is when asked: a refresh replaces it while the window is open.
-        var ctx = new ReviewContext(() => _session ?? session, _state.WorkingDirectory, Marks.Value, _settings, CheckoutPullRequestAsync, OpenTicketAsync);
+        var ctx = new ReviewContext(() => _session ?? session, _state.WorkingDirectory, Marks.Value, _settings, CheckoutPullRequestAsync, OpenTicketAsync, Avatars,
+            AfterPullRequestMergedAsync);
         var vm = new PullRequestReviewViewModel(source, ctx) { Ticket = ticket };
         _reviews[source.MarksKey] = vm;
         vm.CloseRequested += () => _reviews.Remove(source.MarksKey);
@@ -411,6 +470,8 @@ public partial class RepositoryViewModel
     private IReadOnlyList<MenuAction> ActionsForPullRequest(PullRequestSummary pr) =>
     [
         new MenuAction("Open pull request", OpenPullRequestCommand, pr, Icon: MenuIcons.Open),
+        new MenuAction(pr.IsDraft ? "Merge… (a draft can't be merged)" : PullRequestTriage.IsReadyToMerge(pr) ? "Merge… (ready)" : "Merge…",
+            MergePullRequestCommand, pr, IsEnabled: !pr.IsDraft && _prProvider?.Capabilities.HasFlag(PrCapabilities.Merge) == true, Icon: MenuIcons.Merge),
         new MenuAction("Check out in new worktree…", CheckoutPullRequestCommand, pr, Icon: MenuIcons.Worktree),
         new MenuAction("Open on " + (_prHost?.Kind == HostKind.GitHub ? "GitHub" : "the web"), OpenUrlCommand, pr.Url, Icon: MenuIcons.Browser),
         MenuAction.Separator,

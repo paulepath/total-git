@@ -43,6 +43,40 @@ public static partial class PullRequestTriage
         return PrRail.Ready;
     }
 
+    /// <summary>
+    /// Approved, its checks passed (or it has none), and the host has nothing against merging it: no conflicts, not
+    /// behind its target, not held by the branch's rules. Without required reviews, an approval with no request for
+    /// changes counts. A merge state the host hasn't worked out yet doesn't count against it.
+    /// </summary>
+    public static bool IsReadyToMerge(PullRequestSummary pr) =>
+        !pr.IsDraft && pr.State == PullRequestState.Open
+        && (pr.ReviewDecision == ReviewDecision.Approved
+            || pr.ReviewDecision == ReviewDecision.None && pr.Reviewers.Any(r => r.State == ReviewState.Approved)
+                                                        && !pr.Reviewers.Any(r => r.State == ReviewState.ChangesRequested))
+        && pr.Checks is ChecksState.Success or ChecksState.None
+        && pr.MergeState is MergeState.Clean or MergeState.Unknown;
+
+    /// <summary>
+    /// What may stop a pull request merging, in words ("checks failed", "behind main"); empty when nothing is in
+    /// the way. The host has the last word.
+    /// </summary>
+    public static IReadOnlyList<string> MergeProblems(PullRequestSummary pr)
+    {
+        var problems = new List<string>();
+        if (pr.IsDraft) problems.Add("it's a draft");
+        if (pr.ReviewDecision == ReviewDecision.ChangesRequested) problems.Add("changes were requested");
+        else if (pr.ReviewDecision == ReviewDecision.ReviewRequired) problems.Add("it still needs an approving review");
+        if (pr.Checks == ChecksState.Failure) problems.Add("checks failed");
+        else if (pr.Checks == ChecksState.Pending) problems.Add("checks are still running");
+        switch (pr.MergeState)
+        {
+            case MergeState.Conflicting: problems.Add($"it has conflicts with {pr.BaseRef}"); break;
+            case MergeState.Behind: problems.Add($"it's behind {pr.BaseRef}"); break;
+            case MergeState.Blocked when problems.Count == 0: problems.Add("the branch's rules hold it (more approvals needed?)"); break;
+        }
+        return problems;
+    }
+
     public static PrGroup Group(PullRequestSummary pr) =>
         pr.IsDraft ? PrGroup.Drafts
         : pr.ViewerReviewRequested ? PrGroup.NeedsYourReview

@@ -32,6 +32,9 @@
     <StackPanel Spacing="6">
       <StackPanel Orientation="Horizontal" Spacing="6">
         <Border Width="3" Height="14" CornerRadius="1.5" Background="{Binding RailBrush}" VerticalAlignment="Center" />
+        <Border Width="14" Height="14" CornerRadius="7" Background="#2EA043" VerticalAlignment="Center" IsVisible="{Binding IsReadyToMerge}">
+          <PathIcon Data="{StaticResource CheckIcon}" Width="9" Height="9" Foreground="White" />
+        </Border>
         <TextBlock Text="{Binding StatusText}" FontSize="11" FontWeight="SemiBold" Foreground="#C9CED6" VerticalAlignment="Center" />
         <Border Classes="branch" IsVisible="{Binding IsDraft}" Background="Transparent" BorderBrush="#5C636D" BorderThickness="1" CornerRadius="7">
           <TextBlock Text="draft" FontSize="9.5" Foreground="#8A9099" />

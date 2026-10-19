@@ -25,6 +25,37 @@ public sealed class PullRequestTriageTests
     }
 
     [Fact]
+    public void Ready_to_merge_needs_an_approval_passing_checks_and_nothing_in_the_way()
+    {
+        Assert.True(PullRequestTriage.IsReadyToMerge(Pr()));
+        Assert.True(PullRequestTriage.IsReadyToMerge(Pr(checks: ChecksState.None, merge: MergeState.Unknown)));
+        Assert.False(PullRequestTriage.IsReadyToMerge(Pr(draft: true)));
+        Assert.False(PullRequestTriage.IsReadyToMerge(Pr(review: ReviewDecision.ReviewRequired)));
+        Assert.False(PullRequestTriage.IsReadyToMerge(Pr(checks: ChecksState.Pending)));
+        Assert.False(PullRequestTriage.IsReadyToMerge(Pr(checks: ChecksState.Failure)));
+        Assert.False(PullRequestTriage.IsReadyToMerge(Pr(merge: MergeState.Behind)));
+        Assert.False(PullRequestTriage.IsReadyToMerge(Pr(merge: MergeState.Blocked))); // e.g. a second approval is required
+        Assert.False(PullRequestTriage.IsReadyToMerge(Pr(merge: MergeState.Conflicting)));
+
+        // No required reviews: an approval counts, unless someone asked for changes; no reviews at all doesn't.
+        var bob = new Reviewer("bob", null, ReviewState.Approved, IsRequested: false);
+        var carol = new Reviewer("carol", null, ReviewState.ChangesRequested, IsRequested: false);
+        Assert.False(PullRequestTriage.IsReadyToMerge(Pr(review: ReviewDecision.None)));
+        Assert.True(PullRequestTriage.IsReadyToMerge(Pr(review: ReviewDecision.None) with { Reviewers = [bob] }));
+        Assert.False(PullRequestTriage.IsReadyToMerge(Pr(review: ReviewDecision.None) with { Reviewers = [bob, carol] }));
+    }
+
+    [Fact]
+    public void Merge_problems_say_what_is_in_the_way()
+    {
+        Assert.Empty(PullRequestTriage.MergeProblems(Pr()));
+        Assert.Equal(["it still needs an approving review", "checks failed", "it's behind main"],
+            PullRequestTriage.MergeProblems(Pr(review: ReviewDecision.ReviewRequired, checks: ChecksState.Failure, merge: MergeState.Behind)));
+        Assert.Equal(["the branch's rules hold it (more approvals needed?)"], PullRequestTriage.MergeProblems(Pr(merge: MergeState.Blocked)));
+        Assert.Equal(["changes were requested"], PullRequestTriage.MergeProblems(Pr(review: ReviewDecision.ChangesRequested, merge: MergeState.Blocked)));
+    }
+
+    [Fact]
     public void Groups_put_drafts_last_and_your_reviews_first()
     {
         Assert.Equal(PrGroup.Drafts, PullRequestTriage.Group(Pr(draft: true, yourReview: true)));

@@ -15,6 +15,7 @@ public static class PrColors
     public static readonly IBrush Failure = new SolidColorBrush(Color.Parse("#E5484D"));
     public static readonly IBrush Pending = new SolidColorBrush(Color.Parse("#E8B339"));
     public static readonly IBrush Neutral = new SolidColorBrush(Color.Parse("#8A9099"));
+    public static readonly IBrush Merged = new SolidColorBrush(Color.Parse("#A371F7"));
 }
 
 /// <summary>
@@ -49,8 +50,8 @@ public sealed partial class PullRequestViewModel : ObservableObject
     /// <summary>What the host lets this app do with pull requests.</summary>
     public PrCapabilities Capabilities { get; init; }
 
-    public Func<ReviewThread, string, Task<bool>>? Reply { get; init; }
-    public Func<ReviewThread, bool, Task<bool>>? SetResolved { get; init; }
+    /// <summary>What the threads' comments can do (the review window); none in a read-only view.</summary>
+    public ICommentHost? CommentHost { get; init; }
     public Func<string, Task<bool>>? PostConversationComment { get; init; }
 
     public bool CanComment => Capabilities.HasFlag(PrCapabilities.LineComments);
@@ -142,7 +143,7 @@ public sealed partial class PullRequestViewModel : ObservableObject
     /// <summary>The description first, then comments and reviews, oldest first.</summary>
     public IReadOnlyList<ConversationItem> Conversation => Details is { } d
         ? d.Timeline.Where(t => t.Body.Trim().Length > 0 || t.ReviewState is ReviewState.Approved or ReviewState.ChangesRequested)
-            .Select(t => new ConversationItem(t)).ToList()
+            .Select(t => new ConversationItem(t, CommentHost?.Avatars)).ToList()
         : [];
 
     public string ConversationTabText => Conversation.Count + FileThreads.Count is var n && n == 0 ? "Conversation" : $"Conversation ({n})";
@@ -153,6 +154,8 @@ public sealed partial class PullRequestViewModel : ObservableObject
         get
         {
             if (Details is not { } d) return null;
+            if (d.Summary.State == PullRequestState.Merged) return $"Merged into {d.Summary.BaseRef}.";
+            if (d.Summary.State == PullRequestState.Closed) return "Closed without merging.";
             if (d.Summary.IsDraft) return "Draft: not ready for review yet.";
             var reasons = new List<string>();
             var failing = d.Checks.Count(c => c.IsRequired && c.Status == CheckStatus.Failure);
@@ -168,16 +171,20 @@ public sealed partial class PullRequestViewModel : ObservableObject
                 MergeState.Blocked when reasons.Count > 0 => "Blocked: " + string.Join(", ", reasons) + ".",
                 MergeState.Blocked => "Blocked by the branch's rules.",
                 MergeState.Unstable => "Can be merged, but some checks failed.",
-                MergeState.Clean => "Ready to merge.",
+                MergeState.Clean when PullRequestTriage.IsReadyToMerge(d.Summary) => "Ready to merge.",
+                MergeState.Clean => "Can be merged, but nobody has approved it yet.",
                 _ when reasons.Count > 0 => string.Join(", ", reasons) + ".",
                 _ => null,
             };
         }
     }
 
-    public IBrush MergeBrush => Details?.MergeState switch
+    public IBrush MergeBrush => Details?.Summary.State is PullRequestState.Merged ? PrColors.Merged
+        : Details?.Summary.State is PullRequestState.Closed ? PrColors.Neutral
+        : Details?.MergeState switch
     {
-        MergeState.Clean => PrColors.Success,
+        MergeState.Clean when PullRequestTriage.IsReadyToMerge(Details.Summary) => PrColors.Success,
+        MergeState.Clean => PrColors.Neutral,
         MergeState.Conflicting or MergeState.Blocked => PrColors.Failure,
         MergeState.Behind or MergeState.Unstable => PrColors.Pending,
         _ => PrColors.Neutral,
@@ -187,17 +194,31 @@ public sealed partial class PullRequestViewModel : ObservableObject
 
     partial void OnDetailsChanged(PullRequestDetails? value)
     {
-        FileThreads = value?.Threads
+        // Threads keep their view models across reloads (by id), so what's open or being written stays.
+        var threads = value?.Threads ?? [];
+        var ids = threads.Select(t => t.Id).ToHashSet();
+        foreach (var gone in _threads.Keys.Where(id => !ids.Contains(id)).ToList())
+        {
+            _threads[gone].Detach();
+            _threads.Remove(gone);
+        }
+        FileThreads = threads
             .OrderBy(t => t.Anchor.Path, StringComparer.OrdinalIgnoreCase)
             .ThenBy(t => t.Anchor.Line ?? t.Anchor.OriginalLine ?? 0)
-            .Select(NewThread).ToList() ?? [];
+            .Select(ThreadFor).ToList();
     }
 
     // ------------------------------------------------------------------ comments and reviews
 
-    public ReviewThreadViewModel NewThread(ReviewThread thread) => new(thread,
-        Reply ?? ((_, _) => Task.FromResult(false)),
-        SetResolved ?? ((_, _) => Task.FromResult(false)));
+    private readonly Dictionary<string, ReviewThreadViewModel> _threads = [];
+
+    /// <summary>The view model for a thread: the same one each time (brought up to date), wherever it's shown.</summary>
+    public ReviewThreadViewModel ThreadFor(ReviewThread thread)
+    {
+        if (_threads.TryGetValue(thread.Id, out var vm)) vm.Update(thread);
+        else _threads[thread.Id] = vm = new ReviewThreadViewModel(thread, CommentHost);
+        return vm;
+    }
 
     /// <summary>All line comment threads, by file: shown on the Conversation tab (including outdated ones).</summary>
     [ObservableProperty]
@@ -234,9 +255,13 @@ public sealed partial class PullRequestViewModel : ObservableObject
 
     public void AddPending(DraftComment draft)
     {
-        Pending.Add(new PendingCommentViewModel(draft, p => RemovePending(p)));
+        var viewer = CommentHost?.Viewer is { } me ? new PersonViewModel(me, CommentHost.Avatars) : null;
+        Pending.Add(new PendingCommentViewModel(draft, p => RemovePending(p), ReplacePending, viewer, Pending.Count + 1));
         PendingChanged();
     }
+
+    /// <summary>A pending comment was edited: the review sends the new text.</summary>
+    private void ReplacePending(PendingCommentViewModel pending, DraftComment draft) => PendingChanged();
 
     public void RemovePending(PendingCommentViewModel pending)
     {
@@ -338,12 +363,15 @@ public sealed class CheckItemViewModel(CheckItem check)
     };
 }
 
-public sealed class ConversationItem(TimelineItem item)
+public sealed class ConversationItem(TimelineItem item, Services.AvatarCache? avatars = null)
 {
+    public PersonViewModel Person { get; } = new(item.Author, avatars);
     public string Author => item.Author.DisplayName;
+    public bool IsBot => item.Author.IsBot;
     public string Body => item.Body.Trim();
     public bool HasBody => Body.Length > 0;
-    public string When => item.CreatedAt.LocalDateTime.ToString("g");
+    public string When => Services.DateText.Relative(item.CreatedAt);
+    public string WhenToolTip => item.CreatedAt.LocalDateTime.ToString("dddd d MMMM yyyy, HH:mm", System.Globalization.CultureInfo.CurrentCulture);
 
     public string? Verdict => item.ReviewState switch
     {

@@ -318,6 +318,55 @@ public class GitHubProviderTests
         Assert.Equal(ReviewState.Commented, pr.Timeline[1].ReviewState);
     }
 
+    [Fact]
+    public async Task Maps_comment_reactions_permissions_and_who_resolved()
+    {
+        var (provider, http) = Create();
+        var json = DetailsJson
+            .Replace("""
+                "diffSide":"RIGHT","viewerCanReply":true,"viewerCanResolve":false,"viewerCanUnresolve":true,
+                """, """
+                "diffSide":"RIGHT","viewerCanReply":true,"viewerCanResolve":false,"viewerCanUnresolve":true,
+                "resolvedBy":{"__typename":"User","login":"bob","avatarUrl":null,"name":"Bob B","databaseId":7},
+                "hunk":{"nodes":[{"diffHunk":"@@ -1,2 +1,2 @@\n a\n+b"}]},
+                """)
+            .Replace("""
+                {"id":"C4","body":"Range","createdAt":"2026-09-30T08:20:00Z","author":{"login":"bob","avatarUrl":null},
+                """, """
+                {"id":"C4","body":"Range","createdAt":"2026-09-30T08:20:00Z","author":{"__typename":"Bot","login":"rabbit","avatarUrl":null},
+                 "url":"https://github.com/octo/widgets/pull/7#discussion_r1","authorAssociation":"MEMBER","lastEditedAt":"2026-09-30T09:00:00Z",
+                 "isMinimized":true,"minimizedReason":"off-topic","viewerCanUpdate":true,"viewerCanDelete":false,"viewerCanMinimize":true,"viewerCanReact":true,
+                 "reactionGroups":[
+                   {"content":"HEART","viewerHasReacted":false,"reactors":{"totalCount":1,"nodes":[{"__typename":"User","login":"carol","name":null}]}},
+                   {"content":"THUMBS_UP","viewerHasReacted":true,"reactors":{"totalCount":3,"nodes":[{"__typename":"User","login":"me","name":"Me Myself"},{"__typename":"Bot","login":"rabbit"}]}},
+                   {"content":"EYES","viewerHasReacted":false,"reactors":{"totalCount":0,"nodes":[]}}],
+                """);
+        http.Route(GraphQL, () => FakeHttpHandler.Json(json));
+
+        var pr = await provider.GetPullRequestAsync(7);
+
+        var thread = pr.Threads[2];
+        Assert.Equal("bob", thread.ResolvedBy?.Login);
+        Assert.Equal(7, thread.ResolvedBy?.Id);
+        Assert.Equal("@@ -1,2 +1,2 @@\n a\n+b", thread.DiffHunk);
+        Assert.Null(pr.Threads[0].ResolvedBy); // not resolved
+
+        var c = thread.Comments[0];
+        Assert.True(c.Author.IsBot);
+        Assert.Equal("https://github.com/octo/widgets/pull/7#discussion_r1", c.Url);
+        Assert.Equal(AuthorRole.Member, c.Role);
+        Assert.Equal(new DateTimeOffset(2026, 9, 30, 9, 0, 0, TimeSpan.Zero), c.EditedAt);
+        Assert.Equal((true, HideReason.OffTopic), (c.IsHidden, c.HiddenReason));
+        Assert.Equal((true, false, true, true), (c.ViewerCanEdit, c.ViewerCanDelete, c.ViewerCanHide, c.ViewerCanReact));
+        // Unused kinds are left out; GitHub's order (thumbs up first) whatever order they came in.
+        Assert.Equal([Reaction.ThumbsUp, Reaction.Heart], c.Reactions.Select(r => r.Reaction));
+        Assert.Equal((3, true), (c.Reactions[0].Count, c.Reactions[0].ViewerReacted));
+        Assert.Equal(["Me Myself", "rabbit"], c.Reactions[0].Reactors.Select(r => r.DisplayName));
+
+        Assert.Null(pr.Threads[0].Comments[0].Url);
+        Assert.Empty(pr.Threads[0].Comments[0].Reactions);
+    }
+
     [Theory]
     [InlineData("CLEAN", "MERGEABLE", MergeState.Clean)]
     [InlineData("BLOCKED", "MERGEABLE", MergeState.Blocked)]
@@ -436,6 +485,98 @@ public class GitHubProviderTests
         Assert.DoesNotContain("unresolve", Body(http, 1).GetProperty("query").GetString());
         Assert.Contains("unresolveReviewThread", Body(http, 2).GetProperty("query").GetString());
         Assert.Equal("PRRT_1", Body(http, 2).GetProperty("variables").GetProperty("id").GetString());
+    }
+
+    private static readonly PrComment Comment1 = new("PRRC_1", new PrUser("bob", null), "Hi", DateTimeOffset.UnixEpoch);
+
+    private static (string Query, JsonElement Variables) Call(FakeHttpHandler http, int index)
+    {
+        var body = Body(http, index);
+        return (body.GetProperty("query").GetString()!, body.GetProperty("variables"));
+    }
+
+    [Fact]
+    public async Task Reacts_edits_deletes_and_hides_comments_by_id()
+    {
+        var (provider, http) = Create();
+        http.Route(GraphQL, () => FakeHttpHandler.Json("""{"data":{}}"""));
+
+        await provider.ReactAsync(Comment1, Reaction.Hooray, add: true);
+        await provider.ReactAsync(Comment1, Reaction.ThumbsDown, add: false);
+        await provider.EditCommentAsync(Comment1, "Better");
+        await provider.DeleteCommentAsync(Comment1);
+        await provider.SetHiddenAsync(Comment1, HideReason.OffTopic);
+        await provider.SetHiddenAsync(Comment1, null);
+
+        var (add, addVars) = Call(http, 0);
+        Assert.Contains("addReaction", add);
+        Assert.Equal(("PRRC_1", "HOORAY"), (addVars.GetProperty("id").GetString(), addVars.GetProperty("content").GetString()));
+        var (remove, removeVars) = Call(http, 1);
+        Assert.Contains("removeReaction", remove);
+        Assert.Equal("THUMBS_DOWN", removeVars.GetProperty("content").GetString());
+        var (edit, editVars) = Call(http, 2);
+        Assert.Contains("updatePullRequestReviewComment", edit);
+        Assert.Equal(("PRRC_1", "Better"), (editVars.GetProperty("id").GetString(), editVars.GetProperty("body").GetString()));
+        Assert.Contains("deletePullRequestReviewComment", Call(http, 3).Query);
+        var (hide, hideVars) = Call(http, 4);
+        Assert.Contains("minimizeComment", hide);
+        Assert.Equal("OFF_TOPIC", hideVars.GetProperty("reason").GetString());
+        Assert.Contains("unminimizeComment", Call(http, 5).Query);
+    }
+
+    [Fact]
+    public async Task Reads_edit_history_and_people_to_mention()
+    {
+        var (provider, http) = Create();
+        var call = 0;
+        http.Routes[GraphQL] = _ => FakeHttpHandler.Json(call++ == 0
+            ? """
+              {"data":{"node":{"userContentEdits":{"nodes":[
+                {"editedAt":"2026-09-30T10:00:00Z","createdAt":"2026-09-30T10:00:01Z","editor":{"__typename":"User","login":"bob","avatarUrl":null,"name":"Bob B"}},
+                {"editedAt":null,"createdAt":"2026-09-30T09:00:00Z","editor":null}]}}}}
+              """
+            : """{"data":{"repository":{"mentionableUsers":{"nodes":[{"login":"carol","name":"Carol C","avatarUrl":"https://a/carol","databaseId":9}]}}}}""");
+
+        var edits = await provider.GetEditsAsync(Comment1);
+        var people = await provider.SearchMentionsAsync("car");
+
+        Assert.Equal(["bob", "ghost"], edits.Select(e => e.Editor.Login));
+        Assert.Equal(new DateTimeOffset(2026, 9, 30, 9, 0, 0, TimeSpan.Zero), edits[1].At); // no edit time: when it was written
+        Assert.Equal("PRRC_1", Call(http, 0).Variables.GetProperty("id").GetString());
+        Assert.Equal(("carol", "Carol C", 9L), (people[0].Login, people[0].Name, people[0].Id));
+        Assert.Equal(("octo", "widgets", "car"), (Call(http, 1).Variables.GetProperty("owner").GetString(),
+            Call(http, 1).Variables.GetProperty("repo").GetString(), Call(http, 1).Variables.GetProperty("q").GetString()));
+    }
+
+    [Fact]
+    public async Task Reads_merge_options_with_the_viewers_last_method_first()
+    {
+        var (provider, http) = Create();
+        http.Route(GraphQL, () => FakeHttpHandler.Json("""
+            {"data":{"repository":{"mergeCommitAllowed":false,"squashMergeAllowed":true,"rebaseMergeAllowed":true,
+              "deleteBranchOnMerge":true,"viewerDefaultMergeMethod":"MERGE"}}}
+            """));
+
+        var options = await provider.GetMergeOptionsAsync();
+
+        Assert.Equal([MergeMethod.Squash, MergeMethod.Rebase], options.Methods);
+        Assert.Equal(MergeMethod.Squash, options.Default); // their last method isn't allowed any more
+        Assert.True(options.DeletesBranchOnMerge);
+    }
+
+    [Fact]
+    public async Task Merges_at_the_expected_head()
+    {
+        var (provider, http) = Create();
+        http.Route(Rest, () => FakeHttpHandler.Json("""{"merged":true}"""));
+
+        await provider.MergeAsync(7, MergeMethod.Squash, "head1", "Widgets (#7)");
+        await provider.MergeAsync(7, MergeMethod.Rebase, "head1", "ignored for a rebase");
+
+        Assert.Equal(HttpMethod.Put, http.Requests[0].Method);
+        Assert.Equal($"{Rest}/pulls/7/merge", http.Requests[0].RequestUri!.ToString());
+        Assert.Equal("""{"merge_method":"squash","sha":"head1","commit_title":"Widgets (#7)"}""", http.Bodies[0]);
+        Assert.Equal("""{"merge_method":"rebase","sha":"head1"}""", http.Bodies[1]);
     }
 
     // ---- Errors ------------------------------------------------------------------------------------------------

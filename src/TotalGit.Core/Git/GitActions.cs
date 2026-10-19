@@ -595,6 +595,10 @@ public static class GitActions
     public static Task PushBranchAsync(string worktree, string remote, string localBranch, string remoteBranch) =>
         GitCli.RunAsync(worktree, "push", remote, $"refs/heads/{localBranch}:refs/heads/{remoteBranch}");
 
+    /// <summary>Pushes a commit to a branch on <paramref name="remote"/>; refused unless the branch can simply move forward to it.</summary>
+    public static Task PushCommitAsync(string worktree, string remote, string sha, string remoteBranch) =>
+        GitCli.RunAsync(worktree, "push", remote, $"{sha}:refs/heads/{remoteBranch}");
+
     /// <summary>
     /// Pushes the current branch, setting the upstream to <paramref name="remote"/> when it has none.
     /// <paramref name="force"/> replaces the remote branch (after a rebase or amend), but only if it is still where

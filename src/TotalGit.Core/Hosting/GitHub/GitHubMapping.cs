@@ -186,10 +186,103 @@ internal static class GitHubMapping
             anchor,
             resolved,
             outdated,
-            comments.Select(c => new PrComment(c.Str("id") ?? "", User(c.Obj("author")), c.Str("body") ?? "", c.GetProperty("createdAt").GetDateTimeOffset())).ToList(),
+            comments.Select(Comment).ToList(),
             t.Bool("viewerCanReply"),
-            resolved ? t.Bool("viewerCanUnresolve") : t.Bool("viewerCanResolve"));
+            resolved ? t.Bool("viewerCanUnresolve") : t.Bool("viewerCanResolve"))
+        {
+            ResolvedBy = resolved && t.Obj("resolvedBy") is { } by ? User(by) : null,
+            DiffHunk = Nodes(t.Obj("hunk")).FirstOrDefault() is { ValueKind: JsonValueKind.Object } h ? h.Str("diffHunk") : null,
+        };
     }
+
+    private static PrComment Comment(JsonElement c) => new(c.Str("id") ?? "", User(c.Obj("author")), c.Str("body") ?? "", c.GetProperty("createdAt").GetDateTimeOffset())
+    {
+        Url = c.Str("url"),
+        Role = c.Str("authorAssociation") switch
+        {
+            "OWNER" => AuthorRole.Owner,
+            "MEMBER" => AuthorRole.Member,
+            "COLLABORATOR" => AuthorRole.Collaborator,
+            "CONTRIBUTOR" => AuthorRole.Contributor,
+            "FIRST_TIME_CONTRIBUTOR" or "FIRST_TIMER" => AuthorRole.FirstTimeContributor,
+            _ => AuthorRole.None,
+        },
+        EditedAt = c.Obj("lastEditedAt") is { ValueKind: JsonValueKind.String } edited ? edited.GetDateTimeOffset() : null,
+        IsHidden = c.Bool("isMinimized"),
+        HiddenReason = c.Bool("isMinimized") ? HideReasonOf(c.Str("minimizedReason")) : null,
+        Reactions = ReactionGroups(c),
+        ViewerCanEdit = c.Bool("viewerCanUpdate"),
+        ViewerCanDelete = c.Bool("viewerCanDelete"),
+        ViewerCanHide = c.Bool("viewerCanMinimize"),
+        ViewerCanReact = c.Bool("viewerCanReact"),
+    };
+
+    /// <summary>The reactions people have used, in GitHub's order; kinds nobody used are left out.</summary>
+    private static List<ReactionGroup> ReactionGroups(JsonElement c) =>
+        c.Obj("reactionGroups") is { ValueKind: JsonValueKind.Array } groups
+            ? groups.EnumerateArray()
+                .Select(g => (Reaction: ReactionOf(g.Str("content")), Group: g))
+                .Where(r => r.Reaction is not null && (r.Group.Obj("reactors")?.Int("totalCount") ?? 0) > 0)
+                .Select(r => new ReactionGroup(r.Reaction!.Value, r.Group.Obj("reactors")!.Value.Int("totalCount") ?? 0, r.Group.Bool("viewerHasReacted"),
+                    Nodes(r.Group.Obj("reactors")).Select(n => new PrUser(n.Str("login") ?? "ghost", null, n.Str("name"))).ToList()))
+                .OrderBy(r => r.Reaction)
+                .ToList()
+            : [];
+
+    public static Reaction? ReactionOf(string? content) => content switch
+    {
+        "THUMBS_UP" => Reaction.ThumbsUp,
+        "THUMBS_DOWN" => Reaction.ThumbsDown,
+        "LAUGH" => Reaction.Laugh,
+        "HOORAY" => Reaction.Hooray,
+        "CONFUSED" => Reaction.Confused,
+        "HEART" => Reaction.Heart,
+        "ROCKET" => Reaction.Rocket,
+        "EYES" => Reaction.Eyes,
+        _ => null,
+    };
+
+    public static string ReactionContent(Reaction reaction) => reaction switch
+    {
+        Reaction.ThumbsUp => "THUMBS_UP",
+        Reaction.ThumbsDown => "THUMBS_DOWN",
+        Reaction.Laugh => "LAUGH",
+        Reaction.Hooray => "HOORAY",
+        Reaction.Confused => "CONFUSED",
+        Reaction.Heart => "HEART",
+        Reaction.Rocket => "ROCKET",
+        _ => "EYES",
+    };
+
+    /// <summary>GitHub reports the reason in lower case ("off-topic"); <see cref="HideReasonClassifier"/> goes the other way.</summary>
+    private static HideReason? HideReasonOf(string? reason) => reason?.ToLowerInvariant() switch
+    {
+        "spam" => HideReason.Spam,
+        "abuse" => HideReason.Abuse,
+        "off-topic" or "off_topic" => HideReason.OffTopic,
+        "outdated" => HideReason.Outdated,
+        "duplicate" => HideReason.Duplicate,
+        "resolved" => HideReason.Resolved,
+        _ => null,
+    };
+
+    public static string HideReasonClassifier(HideReason reason) => reason switch
+    {
+        HideReason.Spam => "SPAM",
+        HideReason.Abuse => "ABUSE",
+        HideReason.OffTopic => "OFF_TOPIC",
+        HideReason.Outdated => "OUTDATED",
+        HideReason.Duplicate => "DUPLICATE",
+        _ => "RESOLVED",
+    };
+
+    /// <summary>A comment's versions from its edit history, newest first.</summary>
+    public static List<CommentEdit> Edits(JsonElement? node) =>
+        Nodes(node?.Obj("userContentEdits"))
+            .Select(e => new CommentEdit(User(e.Obj("editor")), (e.Obj("editedAt") ?? e.GetProperty("createdAt")).GetDateTimeOffset()))
+            .ToList();
+
+    public static List<PrUser> Users(JsonElement? connection) => Nodes(connection).Select(u => User(u)).ToList();
 
     /// <summary>
     /// Conversation comments and submitted reviews, oldest first. Reviews without a body are left out unless they approve
@@ -239,8 +332,10 @@ internal static class GitHubMapping
     };
 
     /// <summary>Deleted accounts come back as a null author; GitHub shows them as "ghost".</summary>
-    private static PrUser User(JsonElement? user) =>
-        user is { } u ? new(u.Str("login") ?? "ghost", u.Str("avatarUrl"), u.Str("name")) : new("ghost", null);
+    public static PrUser User(JsonElement? user) =>
+        user is { } u
+            ? new(u.Str("login") ?? "ghost", u.Str("avatarUrl"), u.Str("name")) { IsBot = u.Str("__typename") == "Bot", Id = u.Long("databaseId") }
+            : new("ghost", null);
 
     private static IEnumerable<JsonElement> Nodes(JsonElement? connection) =>
         connection?.Obj("nodes") is { ValueKind: JsonValueKind.Array } nodes

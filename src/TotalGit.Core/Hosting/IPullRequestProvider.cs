@@ -16,6 +16,21 @@ public enum PrCapabilities
 
     /// <summary>Files can be marked as viewed (reviewed), and the host remembers it.</summary>
     ViewedFiles = 1 << 8,
+
+    /// <summary>Comments take reactions (👍, 🎉…).</summary>
+    Reactions = 1 << 9,
+
+    /// <summary>Line comments can be edited and deleted, with their edit history readable.</summary>
+    EditComments = 1 << 10,
+
+    /// <summary>Comments can be hidden (minimized) with a reason, and shown again.</summary>
+    HideComments = 1 << 11,
+
+    /// <summary>People can be looked up for @mentions.</summary>
+    Mentions = 1 << 12,
+
+    /// <summary>Pull requests can be merged.</summary>
+    Merge = 1 << 13,
 }
 
 /// <summary>
@@ -57,6 +72,33 @@ public interface IPullRequestProvider
 
     /// <summary>Marks a file of the pull request as viewed by the signed-in user, or clears the mark.</summary>
     Task SetFileViewedAsync(int number, string path, bool viewed, CancellationToken ct = default);
+
+    /// <summary>Adds the signed-in user's reaction to a comment, or takes it away.</summary>
+    Task ReactAsync(PrComment comment, Reaction reaction, bool add, CancellationToken ct = default);
+
+    /// <summary>Replaces a line comment's text.</summary>
+    Task EditCommentAsync(PrComment comment, string body, CancellationToken ct = default);
+
+    Task DeleteCommentAsync(PrComment comment, CancellationToken ct = default);
+
+    /// <summary>Hides a comment for the given reason, or shows it again when <paramref name="reason"/> is null.</summary>
+    Task SetHiddenAsync(PrComment comment, HideReason? reason, CancellationToken ct = default);
+
+    /// <summary>A comment's versions, newest first (the last is when it was written).</summary>
+    Task<IReadOnlyList<CommentEdit>> GetEditsAsync(PrComment comment, CancellationToken ct = default);
+
+    /// <summary>The merge methods the repository allows, and whether it deletes merged branches itself.</summary>
+    Task<MergeOptions> GetMergeOptionsAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Merges a pull request. Refused when its head is no longer <paramref name="expectedHeadSha"/> (someone pushed),
+    /// or when the host won't merge it (checks, reviews, conflicts); the message says why.
+    /// </summary>
+    /// <param name="title">The commit's title, or null for the host's usual one.</param>
+    Task MergeAsync(int number, MergeMethod method, string expectedHeadSha, string? title, CancellationToken ct = default);
+
+    /// <summary>People who can be @mentioned in the repository whose login or name matches <paramref name="query"/>.</summary>
+    Task<IReadOnlyList<PrUser>> SearchMentionsAsync(string query, CancellationToken ct = default);
 }
 
 /// <summary>Creates the provider for a repository's host; null when the host isn't supported.</summary>

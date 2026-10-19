@@ -23,6 +23,14 @@
       <Setter Property="FontSize" Value="11" />
       <Setter Property="Foreground" Value="#5AA9F2" />
     </Style>
+    <Style Selector="Button.small.ready">
+      <Setter Property="Background" Value="#238636" />
+      <Setter Property="Foreground" Value="White" />
+    </Style>
+    <Style Selector="Button.small.ready:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#2EA043" />
+      <Setter Property="Foreground" Value="White" />
+    </Style>
     <Style Selector="Button.small, ToggleButton.small">
       <Setter Property="Padding" Value="9,3" />
       <Setter Property="MinHeight" Value="0" />
@@ -129,9 +137,25 @@
               <TextBlock Text="Check out" />
             </StackPanel>
           </Button>
+          <StackPanel Orientation="Horizontal" IsVisible="{Binding HasSuggestionBatch}">
+            <Button Classes="small" Background="#238636" Foreground="White" CornerRadius="4,0,0,4" Command="{Binding CommitSuggestionBatchCommand}"
+                    Content="{Binding CommitBatchText}" ToolTip.Tip="Commit the suggestions you gathered in one commit, and push it" />
+            <Button Classes="small" Background="#1D6F2E" Foreground="White" CornerRadius="0,4,4,0" Command="{Binding ClearSuggestionBatchCommand}"
+                    ToolTip.Tip="Empty the batch">
+              <PathIcon Data="{StaticResource CloseIcon}" Width="9" Height="9" />
+            </Button>
+          </StackPanel>
           <Button Classes="accent small" Command="{Binding SubmitReviewCommand}" IsVisible="{Binding Pr.CanReview}"
                   ToolTip.Tip="Submit your review: comment, approve or request changes, with your pending line comments">
             <TextBlock Text="{Binding ReviewButtonText}" />
+          </Button>
+          <!-- Green with a tick once it's ready; plain otherwise (GitHub may still refuse, and says why). -->
+          <Button Classes="small" Classes.ready="{Binding IsReadyToMerge}" Command="{Binding MergeCommand}" IsVisible="{Binding CanMerge}"
+                  ToolTip.Tip="{Binding MergeToolTip}">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <PathIcon Data="{StaticResource MergeIcon}" Width="12" Height="12" />
+              <TextBlock Text="Merge…" />
+            </StackPanel>
           </Button>
         </StackPanel>
         <Border Grid.Row="1" Grid.ColumnSpan="2" Margin="0,8,0,0" BorderBrush="{Binding Pr.MergeBrush}" BorderThickness="3,0,0,0"
@@ -502,15 +526,26 @@
             <StackPanel Margin="14,8" Spacing="10">
               <ItemsControl ItemsSource="{Binding Pr.Conversation}">
                 <ItemsControl.ItemTemplate>
+                  <!-- As the line comments draw theirs: avatar, then a box with a header. -->
                   <DataTemplate x:DataType="vm:ConversationItem">
-                    <StackPanel Spacing="3" Margin="0,0,0,10">
-                      <StackPanel Orientation="Horizontal" Spacing="6">
-                        <TextBlock Text="{Binding Author}" FontSize="12" FontWeight="SemiBold" Foreground="#E6E8EB" />
-                        <TextBlock Text="{Binding Verdict}" FontSize="11" Foreground="{Binding VerdictBrush}" IsVisible="{Binding HasVerdict}" VerticalAlignment="Center" />
-                        <TextBlock Text="{Binding When}" Classes="muted" VerticalAlignment="Center" />
-                      </StackPanel>
-                      <views:MarkdownView Markdown="{Binding Body}" BaseFontSize="12" IsVisible="{Binding HasBody}" />
-                    </StackPanel>
+                    <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,10">
+                      <views:PersonAvatar DataContext="{Binding Person}" Width="28" Height="28" VerticalAlignment="Top" Margin="0,0,10,0" />
+                      <Border Grid.Column="1" Background="#262A31" BorderBrush="#3A404A" BorderThickness="1" CornerRadius="8" ClipToBounds="True">
+                        <StackPanel>
+                          <Border Background="#2A2F37" BorderBrush="#3A404A" BorderThickness="0,0,0,1" Padding="10,5">
+                            <WrapPanel>
+                              <TextBlock Text="{Binding Author}" FontSize="12.5" FontWeight="SemiBold" Foreground="#E6E8EB" Margin="0,0,6,0" VerticalAlignment="Center" />
+                              <Border BorderBrush="#4A515C" BorderThickness="1" CornerRadius="9" Padding="6,0" Margin="0,0,6,0" IsVisible="{Binding IsBot}" VerticalAlignment="Center">
+                                <TextBlock Text="bot" FontSize="11" Foreground="#B4BAC3" />
+                              </Border>
+                              <TextBlock Text="{Binding Verdict}" FontSize="12" Foreground="{Binding VerdictBrush}" IsVisible="{Binding HasVerdict}" Margin="0,0,6,0" VerticalAlignment="Center" />
+                              <TextBlock Text="{Binding When}" ToolTip.Tip="{Binding WhenToolTip}" FontSize="12" Foreground="#969CA5" VerticalAlignment="Center" />
+                            </WrapPanel>
+                          </Border>
+                          <views:MarkdownView Markdown="{Binding Body}" BaseFontSize="12.5" IsVisible="{Binding HasBody}" Margin="10,8" />
+                        </StackPanel>
+                      </Border>
+                    </Grid>
                   </DataTemplate>
                 </ItemsControl.ItemTemplate>
               </ItemsControl>

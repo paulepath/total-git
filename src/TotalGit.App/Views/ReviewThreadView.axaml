@@ -2,29 +2,138 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:TotalGit.App.ViewModels"
              xmlns:views="using:TotalGit.App.Views"
+             xmlns:core="using:TotalGit.Core.Hosting"
              x:Class="TotalGit.App.Views.ReviewThreadView"
              x:DataType="x:Object"
-             Padding="0,3,12,3">
+             Padding="0,4,12,4">
   <UserControl.Styles>
     <Style Selector="Border.card">
+      <Setter Property="Background" Value="#1F2328" />
+      <Setter Property="BorderBrush" Value="#3A404A" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="10" />
+    </Style>
+    <Style Selector="Border.box">
       <Setter Property="Background" Value="#262A31" />
       <Setter Property="BorderBrush" Value="#3A404A" />
       <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="ClipToBounds" Value="True" />
+    </Style>
+    <Style Selector="Border.box.author">
+      <Setter Property="BorderBrush" Value="#2F4F7A" />
+    </Style>
+    <Style Selector="Border.boxHead">
+      <Setter Property="Background" Value="#2A2F37" />
+      <Setter Property="BorderBrush" Value="#3A404A" />
+      <Setter Property="BorderThickness" Value="0,0,0,1" />
+      <Setter Property="Padding" Value="12,3,4,3" />
+      <Setter Property="MinHeight" Value="34" />
+    </Style>
+    <Style Selector="Border.boxHead.author">
+      <Setter Property="Background" Value="#1E2D42" />
+      <Setter Property="BorderBrush" Value="#2F4F7A" />
+    </Style>
+    <Style Selector="Border.badge">
+      <Setter Property="BorderBrush" Value="#4A515C" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="9" />
+      <Setter Property="Padding" Value="7,0" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Border.badge > TextBlock">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="#B4BAC3" />
+    </Style>
+    <Style Selector="TextBlock.muted">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="#969CA5" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.icon">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Width" Value="28" />
+      <Setter Property="Height" Value="28" />
+      <Setter Property="MinHeight" Value="0" />
       <Setter Property="CornerRadius" Value="6" />
-      <Setter Property="MaxWidth" Value="820" />
-      <Setter Property="HorizontalAlignment" Value="Left" />
+      <Setter Property="Foreground" Value="#A9AFB8" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.icon PathIcon">
+      <Setter Property="Width" Value="15" />
+      <Setter Property="Height" Value="15" />
     </Style>
     <Style Selector="Button.small">
-      <Setter Property="Padding" Value="10,3" />
+      <Setter Property="Padding" Value="12,5" />
       <Setter Property="MinHeight" Value="0" />
       <Setter Property="FontSize" Value="12" />
+      <Setter Property="FontWeight" Value="SemiBold" />
     </Style>
     <Style Selector="Button.plain">
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="Padding" Value="4,2" />
       <Setter Property="MinHeight" Value="0" />
-      <Setter Property="FontSize" Value="11" />
+      <Setter Property="FontSize" Value="12" />
       <Setter Property="Foreground" Value="#A9AFB8" />
+    </Style>
+    <Style Selector="Button.link">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Padding" Value="0,2" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="#5AA9F2" />
+    </Style>
+    <!-- Reaction chips: yours are filled in blue. -->
+    <Style Selector="Button.chip">
+      <Setter Property="Background" Value="#262A31" />
+      <Setter Property="BorderBrush" Value="#474E59" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="13" />
+      <Setter Property="Height" Value="26" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="Padding" Value="8,0" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.chip.mine">
+      <Setter Property="Background" Value="#1F3A5F" />
+      <Setter Property="BorderBrush" Value="#2F6FBF" />
+      <Setter Property="Foreground" Value="#C9DDF5" />
+    </Style>
+    <Style Selector="Button.addReaction">
+      <Setter Property="Width" Value="26" />
+      <Setter Property="Height" Value="26" />
+      <Setter Property="CornerRadius" Value="13" />
+      <Setter Property="BorderBrush" Value="#444B56" />
+      <Setter Property="BorderThickness" Value="1" />
+    </Style>
+    <Style Selector="Button.pick">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Width" Value="36" />
+      <Setter Property="Height" Value="36" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="FontSize" Value="18" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.pick.mine">
+      <Setter Property="Background" Value="#1F3A5F" />
+    </Style>
+    <!-- The hover bar shows over a comment while the pointer is on it. -->
+    <Style Selector="Grid.commentRow Border.hoverBar">
+      <Setter Property="Opacity" Value="0" />
+    </Style>
+    <Style Selector="Grid.commentRow:pointerover Border.hoverBar">
+      <Setter Property="Opacity" Value="1" />
+    </Style>
+    <Style Selector="Rectangle.rail">
+      <Setter Property="Width" Value="2" />
+      <Setter Property="Fill" Value="#353B44" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
     </Style>
     <Style Selector="TextBox.reply">
       <Setter Property="AcceptsReturn" Value="True" />
@@ -35,72 +144,372 @@
   </UserControl.Styles>
 
   <UserControl.DataTemplates>
-    <!-- An existing conversation on this line. -->
+    <!-- An existing conversation on this line: a card with the comments on a rail, as on GitHub's conversation page. -->
     <DataTemplate DataType="vm:ReviewThreadViewModel">
       <Border Classes="card">
         <StackPanel>
-          <Grid ColumnDefinitions="*,Auto" Background="Transparent" Margin="10,6,6,6">
-            <Button Classes="plain" Command="{Binding ToggleExpandedCommand}" HorizontalAlignment="Left" HorizontalContentAlignment="Left">
-              <StackPanel Orientation="Horizontal" Spacing="6">
-                <PathIcon Data="{StaticResource ChevronIcon}" Width="10" Height="10" RenderTransformOrigin="50%,50%"
-                          RenderTransform="{Binding IsExpanded, Converter={x:Static vm:Converters.ExpandedRotation}}" />
-                <TextBlock Text="{Binding Summary}" TextTrimming="CharacterEllipsis" FontSize="11" Foreground="#A9AFB8" />
-              </StackPanel>
+          <!-- Header: file and lines, state, people, count, resolve -->
+          <DockPanel Margin="6,6,10,6">
+            <Button DockPanel.Dock="Right" Classes="small" Content="{Binding ResolveText}" ToolTip.Tip="{Binding ResolveToolTip}"
+                    Command="{Binding ToggleResolvedCommand}" IsVisible="{Binding CanResolve}" VerticalAlignment="Top" Margin="8,0,0,0" />
+            <Button DockPanel.Dock="Left" Classes="icon" Command="{Binding ToggleExpandedCommand}" ToolTip.Tip="Show or hide the conversation" VerticalAlignment="Top">
+              <PathIcon Data="{StaticResource ChevronIcon}" Width="11" Height="11" RenderTransformOrigin="50%,50%"
+                        RenderTransform="{Binding IsExpanded, Converter={x:Static vm:Converters.ExpandedRotation}}" />
             </Button>
-            <Button Grid.Column="1" Classes="plain" Content="{Binding ResolveText}" Command="{Binding ToggleResolvedCommand}"
-                    IsVisible="{Binding CanResolve}" />
-          </Grid>
-          <StackPanel IsVisible="{Binding IsExpanded}" Margin="10,0,10,10" Spacing="10">
-            <ItemsControl ItemsSource="{Binding Comments}">
+            <WrapPanel VerticalAlignment="Center">
+            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="4,4,8,4" ToolTip.Tip="{Binding FilePath}">
+              <PathIcon Data="{StaticResource FileIcon}" Width="12" Height="12" Foreground="#969CA5" />
+              <TextBlock Text="{Binding FileName}" FontFamily="Cascadia Mono, Consolas, monospace" FontSize="12" Foreground="#E6E8EB" VerticalAlignment="Center" />
+            </StackPanel>
+            <TextBlock Classes="muted" Text="{Binding LinesText}" Margin="0,0,10,0" />
+            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="0,0,8,0">
+              <Border CornerRadius="10" Background="#1B3524" Padding="6,1,9,1" IsVisible="{Binding IsResolved}">
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                  <PathIcon Data="{StaticResource CheckIcon}" Width="11" Height="11" Foreground="#7EE2A0" />
+                  <TextBlock Text="Resolved" FontSize="12" FontWeight="SemiBold" Foreground="#7EE2A0" />
+                </StackPanel>
+              </Border>
+              <Border CornerRadius="10" Background="#3A3018" Padding="9,1" IsVisible="{Binding IsOutdated}"
+                      ToolTip.Tip="The lines it was made on have changed since">
+                <TextBlock Text="Outdated" FontSize="12" FontWeight="SemiBold" Foreground="#F0C35A" />
+              </Border>
+            </StackPanel>
+            <ItemsControl ItemsSource="{Binding Participants}" VerticalAlignment="Center" Margin="0,2,8,2"
+                          ToolTip.Tip="{Binding ParticipantsToolTip}">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <StackPanel Orientation="Horizontal" Spacing="-7" />
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
               <ItemsControl.ItemTemplate>
-                <DataTemplate DataType="vm:CommentViewModel">
-                  <StackPanel Spacing="2" Margin="0,0,0,8">
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                      <TextBlock Text="{Binding Author}" FontSize="12" FontWeight="SemiBold" Foreground="#E6E8EB" />
-                      <TextBlock Text="{Binding When}" FontSize="11" Foreground="#8A9099" VerticalAlignment="Center" />
-                    </StackPanel>
-                    <views:MarkdownView Markdown="{Binding Body}" BaseFontSize="12" />
-                  </StackPanel>
+                <DataTemplate x:DataType="vm:PersonViewModel">
+                  <Border CornerRadius="12" BorderBrush="#1F2328" BorderThickness="2">
+                    <views:PersonAvatar Width="20" Height="20" />
+                  </Border>
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
             </ItemsControl>
-            <StackPanel Spacing="6" IsVisible="{Binding CanReply}">
-              <TextBox Classes="reply" Text="{Binding ReplyText}" PlaceholderText="Reply…" />
-              <Button Classes="small accent" Content="Reply" Command="{Binding ReplyCommand}" HorizontalAlignment="Left" />
+            <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center" ToolTip.Tip="{Binding CountToolTip}">
+              <PathIcon Data="{StaticResource CommentIcon}" Width="12" Height="12" Foreground="#969CA5" />
+              <TextBlock Classes="muted" Text="{Binding CommentCount}" />
             </StackPanel>
+            </WrapPanel>
+          </DockPanel>
+
+          <!-- Folded: the first comment's title and the latest reply -->
+          <Button Classes="plain" Command="{Binding ToggleExpandedCommand}" IsVisible="{Binding IsFolded}"
+                  HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Padding="44,0,14,10">
+            <TextBlock TextWrapping="Wrap">
+              <Run Text="{Binding Title}" FontWeight="SemiBold" Foreground="#E6E8EB" />
+              <Run Text="  " />
+              <Run Text="{Binding LastReplyText}" Foreground="#969CA5" />
+            </TextBlock>
+          </Button>
+
+          <StackPanel IsVisible="{Binding IsExpanded}" Margin="14,4,14,4">
+            <Border Height="1" Background="#3A404A" Margin="-14,0,-14,12" />
+
+            <!-- Outdated: the code the comment was made on -->
+            <StackPanel IsVisible="{Binding HasOriginalCode}" Margin="52,0,0,10" Spacing="6">
+              <Button Classes="link" Content="{Binding OriginalCodeText}" Command="{Binding ToggleOriginalCodeCommand}" HorizontalAlignment="Left" />
+              <Border IsVisible="{Binding ShowOriginalCode}" Background="#161A1F" CornerRadius="6" Padding="0,6" ClipToBounds="True">
+                <ItemsControl ItemsSource="{Binding OriginalCode}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:HunkLine">
+                      <Border Background="{Binding Background}" Padding="10,0">
+                        <TextBlock Text="{Binding Text}" FontFamily="Cascadia Mono, Consolas, monospace" FontSize="12" Foreground="#C9CED6" />
+                      </Border>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </Border>
+            </StackPanel>
+
+            <ItemsControl ItemsSource="{Binding Comments}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:CommentViewModel">
+                  <Grid Classes="commentRow" ColumnDefinitions="40,*" RowDefinitions="*,16">
+                    <Rectangle Classes="rail" Grid.RowSpan="2" Margin="0,34,0,0" />
+                    <views:PersonAvatar DataContext="{Binding Author}" Width="32" Height="32" VerticalAlignment="Top" HorizontalAlignment="Left" />
+                    <Panel Grid.Column="1" Margin="12,0,0,0">
+                      <Border Classes="box" Classes.author="{Binding IsPullRequestAuthor}">
+                        <StackPanel>
+                          <Border Classes="boxHead" Classes.author="{Binding IsPullRequestAuthor}">
+                            <DockPanel>
+                              <Button DockPanel.Dock="Right" Classes="icon" ToolTip.Tip="More actions">
+                                <PathIcon Data="{StaticResource DotsIcon}" />
+                                <Button.Flyout>
+                                  <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                    <MenuItem Header="Copy link" Command="{Binding CopyLinkCommand}" IsVisible="{Binding HasUrl}">
+                                      <MenuItem.Icon><PathIcon Data="{StaticResource LinkIcon}" Width="14" Height="14" /></MenuItem.Icon>
+                                    </MenuItem>
+                                    <MenuItem Header="Quote reply" Command="{Binding QuoteReplyCommand}" IsVisible="{Binding CanQuote}">
+                                      <MenuItem.Icon><PathIcon Data="{StaticResource QuoteIcon}" Width="14" Height="14" /></MenuItem.Icon>
+                                    </MenuItem>
+                                    <MenuItem Header="Open on GitHub" Command="{Binding OpenOnWebCommand}" IsVisible="{Binding HasUrl}">
+                                      <MenuItem.Icon><PathIcon Data="{StaticResource BrowserIcon}" Width="14" Height="14" /></MenuItem.Icon>
+                                    </MenuItem>
+                                    <Separator IsVisible="{Binding CanManage}" />
+                                    <MenuItem Header="Edit" Command="{Binding StartEditCommand}" IsVisible="{Binding CanEdit}">
+                                      <MenuItem.Icon><PathIcon Data="{StaticResource PencilIcon}" Width="14" Height="14" /></MenuItem.Icon>
+                                    </MenuItem>
+                                    <MenuItem Header="Hide" IsVisible="{Binding CanHide}">
+                                      <MenuItem.Icon><PathIcon Data="{StaticResource IgnoreIcon}" Width="14" Height="14" /></MenuItem.Icon>
+                                      <MenuItem Header="As spam" Command="{Binding HideCommand}" CommandParameter="{x:Static core:HideReason.Spam}" />
+                                      <MenuItem Header="As abuse" Command="{Binding HideCommand}" CommandParameter="{x:Static core:HideReason.Abuse}" />
+                                      <MenuItem Header="As off-topic" Command="{Binding HideCommand}" CommandParameter="{x:Static core:HideReason.OffTopic}" />
+                                      <MenuItem Header="As outdated" Command="{Binding HideCommand}" CommandParameter="{x:Static core:HideReason.Outdated}" />
+                                      <MenuItem Header="As a duplicate" Command="{Binding HideCommand}" CommandParameter="{x:Static core:HideReason.Duplicate}" />
+                                      <MenuItem Header="As resolved" Command="{Binding HideCommand}" CommandParameter="{x:Static core:HideReason.Resolved}" />
+                                    </MenuItem>
+                                    <MenuItem Header="Unhide" Command="{Binding UnhideCommand}" IsVisible="{Binding CanUnhide}">
+                                      <MenuItem.Icon><PathIcon Data="{StaticResource EyeIcon}" Width="14" Height="14" /></MenuItem.Icon>
+                                    </MenuItem>
+                                    <MenuItem Header="Delete" Command="{Binding DeleteCommand}" IsVisible="{Binding CanDelete}" Foreground="#F47067">
+                                      <MenuItem.Icon><PathIcon Data="{StaticResource DeleteIcon}" Width="14" Height="14" Foreground="#F47067" /></MenuItem.Icon>
+                                    </MenuItem>
+                                  </MenuFlyout>
+                                </Button.Flyout>
+                              </Button>
+                              <WrapPanel VerticalAlignment="Center">
+                                <TextBlock Text="{Binding AuthorName}" FontWeight="SemiBold" Foreground="#E6E8EB" FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                <TextBlock Classes="muted" Text="{Binding AuthorLogin}" IsVisible="{Binding ShowLogin}" Margin="0,0,6,0" />
+                                <Border Classes="badge" IsVisible="{Binding IsBot}" Margin="0,0,6,0"><TextBlock Text="bot" /></Border>
+                                <Border Classes="badge" IsVisible="{Binding IsPullRequestAuthor}" BorderBrush="#3F6699" Margin="0,0,6,0"><TextBlock Text="Author" /></Border>
+                                <Border Classes="badge" IsVisible="{Binding HasRole}" Margin="0,0,6,0"><TextBlock Text="{Binding RoleText}" /></Border>
+                                <TextBlock Classes="muted" Text="{Binding When}" ToolTip.Tip="{Binding WhenToolTip}" Margin="0,0,6,0" />
+                                <Button Classes="plain" IsVisible="{Binding IsEdited}" ToolTip.Tip="{Binding EditedToolTip}" Command="{Binding LoadEditsCommand}"
+                                        IsEnabled="{Binding CanSeeEdits}" Padding="2,0">
+                                  <TextBlock Text="· edited ▾" FontSize="12" Foreground="#969CA5" />
+                                  <Button.Flyout>
+                                    <Flyout Placement="BottomEdgeAlignedLeft">
+                                      <StackPanel Spacing="4" MinWidth="220">
+                                        <TextBlock Text="Edits" Classes="muted" />
+                                        <ItemsControl ItemsSource="{Binding EditHistory}">
+                                          <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:EditEntry">
+                                              <TextBlock Margin="0,2" FontSize="12.5">
+                                                <Run Text="{Binding Who}" FontWeight="SemiBold" Foreground="#E6E8EB" />
+                                                <Run Text="{Binding What}" Foreground="#A9AFB8" />
+                                                <Run Text="{Binding When}" Foreground="#969CA5" />
+                                              </TextBlock>
+                                            </DataTemplate>
+                                          </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                      </StackPanel>
+                                    </Flyout>
+                                  </Button.Flyout>
+                                </Button>
+                              </WrapPanel>
+                            </DockPanel>
+                          </Border>
+
+                          <!-- Hidden by someone: one line, and a way to look -->
+                          <Grid ColumnDefinitions="Auto,*,Auto" Margin="12,8" IsVisible="{Binding Comment.IsHidden}">
+                            <PathIcon Data="{StaticResource IgnoreIcon}" Width="14" Height="14" Foreground="#969CA5" Margin="0,0,8,0" />
+                            <TextBlock Grid.Column="1" Classes="muted" Text="{Binding HiddenText}" TextWrapping="Wrap" />
+                            <Button Grid.Column="2" Classes="small" Content="{Binding ShowHiddenText}" Command="{Binding ToggleShowHiddenCommand}" Padding="10,3" />
+                          </Grid>
+
+                          <StackPanel Margin="14,10,14,12" Spacing="10" IsVisible="{Binding IsBodyVisible}">
+                            <views:MarkdownView Markdown="{Binding Body}" BaseFontSize="13" SuggestionSource="{Binding}" />
+                          </StackPanel>
+
+                          <StackPanel Margin="10" Spacing="8" IsVisible="{Binding IsEditing}">
+                            <views:CommentEditor DataContext="{Binding Editor}" />
+                            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                              <Button Classes="small" Content="Cancel" Command="{Binding CancelEditCommand}" />
+                              <Button Classes="small accent" Content="Save" Command="{Binding SaveEditCommand}" />
+                            </StackPanel>
+                          </StackPanel>
+
+                          <!-- Reactions -->
+                          <WrapPanel Margin="12,0,12,10" IsVisible="{Binding HasReactions}">
+                            <ItemsControl ItemsSource="{Binding Reactions}">
+                              <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                              </ItemsControl.ItemsPanel>
+                              <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:ReactionChipViewModel">
+                                  <Button Classes="chip" Classes.mine="{Binding IsMine}" Margin="0,0,6,0" ToolTip.Tip="{Binding ToolTip}"
+                                          Command="{Binding Comment.ToggleReactionCommand}" CommandParameter="{Binding Reaction}">
+                                    <StackPanel Orientation="Horizontal" Spacing="5">
+                                      <TextBlock Text="{Binding Emoji}" FontSize="13" VerticalAlignment="Center" />
+                                      <TextBlock Text="{Binding Count}" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                  </Button>
+                                </DataTemplate>
+                              </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <Button Classes="icon addReaction" ToolTip.Tip="Add a reaction" IsVisible="{Binding CanReact}">
+                              <PathIcon Data="{StaticResource ReactIcon}" />
+                              <Button.Flyout>
+                                <Flyout Placement="TopEdgeAlignedLeft">
+                                  <ItemsControl ItemsSource="{Binding ReactionPicks}">
+                                    <ItemsControl.ItemsPanel>
+                                      <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="2" /></ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                      <DataTemplate x:DataType="vm:ReactionPick">
+                                        <Button Classes="pick" Classes.mine="{Binding IsMine}" Content="{Binding Emoji}" ToolTip.Tip="{Binding ToolTip}"
+                                                Command="{Binding Command}" CommandParameter="{Binding Reaction}" />
+                                      </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                  </ItemsControl>
+                                </Flyout>
+                              </Button.Flyout>
+                            </Button>
+                          </WrapPanel>
+                        </StackPanel>
+                      </Border>
+
+                      <!-- On hover: react, quote reply, copy link -->
+                      <Border Classes="hoverBar" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-14,40,0"
+                              Background="#2B3038" BorderBrush="#474E59" BorderThickness="1" CornerRadius="8" Padding="2"
+                              BoxShadow="0 4 12 0 #66000000">
+                        <StackPanel Orientation="Horizontal" Spacing="2">
+                          <Button Classes="icon" ToolTip.Tip="Add a reaction" IsVisible="{Binding CanReact}">
+                            <PathIcon Data="{StaticResource ReactIcon}" />
+                            <Button.Flyout>
+                              <Flyout Placement="BottomEdgeAlignedRight">
+                                <ItemsControl ItemsSource="{Binding ReactionPicks}">
+                                  <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="2" /></ItemsPanelTemplate>
+                                  </ItemsControl.ItemsPanel>
+                                  <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:ReactionPick">
+                                      <Button Classes="pick" Classes.mine="{Binding IsMine}" Content="{Binding Emoji}" ToolTip.Tip="{Binding ToolTip}"
+                                              Command="{Binding Command}" CommandParameter="{Binding Reaction}" />
+                                    </DataTemplate>
+                                  </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                              </Flyout>
+                            </Button.Flyout>
+                          </Button>
+                          <Button Classes="icon" ToolTip.Tip="Quote reply" Command="{Binding QuoteReplyCommand}" IsVisible="{Binding CanQuote}">
+                            <PathIcon Data="{StaticResource QuoteIcon}" />
+                          </Button>
+                          <Button Classes="icon" ToolTip.Tip="Copy link" Command="{Binding CopyLinkCommand}" IsVisible="{Binding HasUrl}">
+                            <PathIcon Data="{StaticResource LinkIcon}" />
+                          </Button>
+                        </StackPanel>
+                      </Border>
+                    </Panel>
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <!-- Resolved: an event on the rail -->
+            <Grid ColumnDefinitions="40,*" RowDefinitions="Auto,16" IsVisible="{Binding IsResolved}">
+              <Rectangle Classes="rail" Grid.RowSpan="2" IsVisible="{Binding CanReply}" />
+              <Border Width="26" Height="26" CornerRadius="13" Background="#1B3524" BorderBrush="#1F2328" BorderThickness="2" HorizontalAlignment="Center">
+                <PathIcon Data="{StaticResource CheckIcon}" Width="12" Height="12" Foreground="#7EE2A0" />
+              </Border>
+              <TextBlock Grid.Column="1" Classes="muted" Text="{Binding ResolvedText}" Margin="12,0,0,0" />
+            </Grid>
+
+            <!-- Reply -->
+            <Grid ColumnDefinitions="40,*" Margin="0,0,0,10" IsVisible="{Binding CanReply}">
+              <Panel VerticalAlignment="Top" IsVisible="{Binding HasViewer}">
+                <views:PersonAvatar DataContext="{Binding Viewer}" Width="32" Height="32" />
+              </Panel>
+              <Button Grid.Column="1" Margin="12,0,0,0" IsVisible="{Binding IsReplyClosed}" Command="{Binding StartReplyCommand}"
+                      HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Background="#16191D" BorderBrush="#474E59" BorderThickness="1"
+                      CornerRadius="6" Padding="10,7" Cursor="IBeam">
+                <TextBlock Text="Write a reply" Foreground="#969CA5" FontSize="12.5" />
+              </Button>
+              <StackPanel Grid.Column="1" Margin="12,0,0,0" Spacing="8" IsVisible="{Binding IsReplyOpen}">
+                <views:CommentEditor DataContext="{Binding ReplyEditor}" />
+                <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                  <Button Classes="small" Content="Cancel" Command="{Binding CancelReplyCommand}" />
+                  <Button Classes="small" Content="{Binding ReplyAndResolveText}" Command="{Binding ReplyAndResolveCommand}" IsVisible="{Binding CanResolve}" />
+                  <Button Classes="small accent" Content="Reply" Command="{Binding ReplyCommand}" />
+                </StackPanel>
+              </StackPanel>
+            </Grid>
           </StackPanel>
         </StackPanel>
+      </Border>
+    </DataTemplate>
+
+    <!-- A suggested change's buttons, under the change in the comment. -->
+    <DataTemplate DataType="vm:SuggestionBlockViewModel">
+      <Border Background="#22262C" BorderBrush="#3A404A" BorderThickness="0,1,0,0" Padding="10,8">
+        <Panel>
+          <TextBlock Classes="muted" Text="{Binding BlockedReason}" TextWrapping="Wrap" IsVisible="{Binding !CanApply}" />
+          <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" IsVisible="{Binding CanApply}">
+            <Button Classes="small" Content="{Binding BatchText}" Command="{Binding ToggleBatchCommand}"
+                    ToolTip.Tip="Gather several suggestions and commit them together" />
+            <Button Classes="small" Background="#238636" Foreground="White" Content="Commit suggestion" Command="{Binding CommitCommand}"
+                    ToolTip.Tip="Commit this change to the pull request's branch and push it" />
+          </StackPanel>
+        </Panel>
       </Border>
     </DataTemplate>
 
     <!-- A new comment being written. -->
     <DataTemplate DataType="vm:CommentComposerViewModel">
       <Border Classes="card" BorderBrush="#3B82F6">
-        <StackPanel Margin="10" Spacing="8">
-          <TextBlock Text="{Binding Title}" FontSize="11" Foreground="#A9AFB8" />
-          <TextBox Classes="reply" x:Name="ComposerBox" Text="{Binding Text}" PlaceholderText="Leave a comment" MinHeight="64" />
-          <StackPanel Orientation="Horizontal" Spacing="8">
-            <Button Classes="small accent" Content="{Binding AddToReviewText}" Command="{Binding AddToReviewCommand}" />
-            <Button Classes="small" Content="Add single comment" Command="{Binding PostNowCommand}" />
-            <Button Classes="small" Content="Cancel" Command="{Binding CancelCommand}" />
+        <Grid ColumnDefinitions="Auto,*" Margin="12">
+          <Panel VerticalAlignment="Top" Margin="0,0,12,0" IsVisible="{Binding HasViewer}">
+            <views:PersonAvatar DataContext="{Binding Viewer}" Width="32" Height="32" />
+          </Panel>
+          <StackPanel Grid.Column="1" Spacing="8">
+            <TextBlock Text="{Binding Title}" Classes="muted" />
+            <views:CommentEditor DataContext="{Binding Editor}" />
+            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+              <Button Classes="small" Content="Cancel" Command="{Binding CancelCommand}" />
+              <Button Classes="small" Content="Add single comment" Command="{Binding PostNowCommand}" ToolTip.Tip="Post it now, on its own" />
+              <Button Classes="small accent" Content="{Binding AddToReviewText}" Command="{Binding AddToReviewCommand}"
+                      ToolTip.Tip="Keep it with your review, sent when you submit (Ctrl+Enter)" />
+            </StackPanel>
           </StackPanel>
-        </StackPanel>
+        </Grid>
       </Border>
     </DataTemplate>
 
     <!-- A comment waiting to be sent with the review. -->
     <DataTemplate DataType="vm:PendingCommentViewModel">
-      <Border Classes="card" BorderBrush="#E8B339">
-        <Grid ColumnDefinitions="*,Auto" Margin="10,8">
-          <StackPanel Spacing="3">
-            <TextBlock Text="Pending: sent when you submit your review" FontSize="11" Foreground="#E8B339" />
-            <SelectableTextBlock Text="{Binding Body}" FontSize="12" Foreground="#D5D8DD" TextWrapping="Wrap" />
+      <Border Classes="card" BorderBrush="#6B5A2A">
+        <Grid ColumnDefinitions="Auto,*" Margin="12,10">
+          <Panel VerticalAlignment="Top" Margin="0,0,10,0" IsVisible="{Binding HasViewer}">
+            <views:PersonAvatar DataContext="{Binding Viewer}" Width="28" Height="28" />
+          </Panel>
+          <StackPanel Grid.Column="1" Spacing="6">
+            <DockPanel>
+              <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" IsVisible="{Binding IsShowing}">
+                <Button Classes="icon" ToolTip.Tip="Edit" Command="{Binding StartEditCommand}"><PathIcon Data="{StaticResource PencilIcon}" /></Button>
+                <Button Classes="icon" ToolTip.Tip="Remove from the review" Command="{Binding RemoveCommand}"><PathIcon Data="{StaticResource DeleteIcon}" /></Button>
+              </StackPanel>
+              <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                <TextBlock Text="{Binding ViewerName}" FontWeight="SemiBold" Foreground="#E6E8EB" VerticalAlignment="Center" />
+                <Border CornerRadius="9" Background="#E8B339" Padding="8,0" VerticalAlignment="Center">
+                  <TextBlock Text="Pending" FontSize="11" FontWeight="SemiBold" Foreground="#1C1F24" />
+                </Border>
+              </StackPanel>
+            </DockPanel>
+            <views:MarkdownView Markdown="{Binding Body}" BaseFontSize="13" IsVisible="{Binding IsShowing}" />
+            <TextBlock Classes="muted" Text="{Binding PendingText}" IsVisible="{Binding IsShowing}" />
+            <StackPanel Spacing="8" IsVisible="{Binding IsEditing}">
+              <views:CommentEditor DataContext="{Binding Editor}" />
+              <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                <Button Classes="small" Content="Cancel" Command="{Binding CancelEditCommand}" />
+                <Button Classes="small accent" Content="Save" Command="{Binding SaveEditCommand}" />
+              </StackPanel>
+            </StackPanel>
           </StackPanel>
-          <Button Grid.Column="1" Classes="plain" Content="Remove" Command="{Binding RemoveCommand}" VerticalAlignment="Top" />
         </Grid>
       </Border>
     </DataTemplate>
   </UserControl.DataTemplates>
 
-  <ContentControl Content="{Binding}" />
+  <!-- As wide as there's room for, up to 860: every card in a diff lines up. -->
+  <Grid>
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="*" MaxWidth="860" />
+      <ColumnDefinition Width="Auto" />
+    </Grid.ColumnDefinitions>
+    <ContentControl Content="{Binding}" HorizontalContentAlignment="Stretch" />
+  </Grid>
 </UserControl>
