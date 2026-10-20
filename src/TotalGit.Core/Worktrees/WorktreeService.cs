@@ -46,7 +46,8 @@ public static partial class WorktreeService
                 switch (key)
                 {
                     case "worktree": path = NormalizePath(value); break;
-                    case "HEAD": head = value; break;
+                    // All zeros: a branch with no commits yet (a new repository).
+                    case "HEAD": head = value.All(c => c == '0') ? null : value; break;
                     case "branch": branch = value.StartsWith("refs/heads/", StringComparison.Ordinal) ? value["refs/heads/".Length..] : value; break;
                     case "bare": bare = true; break;
                     case "locked": locked = true; break;

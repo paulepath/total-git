@@ -1,3 +1,4 @@
+using TotalGit.Core.Git;
 using TotalGit.Core.Worktrees;
 
 namespace TotalGit.Core.Tests;
@@ -64,6 +65,23 @@ public sealed class WorktreeTests : IDisposable
         Assert.True(list[1].IsDetached);
         Assert.True(list[1].IsPrunable);
         Assert.Equal("gitdir file points to non-existent location", list[1].PrunableReason);
+    }
+
+    [Fact]
+    public async Task New_repository_has_no_head_commit()
+    {
+        using var empty = new TestRepo();
+        empty.Write("README.md", "hello");
+
+        var main = Assert.Single(await WorktreeService.ListAsync(empty.Root));
+        Assert.Null(main.HeadSha); // git says 0000000…, which isn't a commit
+
+        using var session = RepositorySession.Open(empty.Root);
+        var state = session.LoadState();
+        Assert.Null(state.CurrentBranch);
+        Assert.Null(state.HeadSha);
+        Assert.Equal(main.Branch, state.UnbornBranch);
+        Assert.NotNull(state.UnbornBranch);
     }
 
     [Fact]
