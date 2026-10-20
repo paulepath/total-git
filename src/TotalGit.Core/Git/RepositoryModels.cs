@@ -25,6 +25,12 @@ public sealed record RepositoryState(
 
     /// <summary>The configured user.email (whose commits are "mine"), or null.</summary>
     public string? UserEmail { get; init; }
+
+    /// <summary>
+    /// The branch HEAD names when it has no commits yet (a new repository: the first commit creates it), else null.
+    /// <see cref="CurrentBranch"/> stays null then, as nothing can be done with the branch until it exists.
+    /// </summary>
+    public string? UnbornBranch { get; init; }
 }
 
 /// <summary>A multi-step operation the repository is in the middle of (usually stopped on conflicts).</summary>

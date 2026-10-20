@@ -105,6 +105,7 @@ public sealed class RepositorySession : IDisposable
                 ReadRebaseProgress()) {
                 DefaultBranch = ReadDefaultBranch(),
                 UserEmail = _repo.Config.Get<string>("user.email")?.Value,
+                UnbornBranch = info.IsHeadUnborn ? _repo.Head.FriendlyName : null,
             };
         }
     }

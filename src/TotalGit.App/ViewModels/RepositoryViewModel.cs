@@ -176,6 +176,10 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
     public Avalonia.Media.Imaging.Bitmap? CurrentBranchIcon => BranchIcons.ForBranch(CurrentBranch);
     public bool HasCurrentBranchIcon => CurrentBranchIcon is not null;
 
+    /// <summary>A new repository with no commits and nothing to commit yet: the graph says how to start.</summary>
+    [ObservableProperty]
+    public partial bool IsEmptyRepository { get; set; }
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowEmptyState), nameof(IsEmptyTab), nameof(TabTitle))]
     public partial bool IsLoading { get; set; }
@@ -496,7 +500,7 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
         var state = _state!;
         RepositoryName = state.RepositoryName;
         WorktreeName = state.IsLinkedWorktree ? state.WorktreeName : null;
-        CurrentBranch = state.CurrentBranch ?? "(detached HEAD)";
+        CurrentBranch = state.CurrentBranch ?? state.UnbornBranch ?? "(detached HEAD)";
 
         var current = state.Refs.FirstOrDefault(r => r is { Kind: RefKind.LocalBranch, IsCurrent: true });
         AheadText = current is { Ahead: > 0 } ? current.Ahead.ToString() : null;
@@ -520,10 +524,12 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
         var projected = ProjectHistory(state);
         var builder = new GraphLayoutBuilder(TrunkCommits(_commits, state));
         var wip = new Dictionary<string, WipInfo>();
-        var hasWip = _status.IsDirty && state.HeadSha is not null;
+        // In a new repository the changes are the first commit to be, so their row has no parent.
+        var hasWip = _status.IsDirty && (state.HeadSha is not null || state.UnbornBranch is not null);
+        IsEmptyRepository = state.UnbornBranch is not null && !_status.IsDirty;
         if (hasWip)
         {
-            builder.Append([new CommitInfo(CommitInfo.WorkingTreeSha, [state.HeadSha!], "", "", DateTimeOffset.Now,
+            builder.Append([new CommitInfo(CommitInfo.WorkingTreeSha, state.HeadSha is { } head ? [head] : [], "", "", DateTimeOffset.Now,
                 "// WIP", IsWorkingTree: true)]);
             wip[CommitInfo.WorkingTreeSha] = new WipInfo(_status.TotalCount, null);
         }
@@ -574,7 +580,8 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
     private void UpdateCommitCount()
     {
         var more = _session?.HasMoreHistory == true;
-        CommitCountText = more ? $"{_commits.Count:N0} commits (scroll for more)" : $"{_commits.Count:N0} commits";
+        var count = _commits.Count == 1 ? "1 commit" : $"{_commits.Count:N0} commits";
+        CommitCountText = more ? $"{count} (scroll for more)" : count;
     }
 
     // ------------------------------------------------------------------ selection, details, diff
@@ -1030,7 +1037,8 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
     /// <summary>Selects the uncommitted changes (the WIP row), when there are any, so they show on the right.</summary>
     private void SelectChangesIfAny()
     {
-        if (!_status.IsDirty || _state?.HeadSha is null || SelectedSha == CommitInfo.WorkingTreeSha) return;
+        if (!_status.IsDirty || _state is not { } state || state.HeadSha is null && state.UnbornBranch is null
+            || SelectedSha == CommitInfo.WorkingTreeSha) return;
         SelectedSha = CommitInfo.WorkingTreeSha;
         ScrollToShaRequested?.Invoke(CommitInfo.WorkingTreeSha);
     }

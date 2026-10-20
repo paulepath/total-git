@@ -113,9 +113,14 @@
             <TextBlock Text="Restart to update" FontSize="12" Foreground="{x:Static t:Palette.Success}" VerticalAlignment="Center" />
           </StackPanel>
         </Button>
-        <Button x:Name="ThemeButton" Background="Transparent" Padding="8" VerticalAlignment="Center" ToolTip.Tip="Dark or light">
-          <PathIcon Data="{StaticResource ThemeIcon}" Width="14" Height="14" Foreground="{x:Static t:Palette.TextSecondary}" />
-          <Button.Flyout>
+        <!-- Click switches between dark and light; right-click offers following Windows instead. -->
+        <Button x:Name="ThemeButton" Background="Transparent" Padding="8" VerticalAlignment="Center"
+                Command="{Binding ToggleThemeCommand}" ToolTip.Tip="{Binding ThemeToolTip}">
+          <Panel>
+            <PathIcon Data="{StaticResource SunIcon}" Width="14" Height="14" Foreground="{x:Static t:Palette.TextSecondary}" IsVisible="{Binding !ShowsLight}" />
+            <PathIcon Data="{StaticResource MoonIcon}" Width="14" Height="14" Foreground="{x:Static t:Palette.TextSecondary}" IsVisible="{Binding ShowsLight}" />
+          </Panel>
+          <Button.ContextFlyout>
             <MenuFlyout Placement="BottomEdgeAlignedRight">
               <MenuItem Header="Dark" ToggleType="Radio" IsChecked="{Binding IsDarkTheme, Mode=OneWay}"
                         Command="{Binding SetThemeCommand}" CommandParameter="Dark" />
@@ -124,7 +129,7 @@
               <MenuItem Header="Follow Windows" ToggleType="Radio" IsChecked="{Binding IsSystemTheme, Mode=OneWay}"
                         Command="{Binding SetThemeCommand}" CommandParameter="System" />
             </MenuFlyout>
-          </Button.Flyout>
+          </Button.ContextFlyout>
         </Button>
       </StackPanel>
     </Grid>

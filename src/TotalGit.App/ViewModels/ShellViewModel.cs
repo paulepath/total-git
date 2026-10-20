@@ -31,6 +31,7 @@ public partial class ShellViewModel : ObservableObject
         _pullRequests = pullRequests;
         _workflows = workflows;
         AppVersion = updates?.CurrentVersion ?? "dev";
+        Palette.Changed += OnPaletteChanged;
         StartUpdateChecks();
     }
 
@@ -257,6 +258,15 @@ public partial class ShellViewModel : ObservableObject
     public bool IsLightTheme => _settings.Theme == "Light";
     public bool IsSystemTheme => _settings.Theme == "System";
 
+    /// <summary>Whether the app is showing light now (also when following Windows).</summary>
+    public bool ShowsLight => Palette.IsLight;
+    public string ThemeToolTip => (ShowsLight ? "Switch to dark" : "Switch to light") +
+                                  (IsSystemTheme ? " (now following Windows)" : "") + ". Right-click to follow Windows.";
+
+    /// <summary>Switches between dark and light; when following Windows, to the opposite of what Windows shows.</summary>
+    [RelayCommand]
+    private void ToggleTheme() => SetTheme(ShowsLight ? "Dark" : "Light");
+
     /// <summary>"Dark", "Light" or "System" (follow Windows); applies at once and is remembered.</summary>
     [RelayCommand]
     private void SetTheme(string choice)
@@ -267,5 +277,13 @@ public partial class ShellViewModel : ObservableObject
         OnPropertyChanged(nameof(IsDarkTheme));
         OnPropertyChanged(nameof(IsLightTheme));
         OnPropertyChanged(nameof(IsSystemTheme));
+        OnPaletteChanged();
+    }
+
+    // Also when Windows switches while following it.
+    private void OnPaletteChanged()
+    {
+        OnPropertyChanged(nameof(ShowsLight));
+        OnPropertyChanged(nameof(ThemeToolTip));
     }
 }

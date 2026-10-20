@@ -332,6 +332,10 @@
               </Style>
             </views:CommitGraphView.Styles>
           </views:CommitGraphView>
+          <TextBlock Grid.Row="1" Grid.Column="0" IsVisible="{Binding IsEmptyRepository}" IsHitTestVisible="False"
+                     Text="No commits yet. Add files to this folder and they'll show here, ready for the first commit."
+                     Foreground="{x:Static t:Palette.TextMuted}" FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
+                     HorizontalAlignment="Center" VerticalAlignment="Center" Margin="24" />
           <ScrollBar Grid.Row="1" Grid.Column="1" x:Name="GraphScrollBar" Orientation="Vertical" AllowAutoHide="False" />
         </Grid>
 

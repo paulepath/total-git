@@ -148,6 +148,19 @@ internal static class Screens
             await Settle(() => false, 1);
         }
 
+        // The theme button: one click to the other theme, and back.
+        if (Wanted("toggled"))
+        {
+            shell.ToggleThemeCommand.Execute(null);
+            await Settle(() => false, 1);
+            _theme = (o.Theme == ThemeVariant.Light ? "dark" : "light") + "-from-" + _theme;
+            await Save(main, "toggled-main");
+            shell.ToggleThemeCommand.Execute(null);
+            await Settle(() => false, 1);
+            _theme = o.Theme == ThemeVariant.Light ? "light" : "dark";
+            await Save(main, "toggled-back");
+        }
+
         // The merge tool, on a file with conflicts: its repository in a tab of its own, as when a merge stops.
         if (o.Conflict is { } conflicted && Wanted("mergetool"))
         {
