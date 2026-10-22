@@ -171,9 +171,15 @@
     <!-- Messages: errors stay until dismissed -->
     <Border DockPanel.Dock="Top" Padding="16,6" IsVisible="{Binding HasMessage}"
             Background="{Binding MessageIsError, Converter={x:Static views:ReviewConverters.MessageBackground}}">
-      <Grid ColumnDefinitions="*,Auto">
+      <Grid ColumnDefinitions="*,Auto,Auto">
         <TextBlock Text="{Binding Message}" Foreground="{x:Static t:Palette.TextHeading}" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center" />
-        <Button Grid.Column="1" Classes="small" Background="Transparent" Command="{Binding DismissMessageCommand}" ToolTip.Tip="Dismiss">
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" Margin="12,0,6,0" IsVisible="{Binding MessageIsError}">
+          <Button Classes="small" Content="Report" Command="{Binding ReportErrorCommand}"
+                  ToolTip.Tip="Open a GitHub issue filled in with this error, Total Git's version and its recent log, for you to check and submit" />
+          <Button Classes="small" Content="Copy details" Command="{Binding CopyErrorDetailsCommand}"
+                  ToolTip.Tip="Copy the same details, to paste into an email or chat" />
+        </StackPanel>
+        <Button Grid.Column="2" Classes="small" Background="Transparent" Command="{Binding DismissMessageCommand}" ToolTip.Tip="Dismiss">
           <PathIcon Data="{StaticResource CloseIcon}" Width="9" Height="9" />
         </Button>
       </Grid>

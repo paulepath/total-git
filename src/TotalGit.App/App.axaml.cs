@@ -61,6 +61,9 @@ public partial class App : Application
             // The theme first, so no window opens in the wrong one. (Only read: the merge window never saves settings.)
             SetTheme(AppSettings.Load().Theme);
 
+            var updates = new UpdateService();
+            ErrorReporter.AppVersion = updates.CurrentVersion;
+
             // TotalGit --merge <file>: just the merge window, for git mergetool or another app.
             if (TotalGit.Core.Git.MergeCommandLine.IsMerge(desktop.Args ?? []))
             {
@@ -72,7 +75,6 @@ public partial class App : Application
             var avatars = new AvatarService(Path.Combine(AppSettings.DataDirectory, "avatars"));
             var settings = AppSettings.Load();
             settings.ApplyBranchRules();
-            var updates = new UpdateService();
             var pullRequests = new GitHubProviderFactory(ChainedCredentialSource.Default());
             var shell = new ShellViewModel(avatars, settings, updates, pullRequests, workflows: pullRequests);
             var window = new MainWindow { DataContext = shell };
@@ -96,6 +98,10 @@ public partial class App : Application
             // Reopen last session's tabs; a folder passed on the command line opens (or selects) a tab too.
             shell.RestoreTabs(desktop.Args is [var first, ..] ? first : null);
 
+            // The last run crashed: offer to report it, once the window is up.
+            if (ErrorReporter.TakeCrash() is { } crash)
+                window.Opened += async (_, _) => await OfferCrashReportAsync(window, crash);
+
             // Older Total Git extensions in VS Code and Visual Studio get this release's, a little after start-up (Visual
             // Studio's only while it's closed).
             _ = Task.Delay(TimeSpan.FromSeconds(30)).ContinueWith(async _ =>
@@ -106,5 +112,15 @@ public partial class App : Application
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    private static async Task OfferCrashReportAsync(MainWindow window, string crash)
+    {
+        var choice = await window.ChooseAsync("Total Git closed unexpectedly",
+            "Last time, Total Git hit an error it couldn't recover from and closed. Reporting it helps get it fixed: " +
+            "a GitHub issue opens in your browser with the error details, for you to check and submit.",
+            null, [new DialogChoice("Report on GitHub", IsPrimary: true), new DialogChoice("Copy details")]);
+        if (choice == 0) await ErrorReporter.OpenIssueAsync(null, crash);
+        else if (choice == 1) await window.CopyToClipboardAsync(await ErrorReporter.DetailsAsync(null, crash));
     }
 }

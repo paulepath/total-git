@@ -110,6 +110,18 @@ internal static class Screens
         await Dialog(main, "dialog-branchrules", () => Run(tab.EditBranchRulesCommand, null));
         await Dialog(main, "dialog-cleanup", () => Run(tab.CleanUpBranchesCommand));
         await Dialog(main, "dialog-worktree", () => Run(tab.CreateWorktreeCommand, null));
+        await Dialog(main, "dialog-crash", () => (Task)typeof(App).GetMethod("OfferCrashReportAsync", BindingFlags.NonPublic | BindingFlags.Static)!
+            .Invoke(null, [main, "System.InvalidOperationException: Sequence contains no elements\n   at TotalGit.App.Foo()"])!);
+
+        // An error, with its Report and Copy details buttons.
+        if (Wanted("error-banner"))
+        {
+            typeof(RepositoryViewModel).GetMethod("ShowError", BindingFlags.NonPublic | BindingFlags.Instance)!
+                .Invoke(tab, ["Commit 0000000 is not in the loaded history."]);
+            await Settle(() => false, 0.5);
+            await Save(main, "error-banner");
+            tab.DismissBannerCommand.Execute(null);
+        }
 
         if (o.Pr is { } number)
         {

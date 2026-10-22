@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text;
 using System.Text.RegularExpressions;
+using TotalGit.Core.Diagnostics;
 
 namespace TotalGit.Core.Git;
 
@@ -94,6 +95,7 @@ public static class GitCli
         if (throwOnError && result.ExitCode != 0)
         {
             var command = string.Join(' ', argList);
+            DiagnosticLog.Write($"git {command} failed (exit {result.ExitCode}) in {workingDirectory}\n{result.StdErr.Trim()}");
             var inUse = BranchInUseException.Pattern().Match(result.StdErr);
             if (inUse.Success) throw new BranchInUseException(command, result, inUse.Groups["path"].Value);
             throw new GitCommandException(command, result);

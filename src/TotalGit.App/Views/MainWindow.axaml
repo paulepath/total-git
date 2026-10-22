@@ -113,6 +113,10 @@
             <TextBlock Text="Restart to update" FontSize="12" Foreground="{x:Static t:Palette.Success}" VerticalAlignment="Center" />
           </StackPanel>
         </Button>
+        <Button Background="Transparent" Padding="8" VerticalAlignment="Center" Command="{Binding ReportProblemCommand}"
+                ToolTip.Tip="Report a problem: opens a GitHub issue with Total Git's version and recent log, for you to describe and submit">
+          <PathIcon Data="{StaticResource ReportIcon}" Width="14" Height="14" Foreground="{x:Static t:Palette.TextSecondary}" />
+        </Button>
         <!-- Click switches between dark and light; right-click offers following Windows instead. -->
         <Button x:Name="ThemeButton" Background="Transparent" Padding="8" VerticalAlignment="Center"
                 Command="{Binding ToggleThemeCommand}" ToolTip.Tip="{Binding ThemeToolTip}">

@@ -211,8 +211,15 @@
       <!-- Counts down to the banner closing itself (banners with actions stay). -->
       <ProgressBar VerticalAlignment="Bottom" Height="2" MinHeight="0" Minimum="0" Maximum="1" Value="{Binding BannerTimeLeft}"
                    IsVisible="{Binding BannerClosesItself}" Foreground="{x:Static t:Palette.BannerCountdown}" Background="Transparent" CornerRadius="0" />
-      <Grid ColumnDefinitions="*,Auto,Auto" Margin="14,8">
+      <Grid ColumnDefinitions="*,Auto,Auto,Auto" Margin="14,8">
         <SelectableTextBlock Text="{Binding Banner.Message}" TextWrapping="Wrap" VerticalAlignment="Center" Foreground="{x:Static t:Palette.BannerText}" />
+        <!-- Errors: report on GitHub (filled in with the details), or copy them to send another way. -->
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" Margin="12,0,0,0" IsVisible="{Binding Banner.CanReport, FallbackValue=False}">
+          <Button Content="Report" Padding="10,3" Command="{Binding ReportErrorCommand}" CommandParameter="{Binding Banner.Message}"
+                  ToolTip.Tip="Open a GitHub issue filled in with this error, Total Git's version and its recent log, for you to check and submit" />
+          <Button Content="Copy details" Padding="10,3" Command="{Binding CopyErrorDetailsCommand}" CommandParameter="{Binding Banner.Message}"
+                  ToolTip.Tip="Copy the same details, to paste into an email or chat" />
+        </StackPanel>
         <ItemsControl Grid.Column="1" ItemsSource="{Binding Banner.Actions}" Margin="12,0,0,0">
           <ItemsControl.ItemsPanel>
             <ItemsPanelTemplate>
@@ -225,7 +232,7 @@
             </DataTemplate>
           </ItemsControl.ItemTemplate>
         </ItemsControl>
-        <Button Grid.Column="2" Command="{Binding DismissBannerCommand}" Background="Transparent" Padding="6" Margin="8,0,0,0" ToolTip.Tip="Dismiss">
+        <Button Grid.Column="3" Command="{Binding DismissBannerCommand}" Background="Transparent" Padding="6" Margin="8,0,0,0" ToolTip.Tip="Dismiss">
           <PathIcon Data="{StaticResource CloseIcon}" Width="12" Height="12" />
         </Button>
       </Grid>

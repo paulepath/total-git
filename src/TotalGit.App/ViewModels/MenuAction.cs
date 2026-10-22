@@ -71,6 +71,9 @@ public sealed record FileTarget(string Path, int? Line = null, int? Column = nul
 public sealed record Banner(string Message, bool IsError, IReadOnlyList<MenuAction> Actions)
 {
     public bool HasActions => Actions.Count > 0;
+
+    /// <summary>An error the user can report (shows Report and Copy details).</summary>
+    public bool CanReport { get; init; }
 }
 
 /// <summary>One answer in a choice dialog.</summary>

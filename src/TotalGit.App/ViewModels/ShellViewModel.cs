@@ -252,6 +252,10 @@ public partial class ShellViewModel : ObservableObject
     [RelayCommand]
     private void RestartToUpdate() => _updates?.RestartToUpdate();
 
+    /// <summary>Opens a GitHub issue with Total Git's version and recent log, for a problem with no error on screen.</summary>
+    [RelayCommand]
+    private Task ReportProblemAsync() => ErrorReporter.OpenIssueAsync(null);
+
     // ------------------------------------------------------------------ theme
 
     public bool IsDarkTheme => _settings.Theme is not ("Light" or "System");

@@ -4,6 +4,7 @@ using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using TotalGit.App.Services;
+using TotalGit.Core.Diagnostics;
 using TotalGit.Core.Git;
 using TotalGit.Core.Hosting;
 
@@ -160,8 +161,21 @@ public sealed partial class PullRequestReviewViewModel : ObservableObject, IComm
 
     private void ShowError(string message)
     {
+        DiagnosticLog.Write($"Error shown in review of #{Number}: {message}");
         Message = message;
         MessageIsError = true;
+    }
+
+    /// <summary>Opens a GitHub issue filled in with the error and the log, for the user to check and submit.</summary>
+    [RelayCommand]
+    private Task ReportErrorAsync() => ErrorReporter.OpenIssueAsync(Message);
+
+    [RelayCommand]
+    private async Task CopyErrorDetailsAsync()
+    {
+        if (Dialogs is null) return;
+        await Dialogs.CopyToClipboardAsync(await ErrorReporter.DetailsAsync(Message));
+        ShowInfo("Error details copied, to paste into an email or chat.");
     }
 
     private void ShowInfo(string message)

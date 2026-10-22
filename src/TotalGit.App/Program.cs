@@ -15,6 +15,8 @@ internal static class Program
         // Already running: it opens the folder (or just comes to the front) instead of a second copy starting.
         if (!TotalGit.Core.Git.MergeCommandLine.IsMerge(args) && Services.SingleInstance.TryForward(args.FirstOrDefault()))
             return 0;
+        // Logs errors for error reports, and saves a crash for the next start to offer reporting.
+        Services.ErrorReporter.Start();
         return BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
     }
 

@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using TotalGit.App.Services;
 using TotalGit.Core.Avatars;
+using TotalGit.Core.Diagnostics;
 using TotalGit.Core.Git;
 using TotalGit.Core.Graph;
 using TotalGit.Core.Hosting;
@@ -1618,7 +1619,23 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void DismissBanner() => Banner = null;
 
-    private void ShowError(string message) => Banner = new Banner(message, true, []);
+    private void ShowError(string message)
+    {
+        DiagnosticLog.Write($"Error shown: {message}");
+        Banner = new Banner(message, true, []) { CanReport = true };
+    }
+
+    /// <summary>Opens a GitHub issue filled in with the error and the log, for the user to check and submit.</summary>
+    [RelayCommand]
+    private Task ReportErrorAsync(string message) => ErrorReporter.OpenIssueAsync(message);
+
+    [RelayCommand]
+    private async Task CopyErrorDetailsAsync(string message)
+    {
+        if (Dialogs is null) return;
+        await Dialogs.CopyToClipboardAsync(await ErrorReporter.DetailsAsync(message));
+        ShowInfo("Error details copied, to paste into an email or chat.");
+    }
 
     private void ShowInfo(string message) => Banner = new Banner(message, false, []);
 }
