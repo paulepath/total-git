@@ -160,6 +160,15 @@ internal static class Screens
             await Settle(() => false, 1);
         }
 
+        // The notifications bell with news not yet looked at.
+        if (Wanted("bell-dot") && shell.Notifier is { } notifier)
+        {
+            notifier.HasUnseen = true;
+            await Settle(() => false, 0.5);
+            await Save(main, "bell-dot");
+            notifier.HasUnseen = false;
+        }
+
         // The theme button: one click to the other theme, and back.
         if (Wanted("toggled"))
         {

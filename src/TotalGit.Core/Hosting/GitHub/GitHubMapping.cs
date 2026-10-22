@@ -38,6 +38,55 @@ internal static class GitHubMapping
         CheckRuns = Checks(pr),
     };
 
+    /// <summary>
+    /// The three searches of <see cref="GitHubQueries.Inbox"/> as one list: a pull request found by more than one
+    /// (say, assigned and asked to review) appears once, with both marks.
+    /// </summary>
+    public static Inbox Inbox(JsonElement data)
+    {
+        var viewer = data.Obj("viewer")?.Str("login") ?? "";
+        var byUrl = new Dictionary<string, InboxPullRequest>(StringComparer.Ordinal);
+        // Own pull requests first: only that search brings their reviews, comments and checks.
+        foreach (var (alias, mark) in (ReadOnlySpan<(string, Func<InboxPullRequest, InboxPullRequest>)>)
+                 [("mine", p => p), ("requested", p => p with { ReviewRequested = true }), ("assigned", p => p with { Assigned = true })])
+        {
+            foreach (var node in Nodes(data.Obj(alias)))
+            {
+                // A search can turn up issues and items the token can't see (empty objects): only pull requests count.
+                if (node.Str("url") is not { } url || node.Int("number") is not { } number) continue;
+                var pr = byUrl.GetValueOrDefault(url) ?? InboxItem(node, number, url, viewer);
+                byUrl[url] = mark(pr);
+            }
+        }
+        return new(viewer, byUrl.Values.ToList());
+    }
+
+    private static InboxPullRequest InboxItem(JsonElement pr, int number, string url, string viewer)
+    {
+        var author = User(pr.Obj("author"));
+        var threadComments = Nodes(pr.Obj("reviewThreads")).SelectMany(t => Nodes(t.Obj("comments")));
+        var timeline = Nodes(pr.Obj("timelineItems")).ToList();
+        // The latest time the viewer was asked to review, or assigned.
+        string? LatestFor(string who) => timeline
+            .Where(e => string.Equals(e.Obj(who)?.Str("login"), viewer, StringComparison.OrdinalIgnoreCase))
+            .Select(e => e.Str("id")).LastOrDefault();
+        return new(pr.Obj("repository")?.Str("nameWithOwner") ?? "", number, pr.Str("title") ?? "", url, author, pr.Bool("isDraft"), pr.Str("headRefOid") ?? "")
+        {
+            IsViewerAuthor = string.Equals(author.Login, viewer, StringComparison.OrdinalIgnoreCase),
+            ReviewRequestId = LatestFor("requestedReviewer"),
+            AssignmentId = LatestFor("assignee"),
+            Reviews = Nodes(pr.Obj("reviews"))
+                .Select(r => new InboxReview(r.Str("id") ?? "", ReviewState(r.Str("state")), User(r.Obj("author")), !string.IsNullOrWhiteSpace(r.Str("body"))))
+                .Where(r => r.Id.Length > 0)
+                .ToList(),
+            Comments = Nodes(pr.Obj("comments")).Concat(threadComments)
+                .Select(c => new InboxComment(c.Str("id") ?? "", User(c.Obj("author"))))
+                .Where(c => c.Id.Length > 0)
+                .ToList(),
+            Checks = ChecksState(Rollup(pr)?.Str("state")),
+        };
+    }
+
     private static MergeState MergeStateOf(JsonElement pr) =>
         pr.Str("mergeable") == "CONFLICTING" ? MergeState.Conflicting : pr.Str("mergeStateStatus") switch
         {

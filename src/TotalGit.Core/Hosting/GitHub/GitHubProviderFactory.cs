@@ -10,7 +10,7 @@ namespace TotalGit.Core.Hosting.GitHub;
 /// <param name="http">Client to use (tests pass a fake handler); by default the factory creates and owns one.</param>
 /// <param name="accounts">The GitHub CLI's accounts, for moving to one that can see a repository; by default gh's own.</param>
 public sealed class GitHubProviderFactory(ICredentialSource credentials, HttpClient? http = null, IGitHubAccounts? accounts = null)
-    : IPullRequestProviderFactory, IWorkflowProviderFactory, IHostAccountSwitcher, IDisposable
+    : IPullRequestProviderFactory, IWorkflowProviderFactory, IHostAccountSwitcher, IPullRequestInboxSource, IDisposable
 {
     private readonly bool _ownsHttp = http is null;
     private readonly HttpClient _http = http ?? new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
@@ -26,6 +26,26 @@ public sealed class GitHubProviderFactory(ICredentialSource credentials, HttpCli
     /// <summary>GitHub Actions for a github.com repository; null for other hosts.</summary>
     public IWorkflowProvider? TryCreateWorkflows(RemoteHostInfo host) =>
         IsGitHub(host) ? new GitHubWorkflowProvider(host, Http(host)) : null;
+
+    /// <summary>
+    /// One inbox per account the GitHub CLI is signed in to on github.com, each with that account's own token (the
+    /// active account isn't changed); without gh accounts, one with the usual token.
+    /// </summary>
+    public async Task<IReadOnlyList<IPullRequestInbox>> CreateInboxesAsync(CancellationToken ct = default)
+    {
+        const string host = "github.com";
+        var inboxes = new List<IPullRequestInbox>();
+        foreach (var account in await _accounts.ListAsync(host, ct))
+            if (await _accounts.TokenAsync(host, account.Login, ct) is { } token)
+                inboxes.Add(new GitHubInbox(new GitHubHttp(_http, new FixedToken(token), host)));
+        if (inboxes.Count == 0) inboxes.Add(new GitHubInbox(_hosts.GetOrAdd(host, h => new GitHubHttp(_http, credentials, h))));
+        return inboxes;
+    }
+
+    private sealed class FixedToken(string token) : ICredentialSource
+    {
+        public string? GetToken(string host) => token;
+    }
 
     private static bool IsGitHub(RemoteHostInfo host) =>
         host.Kind == HostKind.GitHub && string.Equals(host.Host, "github.com", StringComparison.OrdinalIgnoreCase);

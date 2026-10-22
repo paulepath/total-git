@@ -137,6 +137,9 @@ public sealed class AppSettings
     /// <summary>The merge tool shows the common ancestor next to the two sides (when git has one).</summary>
     public bool MergeShowBase { get; set; } = true;
 
+    /// <summary>Windows notifications about pull requests (review requests, approvals…), and which.</summary>
+    public NotificationSettings Notifications { get; set; } = new();
+
     public Dictionary<string, RepoSettings> Repositories { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Repositories opened before, most recently opened first (shown as tiles on a new tab).</summary>
@@ -234,3 +237,27 @@ public sealed record WindowPlacement(int X, int Y, double Width, double Height, 
 
 /// <summary>A repository opened before: its folder (the main working directory), name and when it was last opened.</summary>
 public sealed record RecentRepository(string Path, string Name, DateTimeOffset LastOpened);
+
+/// <summary>Which pull request news Total Git tells the user about, with a Windows notification.</summary>
+public sealed class NotificationSettings
+{
+    /// <summary>Off pauses them all (news still counts as seen, so turning them on again doesn't bring a flood).</summary>
+    public bool Enabled { get; set; } = true;
+    public bool Sound { get; set; } = true;
+    public bool ReviewRequested { get; set; } = true;
+    public bool Assigned { get; set; } = true;
+    public bool Approved { get; set; } = true;
+    public bool ChangesRequested { get; set; } = true;
+    public bool Comments { get; set; } = true;
+    public bool ChecksFailed { get; set; } = true;
+
+    public bool Wants(TotalGit.Core.Hosting.InboxEventKind kind) => Enabled && kind switch
+    {
+        TotalGit.Core.Hosting.InboxEventKind.ReviewRequested => ReviewRequested,
+        TotalGit.Core.Hosting.InboxEventKind.Assigned => Assigned,
+        TotalGit.Core.Hosting.InboxEventKind.Approved => Approved,
+        TotalGit.Core.Hosting.InboxEventKind.ChangesRequested => ChangesRequested,
+        TotalGit.Core.Hosting.InboxEventKind.Commented => Comments,
+        _ => ChecksFailed,
+    };
+}

@@ -113,6 +113,34 @@
             <TextBlock Text="Restart to update" FontSize="12" Foreground="{x:Static t:Palette.Success}" VerticalAlignment="Center" />
           </StackPanel>
         </Button>
+        <!-- Pull request notifications: which, sound, check now; a dot while there's news not yet looked at. -->
+        <Button x:Name="NotificationsButton" Background="Transparent" Padding="8" VerticalAlignment="Center" IsVisible="{Binding HasNotifier}"
+                ToolTip.Tip="Pull request notifications">
+          <Panel>
+            <PathIcon Data="{StaticResource BellIcon}" Width="14" Height="14" Foreground="{x:Static t:Palette.TextSecondary}"
+                      Opacity="{Binding Notifier.IsEnabled, FallbackValue=1, Converter={x:Static vm:Converters.DimWhenFalse}}" />
+            <Ellipse Width="7" Height="7" Fill="{x:Static t:Palette.Accent}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-2,-2,0"
+                     IsVisible="{Binding Notifier.HasUnseen, FallbackValue=False}" />
+          </Panel>
+          <Button.Flyout>
+            <MenuFlyout Placement="BottomEdgeAlignedRight">
+              <MenuItem Header="Notify me about pull requests" ToggleType="CheckBox" IsChecked="{Binding Notifier.IsEnabled, Mode=TwoWay}" />
+              <Separator />
+              <MenuItem Header="My review is requested" ToggleType="CheckBox" IsChecked="{Binding Notifier.OnReviewRequested, Mode=TwoWay}" IsEnabled="{Binding Notifier.IsEnabled}" />
+              <MenuItem Header="I'm assigned" ToggleType="CheckBox" IsChecked="{Binding Notifier.OnAssigned, Mode=TwoWay}" IsEnabled="{Binding Notifier.IsEnabled}" />
+              <MenuItem Header="My pull request is approved" ToggleType="CheckBox" IsChecked="{Binding Notifier.OnApproved, Mode=TwoWay}" IsEnabled="{Binding Notifier.IsEnabled}" />
+              <MenuItem Header="Changes are requested on mine" ToggleType="CheckBox" IsChecked="{Binding Notifier.OnChangesRequested, Mode=TwoWay}" IsEnabled="{Binding Notifier.IsEnabled}" />
+              <MenuItem Header="Someone comments on mine" ToggleType="CheckBox" IsChecked="{Binding Notifier.OnComments, Mode=TwoWay}" IsEnabled="{Binding Notifier.IsEnabled}" />
+              <MenuItem Header="Checks fail on mine" ToggleType="CheckBox" IsChecked="{Binding Notifier.OnChecksFailed, Mode=TwoWay}" IsEnabled="{Binding Notifier.IsEnabled}" />
+              <Separator />
+              <MenuItem Header="Play a sound" ToggleType="CheckBox" IsChecked="{Binding Notifier.PlaySound, Mode=TwoWay}" IsEnabled="{Binding Notifier.IsEnabled}" />
+              <Separator />
+              <MenuItem Header="Check now" Command="{Binding Notifier.CheckNowCommand}" />
+              <MenuItem Header="Send a test notification" Command="{Binding Notifier.SendTestCommand}" />
+              <MenuItem Header="{Binding Notifier.Status}" IsEnabled="False" />
+            </MenuFlyout>
+          </Button.Flyout>
+        </Button>
         <Button Background="Transparent" Padding="8" VerticalAlignment="Center" Command="{Binding ReportProblemCommand}"
                 ToolTip.Tip="Report a problem: opens a GitHub issue with Total Git's version and recent log, for you to describe and submit">
           <PathIcon Data="{StaticResource ReportIcon}" Width="14" Height="14" Foreground="{x:Static t:Palette.TextSecondary}" />

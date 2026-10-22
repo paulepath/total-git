@@ -80,10 +80,11 @@ public partial class App : Application
             var window = new MainWindow { DataContext = shell };
             desktop.MainWindow = window;
 
-            // Later starts hand their folder over to this copy.
+            // Later starts hand their folder (or a notification's pull request) over to this copy.
             var instance = SingleInstance.Listen(path => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
             {
-                if (path is not null && Directory.Exists(path)) _ = shell.OpenPathAsync(path);
+                if (SingleInstance.PullRequestUrl(path) is { } url) _ = shell.OpenPullRequestAsync(url);
+                else if (path is not null && Directory.Exists(path)) _ = shell.OpenPathAsync(path);
                 window.BringToFront();
             }));
             desktop.Exit += (_, _) =>
@@ -97,6 +98,18 @@ public partial class App : Application
 
             // Reopen last session's tabs; a folder passed on the command line opens (or selects) a tab too.
             shell.RestoreTabs(desktop.Args is [var first, ..] ? first : null);
+
+            // Pull request news as Windows notifications; a click opens the pull request (also one that started Total Git).
+            shell.Notifier?.Start();
+            Toasts.OnClicked(click => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                if (click.Url is { } url)
+                {
+                    if (click.OnGitHub) UrlLauncher.Open(url);
+                    else _ = shell.OpenPullRequestAsync(url);
+                }
+                if (!click.OnGitHub) window.BringToFront();
+            }));
 
             // The last run crashed: offer to report it, once the window is up.
             if (ErrorReporter.TakeCrash() is { } crash)

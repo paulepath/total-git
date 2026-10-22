@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using TotalGit.App.Services;
 using TotalGit.Core.Avatars;
+using TotalGit.Core.Git;
 using TotalGit.Core.Hosting;
 using TotalGit.Core.Worktrees;
 
@@ -33,6 +34,7 @@ public partial class ShellViewModel : ObservableObject
         AppVersion = updates?.CurrentVersion ?? "dev";
         Palette.Changed += OnPaletteChanged;
         StartUpdateChecks();
+        if (pullRequests is IPullRequestInboxSource inboxes) Notifier = new PullRequestNotifier(inboxes, settings);
     }
 
     public ObservableCollection<RepositoryViewModel> Tabs { get; } = [];
@@ -251,6 +253,51 @@ public partial class ShellViewModel : ObservableObject
 
     [RelayCommand]
     private void RestartToUpdate() => _updates?.RestartToUpdate();
+
+    // ------------------------------------------------------------------ pull request notifications
+
+    /// <summary>Watches the user's pull requests for news; null without GitHub.</summary>
+    public PullRequestNotifier? Notifier { get; }
+
+    public bool HasNotifier => Notifier is not null;
+
+    /// <summary>
+    /// Opens a pull request a notification was about: in its review window when a clone of its repository is open in a
+    /// tab or was opened before, else on GitHub in the browser.
+    /// </summary>
+    public async Task OpenPullRequestAsync(string url)
+    {
+        if (PullRequestNotifications.ParseUrl(url) is not { } pr)
+        {
+            UrlLauncher.Open(url);
+            return;
+        }
+        if (await FindCloneAsync(pr.Repository) is { } path)
+        {
+            await OpenPathAsync(path);
+            if (SelectedTab is { } tab && await tab.WhenLoadedAsync(TimeSpan.FromSeconds(30)) && await tab.OpenPullRequestByNumberAsync(pr.Number))
+                return;
+        }
+        UrlLauncher.Open(url);
+    }
+
+    /// <summary>A tab, or else a repository opened before, whose origin is <paramref name="repository"/> (<c>owner/name</c>) on GitHub.</summary>
+    private async Task<string?> FindCloneAsync(string repository)
+    {
+        bool Same(string? r) => string.Equals(r, repository, StringComparison.OrdinalIgnoreCase);
+        if (Tabs.FirstOrDefault(t => Same(t.PullRequestRepository)) is { TabPath: { } loaded }) return loaded;
+        // Tabs not loaded yet, then recent repositories: ask git where their origin is.
+        var candidates = Tabs.Select(t => t.TabPath).OfType<string>()
+            .Concat(_settings.Recent().Select(r => r.Path))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Where(Directory.Exists);
+        foreach (var path in candidates)
+        {
+            var origin = await GitCli.RunAsync(path, ["config", "--get", "remote.origin.url"], throwOnError: false);
+            if (origin.ExitCode == 0 && RemoteHostParser.Parse(origin.StdOut.Trim()) is { } host && Same($"{host.Owner}/{host.Repo}")) return path;
+        }
+        return null;
+    }
 
     /// <summary>Opens a GitHub issue with Total Git's version and recent log, for a problem with no error on screen.</summary>
     [RelayCommand]

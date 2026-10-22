@@ -105,6 +105,7 @@ public partial class MainWindow : Window, IDialogService
         Activated += (_, _) =>
         {
             RepositoryViewModel.AppIsActive = true;
+            _shell?.Notifier?.OnWindowActivated();
             if (_shell?.SelectedTab is not { } tab) return;
             _ = tab.RefreshOtherWorktreesAsync();
             _ = tab.RefreshPullRequestsAsync(TimeSpan.FromMinutes(1));
@@ -146,8 +147,10 @@ public partial class MainWindow : Window, IDialogService
         base.OnDataContextChanged(e);
         if (_shell is not null) _shell.PropertyChanging -= OnShellPropertyChanging;
         if (_shell is not null) _shell.PropertyChanged -= OnShellPropertyChanged;
+        if (_shell?.Notifier is { } old) old.Notified -= FlashTaskbar;
         _shell = DataContext as ShellViewModel;
         if (_shell is null) return;
+        if (_shell.Notifier is { } notifier) notifier.Notified += FlashTaskbar;
 
         _shell.Dialogs = this;
         if (!IsVisible) RestorePlacement(_shell.Settings);
@@ -301,6 +304,35 @@ public partial class MainWindow : Window, IDialogService
 
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern bool SetForegroundWindow(IntPtr window);
+
+    /// <summary>Flashes the taskbar button until the window is brought to the front (when it isn't already).</summary>
+    public void FlashTaskbar()
+    {
+        if (IsActive || !OperatingSystem.IsWindows() || TryGetPlatformHandle()?.Handle is not { } handle) return;
+        var info = new FlashInfo
+        {
+            Size = (uint)System.Runtime.InteropServices.Marshal.SizeOf<FlashInfo>(),
+            Window = handle,
+            Flags = FlashTray | FlashUntilForeground,
+        };
+        FlashWindowEx(ref info);
+    }
+
+    private const uint FlashTray = 0x2;
+    private const uint FlashUntilForeground = 0xC;
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct FlashInfo
+    {
+        public uint Size;
+        public IntPtr Window;
+        public uint Flags;
+        public uint Count;
+        public uint Timeout;
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool FlashWindowEx(ref FlashInfo info);
 
     // ------------------------------------------------------------------ IDialogService
 

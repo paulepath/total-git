@@ -129,6 +129,30 @@ public partial class RepositoryViewModel
         OpenReview(new PullRequestSource(provider, summary), ticket);
     }
 
+    /// <summary>The repository as <c>owner/name</c> on its host, when that has pull requests (to match notifications to tabs).</summary>
+    public string? PullRequestRepository => _prHost is { } h && _prProvider is not null ? $"{h.Owner}/{h.Repo}" : null;
+
+    /// <summary>Opens pull request <paramref name="number"/> in its review window (from a notification); false when it can't.</summary>
+    public async Task<bool> OpenPullRequestByNumberAsync(int number)
+    {
+        if (_prProvider is not { } provider) return false;
+        var summary = _pullRequests.FirstOrDefault(p => p.Number == number);
+        if (summary is null)
+        {
+            try
+            {
+                summary = (await Task.Run(() => provider.GetPullRequestAsync(number))).Summary;
+            }
+            catch (HostException ex)
+            {
+                ShowError(ex.Message);
+                return false;
+            }
+        }
+        OpenPullRequest(summary);
+        return true;
+    }
+
     /// <summary>Merges a pull request on the host, after asking how; then fetches, so its merge and deleted branch show here.</summary>
     [RelayCommand]
     private async Task MergePullRequestAsync(PullRequestSummary pr)

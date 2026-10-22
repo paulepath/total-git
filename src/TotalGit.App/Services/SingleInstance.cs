@@ -15,6 +15,9 @@ internal sealed class SingleInstance : IDisposable
 {
     private const string Ack = "ok";
 
+    /// <summary>A message asking to open a pull request (from a notification) rather than a folder.</summary>
+    private const string PullRequestPrefix = "pr:";
+
     private readonly CancellationTokenSource _stop = new();
 
     private SingleInstance() { }
@@ -23,10 +26,11 @@ internal sealed class SingleInstance : IDisposable
         SHA256.HashData(Encoding.UTF8.GetBytes(Path.GetFullPath(AppSettings.DataDirectory).ToLowerInvariant())))[..16];
 
     /// <summary>
-    /// Hands <paramref name="path"/> (a folder to open, or null just to bring the window up) to a running Total
-    /// Git. Returns true if one took it; false if none is running (or it didn't answer), so this one starts.
+    /// Hands <paramref name="path"/> (a folder to open, or null just to bring the window up), or a pull request's
+    /// address from a notification, to a running Total Git. Returns true if one took it; false if none is running (or
+    /// it didn't answer), so this one starts.
     /// </summary>
-    public static bool TryForward(string? path)
+    public static bool TryForward(string? path, string? pullRequestUrl = null)
     {
         try
         {
@@ -38,7 +42,7 @@ internal sealed class SingleInstance : IDisposable
 
             using var writer = new StreamWriter(client, new UTF8Encoding(false), leaveOpen: true) { AutoFlush = true };
             using var reader = new StreamReader(client, Encoding.UTF8, leaveOpen: true);
-            writer.WriteLine(path is null ? "" : Path.GetFullPath(path));
+            writer.WriteLine(pullRequestUrl is not null ? PullRequestPrefix + pullRequestUrl : path is null ? "" : Path.GetFullPath(path));
             var answer = reader.ReadLineAsync();
             return answer.Wait(TimeSpan.FromSeconds(5)) && answer.Result == Ack;
         }
@@ -49,7 +53,14 @@ internal sealed class SingleInstance : IDisposable
         }
     }
 
-    /// <summary>Listens for later starts; <paramref name="open"/> gets each one's folder (or null) on a pool thread.</summary>
+    /// <summary>The pull request address in a message from <see cref="Listen"/>, or null for a folder.</summary>
+    public static string? PullRequestUrl(string? message) =>
+        message?.StartsWith(PullRequestPrefix, StringComparison.Ordinal) == true ? message[PullRequestPrefix.Length..] : null;
+
+    /// <summary>
+    /// Listens for later starts; <paramref name="open"/> gets each one's folder (or null, or a pull request: see
+    /// <see cref="PullRequestUrl"/>) on a pool thread.
+    /// </summary>
     public static SingleInstance Listen(Action<string?> open)
     {
         var listener = new SingleInstance();

@@ -130,6 +130,15 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
         if (_state is null && !IsLoading && PendingPath is { } path) _ = LoadAsync(path);
     }
 
+    /// <summary>Loads a restored tab if it isn't yet and waits for it; false when it didn't load in time (or failed).</summary>
+    public async Task<bool> WhenLoadedAsync(TimeSpan timeout)
+    {
+        EnsureLoaded();
+        var until = DateTime.UtcNow + timeout;
+        while ((_state is null || IsLoading) && LoadError is null && DateTime.UtcNow < until) await Task.Delay(100);
+        return _state is not null && !IsLoading;
+    }
+
     public void ShowBanner(Banner banner) => Banner = banner;
 
     public void Dispose()

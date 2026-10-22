@@ -50,6 +50,41 @@ internal static class GitHubQueries
         }
         """;
 
+    /// <summary>
+    /// The viewer's pull requests in every repository, for notifications: three searches (asked to review, assigned,
+    /// their own), the last with the reviews, comments and checks that notifications are about.
+    /// </summary>
+    public const string Inbox = """
+        query($requested: String!, $assigned: String!, $mine: String!) {
+          viewer { login }
+          requested: search(query: $requested, type: ISSUE, first: 50) { nodes { ...InboxPr } }
+          assigned: search(query: $assigned, type: ISSUE, first: 50) { nodes { ...InboxPr } }
+          mine: search(query: $mine, type: ISSUE, first: 50) { nodes { ...InboxPr ...InboxActivity } }
+        }
+        fragment InboxPr on PullRequest {
+          number title url isDraft headRefOid
+          repository { nameWithOwner }
+          author { __typename login }
+          timelineItems(itemTypes: [REVIEW_REQUESTED_EVENT, ASSIGNED_EVENT], last: 20) {
+            nodes {
+              ... on ReviewRequestedEvent { id requestedReviewer { ... on User { login } } }
+              ... on AssignedEvent { id assignee { ... on User { login } } }
+            }
+          }
+        }
+        fragment InboxActivity on PullRequest {
+          commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
+          reviews(last: 30) { nodes { id state body author { __typename login } } }
+          comments(last: 20) { nodes { id author { __typename login } } }
+          reviewThreads(last: 30) { nodes { comments(last: 5) { nodes { id author { __typename login } } } } }
+        }
+        """;
+
+    /// <summary>The searches behind <see cref="Inbox"/>: open pull requests in repositories that aren't archived.</summary>
+    public const string InboxRequested = "is:pr is:open archived:false user-review-requested:@me";
+    public const string InboxAssigned = "is:pr is:open archived:false assignee:@me";
+    public const string InboxMine = "is:pr is:open archived:false author:@me";
+
     // isRequired needs the pull request number to know which branch rules apply.
     public const string Details = $$"""
         query($owner: String!, $repo: String!, $n: Int!) {
