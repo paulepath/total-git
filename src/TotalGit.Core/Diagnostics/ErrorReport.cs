@@ -14,8 +14,14 @@ public sealed partial class ErrorReport
 {
     public const string NewIssueUrl = "https://github.com/paulepath/total-git/issues/new";
 
-    /// <summary>GitHub refuses longer new-issue links; the log is shortened (oldest lines first) to fit.</summary>
-    public const int MaxUrlLength = 7500;
+    /// <summary>
+    /// GitHub refuses longer links. Someone not signed in to GitHub is sent to its sign-in page with the whole new-issue
+    /// link encoded again inside (<see cref="SignInUrl"/>), and that's what has to fit: past about 7,000 characters
+    /// the sign-in page is an error page (measured October 2026). The log is shortened (oldest lines first) to fit.
+    /// </summary>
+    public const int MaxUrlLength = 6500;
+
+    private const string SignInUrl = "https://github.com/login?return_to=";
 
     private const int StackLines = 40;
 
@@ -49,20 +55,23 @@ public sealed partial class ErrorReport
         // Fewer log lines until it fits; halving keeps this quick for a long log.
         var lines = _log.Count;
         var url = Url(BuildBody(lines));
-        while (url.Length > MaxUrlLength && lines > 0)
+        while (SignInLength(url) > MaxUrlLength && lines > 0)
         {
             lines /= 2;
             url = Url(BuildBody(lines));
         }
         // Still too long (a huge error message): cut the end off; the user can paste the rest from "Copy details".
         var cut = BuildBody(0);
-        while (url.Length > MaxUrlLength && cut.Length > 0)
+        while (SignInLength(url) > MaxUrlLength && cut.Length > 0)
         {
-            cut = cut[..Math.Max(0, cut.Length - Math.Max(50, (url.Length - MaxUrlLength) / 3))];
+            cut = cut[..Math.Max(0, cut.Length - Math.Max(50, (SignInLength(url) - MaxUrlLength) / 6))];
             url = Url(cut + "\n\n(cut short)");
         }
         return url;
     }
+
+    /// <summary>The length of GitHub's sign-in link that carries <paramref name="url"/>, which is longer than the link itself.</summary>
+    public static int SignInLength(string url) => SignInUrl.Length + Uri.EscapeDataString(url).Length;
 
     private string Url(string body) =>
         $"{NewIssueUrl}?title={Uri.EscapeDataString(Title)}&body={Uri.EscapeDataString(body)}";

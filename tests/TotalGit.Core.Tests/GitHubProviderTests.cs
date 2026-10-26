@@ -247,6 +247,17 @@ public class GitHubProviderTests
     }
 
     [Fact]
+    public async Task An_empty_answer_from_GitHub_is_an_error_not_a_crash()
+    {
+        var (provider, http) = Create();
+        http.Route(GraphQL, () => new HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = new StringContent("") });
+
+        var ex = await Assert.ThrowsAsync<HostException>(() => provider.SetFileViewedAsync(7, "src/a.py", viewed: true));
+
+        Assert.Contains("empty response", ex.Message);
+    }
+
+    [Fact]
     public async Task Marks_and_unmarks_a_file_as_viewed_by_pull_request_id()
     {
         var (provider, http) = Create();

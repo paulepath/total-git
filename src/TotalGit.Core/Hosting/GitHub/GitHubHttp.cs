@@ -27,6 +27,9 @@ internal sealed class GitHubHttp(HttpClient http, ICredentialSource credentials,
     public async Task<JsonElement> GraphQLAsync(string query, JsonObject variables, CancellationToken ct)
     {
         var root = await SendAsync(HttpMethod.Post, "graphql", new JsonObject { ["query"] = query, ["variables"] = variables }, "graphql", ct);
+        // Now and then GitHub answers with nothing at all.
+        if (root.ValueKind != JsonValueKind.Object)
+            throw new HostException(HostErrorKind.Other, "GitHub sent an empty response. Try again.");
         // GraphQL reports most failures with 200 and an errors array.
         if (root.TryGetProperty("errors", out var errors) && errors.ValueKind == JsonValueKind.Array && errors.GetArrayLength() > 0)
             throw GraphQLError(errors);

@@ -45,7 +45,8 @@ public sealed class ErrorReportTests
         var report = new ErrorReport("Push failed", null, Env, log, null);
 
         var url = report.ToUrl();
-        Assert.True(url.Length <= ErrorReport.MaxUrlLength, $"{url.Length} characters");
+        // It has to fit even inside GitHub's sign-in link, for someone who isn't signed in.
+        Assert.True(ErrorReport.SignInLength(url) <= ErrorReport.MaxUrlLength, $"{ErrorReport.SignInLength(url)} characters");
         Assert.Contains("line%20399", url); // the newest lines are the ones kept
         Assert.DoesNotContain("line%200%20", url);
         Assert.Contains("line 0 ", report.Body);
@@ -56,7 +57,7 @@ public sealed class ErrorReportTests
     {
         var report = new ErrorReport(new string('é', 20_000), null, Env, [], null);
 
-        Assert.True(report.ToUrl().Length <= ErrorReport.MaxUrlLength);
+        Assert.True(ErrorReport.SignInLength(report.ToUrl()) <= ErrorReport.MaxUrlLength);
     }
 }
 
