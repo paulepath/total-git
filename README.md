@@ -5,7 +5,8 @@
 <p align="center">
   A visual git client for Windows, built with .NET and Avalonia.<br>
   <a href="https://totalgit.e-path.co.uk"><b>totalgit.e-path.co.uk</b></a> ·
-  <a href="https://github.com/paulepath/total-git/releases/latest/download/TotalGitApp-win-Setup.exe">Download for Windows</a>
+  <a href="https://github.com/paulepath/total-git/releases/latest/download/TotalGitApp-win-Setup.exe">Download for Windows</a> ·
+  Made by <a href="https://www.e-path.co.uk">E-Path</a>
 </p>
 
 ![Commit graph with branches, tags, worktrees, remote branch owners and commit details](docs/screenshots/graph.png)
@@ -174,3 +175,8 @@ Web App (Free) with DNS in Cloudflare:
   by hand with `apply` to make them.
 - The **Website** workflow publishes `site/` whenever it changes.
 - `python tools/make_site_images.py` rebuilds the site's images from `docs/screenshots` and the app icon.
+
+## About
+
+Total Git is made by Paul Johnson at [E-Path](https://www.e-path.co.uk). Find out more, and download it, at
+[totalgit.e-path.co.uk](https://totalgit.e-path.co.uk).
