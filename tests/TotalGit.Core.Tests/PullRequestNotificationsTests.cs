@@ -62,11 +62,11 @@ public class PullRequestNotificationsTests
         }}
         """;
 
-    private static async Task<(Inbox Inbox, FakeHttpHandler Http)> Fetch(params string[] accounts)
+    private static async Task<(Inbox Inbox, FakeHttpHandler Http)> Fetch(string response = Response)
     {
         var http = new FakeHttpHandler();
-        http.Route(GraphQL, () => FakeHttpHandler.Json(Response));
-        using var factory = new GitHubProviderFactory(new Token("usual"), new HttpClient(http), new Accounts(accounts));
+        http.Route(GraphQL, () => FakeHttpHandler.Json(response));
+        using var factory = new GitHubProviderFactory(new Token("usual"), new HttpClient(http), new Accounts());
         var inboxes = await factory.CreateInboxesAsync();
         return (await inboxes[0].GetAsync(), http);
     }
@@ -94,8 +94,82 @@ public class PullRequestNotificationsTests
         Assert.Equal(["C1", "C2", "T1", "T2"], mine.Comments.Select(c => c.Id));
 
         var variables = JsonDocument.Parse(http.Bodies[0]!).RootElement.GetProperty("variables");
-        Assert.Contains("user-review-requested:@me", variables.GetProperty("requested").GetString());
+        Assert.Contains(" review-requested:@me", variables.GetProperty("requested").GetString()); // teams too, not user-review-requested
+        Assert.Contains("reviewed-by:@me -author:@me", variables.GetProperty("reviewed").GetString());
         Assert.Equal("Bearer usual", http.Requests[0].Headers.Authorization!.ToString());
+    }
+
+    private const string ReviewedResponse = """
+        {"data":{
+          "viewer":{"login":"me"},
+          "reviewed":{"nodes":[
+            {"number":20,"title":"Commented","url":"https://github.com/octo/widgets/pull/20","isDraft":false,"headRefOid":"new",
+             "repository":{"nameWithOwner":"octo/widgets"},"author":{"__typename":"User","login":"alice"},
+             "latestReviews":{"nodes":[{"id":"MR20","state":"COMMENTED","author":{"login":"me"},"commit":{"oid":"old"}},
+                                       {"id":"BR20","state":"APPROVED","author":{"login":"bob"},"commit":{"oid":"old"}}]},
+             "latestOpinionatedReviews":{"nodes":[{"state":"APPROVED","author":{"login":"bob"}}]}},
+            {"number":21,"title":"Approved","url":"https://github.com/octo/widgets/pull/21","isDraft":false,"headRefOid":"new",
+             "repository":{"nameWithOwner":"octo/widgets"},"author":{"__typename":"User","login":"alice"},
+             "latestReviews":{"nodes":[{"id":"MR21","state":"APPROVED","author":{"login":"me"},"commit":{"oid":"old"}}]},
+             "latestOpinionatedReviews":{"nodes":[{"state":"APPROVED","author":{"login":"me"}}]}},
+            {"number":22,"title":"Approved, then commented","url":"https://github.com/octo/widgets/pull/22","isDraft":false,"headRefOid":"new",
+             "repository":{"nameWithOwner":"octo/widgets"},"author":{"__typename":"User","login":"alice"},
+             "latestReviews":{"nodes":[{"id":"MR22","state":"COMMENTED","author":{"login":"me"},"commit":{"oid":"old"}}]},
+             "latestOpinionatedReviews":{"nodes":[{"state":"APPROVED","author":{"login":"me"}}]}},
+            {"number":23,"title":"Changes requested, nothing pushed since","url":"https://github.com/octo/widgets/pull/23","isDraft":false,"headRefOid":"same",
+             "repository":{"nameWithOwner":"octo/widgets"},"author":{"__typename":"User","login":"alice"},
+             "latestReviews":{"nodes":[{"id":"MR23","state":"CHANGES_REQUESTED","author":{"login":"me"},"commit":{"oid":"same"}}]},
+             "latestOpinionatedReviews":{"nodes":[{"state":"CHANGES_REQUESTED","author":{"login":"me"}}]}},
+            {"number":24,"title":"Approval dismissed","url":"https://github.com/octo/widgets/pull/24","isDraft":false,"headRefOid":"new",
+             "repository":{"nameWithOwner":"octo/widgets"},"author":{"__typename":"User","login":"alice"},
+             "latestReviews":{"nodes":[{"id":"MR24","state":"DISMISSED","author":{"login":"me"},"commit":{"oid":"old"}}]},
+             "latestOpinionatedReviews":{"nodes":[]}}
+          ]},
+          "requested":{"nodes":[
+            {"number":25,"title":"Asked of my team","url":"https://github.com/octo/widgets/pull/25","isDraft":false,"headRefOid":"x",
+             "repository":{"nameWithOwner":"octo/widgets"},"author":{"__typename":"User","login":"alice"},
+             "timelineItems":{"nodes":[{"id":"RQB","requestedReviewer":{"__typename":"User","login":"bob"}},{"id":"RQT","requestedReviewer":{"__typename":"Team"}}]}}
+          ]},
+          "assigned":{"nodes":[]},
+          "mine":{"nodes":[]}
+        }}
+        """;
+
+    [Fact]
+    public async Task Pull_requests_you_reviewed_without_approving_and_team_requests_are_news()
+    {
+        var (inbox, _) = await Fetch(ReviewedResponse);
+
+        UnapprovedReview? Review(int n) => inbox.PullRequests.Single(p => p.Number == n).UnapprovedReview;
+        Assert.Equal(new UnapprovedReview("MR20", "old"), Review(20)); // only commented: bob's approval isn't mine
+        Assert.Null(Review(21));
+        Assert.Null(Review(22)); // comments after approving don't undo the approval
+        Assert.Equal(new UnapprovedReview("MR23", "same"), Review(23));
+        Assert.Equal(new UnapprovedReview("MR24", "old"), Review(24));
+        Assert.Equal("RQT", inbox.PullRequests.Single(p => p.Number == 25).ReviewRequestId); // through a team, not bob's
+
+        // Commits since my review: #20 and #24; #23 has nothing new.
+        string[] expected = ["nc:octo/widgets#20:MR20", "nc:octo/widgets#24:MR24", "rr:octo/widgets#25:RQT"];
+        Assert.Equal(expected.Order(), PullRequestNotifications.Events(inbox).Select(e => e.Id).Order());
+    }
+
+    [Fact]
+    public void Pushes_after_your_review_are_news_once_until_you_review_again()
+    {
+        Dictionary<string, DateTimeOffset>? seen = null;
+        var pr = Pr(20) with { UnapprovedReview = new("MR1", "sha1") };
+        Diff(ref seen, new("me", [pr]), T0);
+        Assert.Empty(Diff(ref seen, new("me", [pr]), T0.AddMinutes(2))); // nothing pushed
+
+        var pushed = pr with { HeadSha = "sha2" };
+        var news = Diff(ref seen, new("me", [pushed]), T0.AddMinutes(4));
+        Assert.Equal(InboxEventKind.NewCommits, Assert.Single(news).Kind);
+        Assert.Equal("Alice pushed changes since your review", PullRequestNotifications.Group(news)[0].Title);
+        Assert.Empty(Diff(ref seen, new("me", [pushed with { HeadSha = "sha3" }]), T0.AddMinutes(6))); // another push, same review
+
+        var reviewedAgain = pushed with { HeadSha = "sha4", UnapprovedReview = new("MR2", "sha3") };
+        Assert.Single(Diff(ref seen, new("me", [reviewedAgain]), T0.AddMinutes(8)));
+        Assert.Empty(Diff(ref seen, new("me", [reviewedAgain with { HeadSha = "sha5", UnapprovedReview = null }]), T0.AddMinutes(10))); // approved
     }
 
     [Fact]

@@ -133,6 +133,33 @@ public class GitHubProviderTests
         var variables = Body(http).GetProperty("variables");
         Assert.Equal("octo", variables.GetProperty("owner").GetString());
         Assert.Equal("widgets", variables.GetProperty("repo").GetString());
+        Assert.Equal("repo:octo/widgets is:pr is:open review-requested:@me", variables.GetProperty("requested").GetString());
+    }
+
+    [Fact]
+    public async Task Waiting_for_you_covers_team_requests_and_reviews_without_approval()
+    {
+        static string Pr(int n, string reviews, string opinions = "", string author = "alice") => $$$"""
+            {"number":{{{n}}},"title":"t","isDraft":false,"state":"OPEN","baseRefName":"main","headRefName":"b{{{n}}}","headRefOid":"x",
+             "isCrossRepository":false,"updatedAt":"2026-10-26T10:00:00Z","url":"u{{{n}}}","reviewDecision":"REVIEW_REQUIRED",
+             "author":{"login":"{{{author}}}"},"reviewRequests":{"nodes":[]},
+             "latestReviews":{"nodes":[{{{reviews}}}]},"latestOpinionatedReviews":{"nodes":[{{{opinions}}}]}}
+            """;
+        static string Review(string state, string who = "me") => $$$"""{"state":"{{{state}}}","author":{"login":"{{{who}}}"}}""";
+        var prs = string.Join(",", Pr(10, ""), Pr(11, Review("COMMENTED")), Pr(12, Review("CHANGES_REQUESTED"), Review("CHANGES_REQUESTED")),
+            Pr(13, Review("DISMISSED")), Pr(14, Review("COMMENTED"), Review("APPROVED")), Pr(15, Review("APPROVED"), Review("APPROVED")),
+            Pr(16, Review("COMMENTED", "bob")), Pr(17, Review("COMMENTED"), author: "me"));
+        var json = """{"data":{"viewer":{"login":"Me"},"requested":{"nodes":[{"number":10},{}]},"repository":{"pullRequests":{"nodes":[PRS]}}}}"""
+            .Replace("PRS", prs);
+        var (provider, http) = Create();
+        http.Route(GraphQL, () => FakeHttpHandler.Json(json));
+
+        var list = await provider.ListOpenAsync();
+
+        // 10: asked through a team (the search found it); 11-13: commented, asked for changes, approval dismissed.
+        // Not 14 (approved, then commented), 15 (approved), 16 (only someone else reviewed) or 17 (my own).
+        Assert.Equal([10, 11, 12, 13], list.Where(p => p.WaitsForViewer).Select(p => p.Number));
+        Assert.True(list[0].ViewerReviewRequested);
     }
 
     [Fact]

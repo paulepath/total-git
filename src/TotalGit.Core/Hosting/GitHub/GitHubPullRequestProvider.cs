@@ -45,10 +45,15 @@ public sealed class GitHubPullRequestProvider : IPullRequestProvider
 
     public async Task<IReadOnlyList<PullRequestSummary>> ListOpenAsync(CancellationToken ct = default)
     {
-        var data = await _http.GraphQLAsync(GitHubQueries.ListOpen, RepoVariables(), ct);
+        var variables = RepoVariables();
+        variables["requested"] = GitHubQueries.TeamRequested(Host.Owner, Host.Repo);
+        var data = await _http.GraphQLAsync(GitHubQueries.ListOpen, variables, ct);
         var viewer = Viewer(data);
+        var requested = data.Obj("requested")?.Obj("nodes") is { ValueKind: System.Text.Json.JsonValueKind.Array } found
+            ? found.EnumerateArray().Select(n => n.Int("number")).OfType<int>().ToHashSet()
+            : [];
         var nodes = data.Obj("repository")?.Obj("pullRequests")?.Obj("nodes");
-        return nodes is { } array ? array.EnumerateArray().Select(pr => GitHubMapping.Summary(pr, viewer)).ToList() : [];
+        return nodes is { } array ? array.EnumerateArray().Select(pr => GitHubMapping.Summary(pr, viewer, requested)).ToList() : [];
     }
 
     public async Task<PullRequestDetails> GetPullRequestAsync(int number, CancellationToken ct = default)

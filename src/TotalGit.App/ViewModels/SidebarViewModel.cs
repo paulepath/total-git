@@ -159,8 +159,8 @@ public partial class SidebarNode : ObservableObject
     public bool IsReadyToMerge { get; init; }
     public bool IsChangesRequested => PullRequest?.ReviewDecision == ReviewDecision.ChangesRequested;
 
-    /// <summary>You're asked to review this pull request.</summary>
-    public bool IsReviewRequested => PullRequest?.ViewerReviewRequested == true;
+    /// <summary>This pull request is waiting for your review.</summary>
+    public bool IsReviewRequested => PullRequest?.WaitsForViewer == true;
     public bool ShowCount => IsSection || IsPrGroup;
     public bool HasAhead => Ahead is not null;
     public bool HasBehind => Behind is not null;

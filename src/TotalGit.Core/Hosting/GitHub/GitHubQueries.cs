@@ -28,11 +28,17 @@ internal static class GitHubQueries
         number title isDraft state baseRefName headRefName headRefOid isCrossRepository updatedAt url reviewDecision
         author { {{Actor}} }
         reviewRequests(first: 20) { nodes { requestedReviewer { __typename ... on User { login avatarUrl name } ... on Team { name avatarUrl } } } }
+        latestOpinionatedReviews(first: 50) { nodes { state author { login } } }
         """;
 
+    /// <summary>
+    /// The open pull requests, and (<c>$requested</c>, see <see cref="TeamRequested"/>) which of them ask for the
+    /// viewer's review through a team: a team's members aren't listed, but GitHub's search knows.
+    /// </summary>
     public const string ListOpen = $$"""
-        query($owner: String!, $repo: String!) {
+        query($owner: String!, $repo: String!, $requested: String!) {
           viewer { login }
+          requested: search(query: $requested, type: ISSUE, first: 50) { nodes { ... on PullRequest { number } } }
           repository(owner: $owner, name: $repo) {
             pullRequests(states: OPEN, first: 30, orderBy: {field: UPDATED_AT, direction: DESC}) {
               nodes {
@@ -43,23 +49,28 @@ internal static class GitHubQueries
                   ... on CheckRun { name status conclusion detailsUrl title startedAt checkSuite { workflowRun { databaseId workflow { name } } } }
                   ... on StatusContext { context state targetUrl description }
                 } } } } } }
-                latestReviews(first: 20) { nodes { state author { {{Actor}} } } }
+                latestReviews(first: 50) { nodes { state author { {{Actor}} } } }
               }
             }
           }
         }
         """;
 
+    /// <summary>The search behind <see cref="ListOpen"/>'s <c>$requested</c>: asked to review, directly or through a team.</summary>
+    public static string TeamRequested(string owner, string repo) => $"repo:{owner}/{repo} is:pr is:open review-requested:@me";
+
     /// <summary>
-    /// The viewer's pull requests in every repository, for notifications: three searches (asked to review, assigned,
-    /// their own), the last with the reviews, comments and checks that notifications are about.
+    /// The viewer's pull requests in every repository, for notifications: four searches (their own, ones they've
+    /// reviewed, asked to review, assigned). Their own come with the reviews, comments and checks that notifications
+    /// are about; ones they've reviewed with everyone's latest review, to tell whether theirs is still an approval.
     /// </summary>
     public const string Inbox = """
-        query($requested: String!, $assigned: String!, $mine: String!) {
+        query($requested: String!, $assigned: String!, $mine: String!, $reviewed: String!) {
           viewer { login }
+          mine: search(query: $mine, type: ISSUE, first: 50) { nodes { ...InboxPr ...InboxActivity } }
+          reviewed: search(query: $reviewed, type: ISSUE, first: 50) { nodes { ...InboxPr ...InboxReviewed } }
           requested: search(query: $requested, type: ISSUE, first: 50) { nodes { ...InboxPr } }
           assigned: search(query: $assigned, type: ISSUE, first: 50) { nodes { ...InboxPr } }
-          mine: search(query: $mine, type: ISSUE, first: 50) { nodes { ...InboxPr ...InboxActivity } }
         }
         fragment InboxPr on PullRequest {
           number title url isDraft headRefOid
@@ -67,7 +78,7 @@ internal static class GitHubQueries
           author { __typename login }
           timelineItems(itemTypes: [REVIEW_REQUESTED_EVENT, ASSIGNED_EVENT], last: 20) {
             nodes {
-              ... on ReviewRequestedEvent { id requestedReviewer { ... on User { login } } }
+              ... on ReviewRequestedEvent { id requestedReviewer { __typename ... on User { login } } }
               ... on AssignedEvent { id assignee { ... on User { login } } }
             }
           }
@@ -78,12 +89,20 @@ internal static class GitHubQueries
           comments(last: 20) { nodes { id author { __typename login } } }
           reviewThreads(last: 30) { nodes { comments(last: 5) { nodes { id author { __typename login } } } } }
         }
+        fragment InboxReviewed on PullRequest {
+          latestReviews(first: 50) { nodes { id state author { login } commit { oid } } }
+          latestOpinionatedReviews(first: 50) { nodes { state author { login } } }
+        }
         """;
 
-    /// <summary>The searches behind <see cref="Inbox"/>: open pull requests in repositories that aren't archived.</summary>
-    public const string InboxRequested = "is:pr is:open archived:false user-review-requested:@me";
+    /// <summary>
+    /// The searches behind <see cref="Inbox"/>: open pull requests in repositories that aren't archived. Asked to
+    /// review includes through a team.
+    /// </summary>
+    public const string InboxRequested = "is:pr is:open archived:false review-requested:@me";
     public const string InboxAssigned = "is:pr is:open archived:false assignee:@me";
     public const string InboxMine = "is:pr is:open archived:false author:@me";
+    public const string InboxReviewed = "is:pr is:open archived:false reviewed-by:@me -author:@me";
 
     // isRequired needs the pull request number to know which branch rules apply.
     public const string Details = $$"""

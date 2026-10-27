@@ -126,7 +126,7 @@
             <MenuFlyout Placement="BottomEdgeAlignedRight">
               <MenuItem Header="Notify me about pull requests" ToggleType="CheckBox" IsChecked="{Binding Notifier.IsEnabled, Mode=TwoWay}" />
               <Separator />
-              <MenuItem Header="My review is requested" ToggleType="CheckBox" IsChecked="{Binding Notifier.OnReviewRequested, Mode=TwoWay}" IsEnabled="{Binding Notifier.IsEnabled}" />
+              <MenuItem Header="My review is needed" ToolTip.Tip="Asked to review (directly or through a team), or new commits since your review when you haven't approved" ToggleType="CheckBox" IsChecked="{Binding Notifier.OnReviewRequested, Mode=TwoWay}" IsEnabled="{Binding Notifier.IsEnabled}" />
               <MenuItem Header="I'm assigned" ToggleType="CheckBox" IsChecked="{Binding Notifier.OnAssigned, Mode=TwoWay}" IsEnabled="{Binding Notifier.IsEnabled}" />
               <MenuItem Header="My pull request is approved" ToggleType="CheckBox" IsChecked="{Binding Notifier.OnApproved, Mode=TwoWay}" IsEnabled="{Binding Notifier.IsEnabled}" />
               <MenuItem Header="Changes are requested on mine" ToggleType="CheckBox" IsChecked="{Binding Notifier.OnChangesRequested, Mode=TwoWay}" IsEnabled="{Binding Notifier.IsEnabled}" />

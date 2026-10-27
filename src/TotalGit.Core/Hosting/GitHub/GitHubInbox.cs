@@ -12,6 +12,7 @@ internal sealed class GitHubInbox(GitHubHttp http) : IPullRequestInbox
             ["requested"] = GitHubQueries.InboxRequested,
             ["assigned"] = GitHubQueries.InboxAssigned,
             ["mine"] = GitHubQueries.InboxMine,
+            ["reviewed"] = GitHubQueries.InboxReviewed,
         }, ct);
         return GitHubMapping.Inbox(data);
     }

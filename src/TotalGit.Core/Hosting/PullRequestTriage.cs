@@ -8,7 +8,7 @@ public enum PrRail
     /// <summary>Not ready for review yet.</summary>
     Draft,
 
-    /// <summary>The signed-in user is asked to review it.</summary>
+    /// <summary>Waiting for the signed-in user's review (see <see cref="PullRequestSummary.WaitsForViewer"/>).</summary>
     YourReview,
 
     /// <summary>Checks failed, changes were requested, or it conflicts with its target.</summary>
@@ -36,7 +36,7 @@ public static partial class PullRequestTriage
     public static PrRail Rail(PullRequestSummary pr)
     {
         if (pr.IsDraft) return PrRail.Draft;
-        if (pr.ViewerReviewRequested) return PrRail.YourReview;
+        if (pr.WaitsForViewer) return PrRail.YourReview;
         if (pr.Checks == ChecksState.Failure || pr.ReviewDecision == ReviewDecision.ChangesRequested || pr.MergeState == MergeState.Conflicting)
             return PrRail.Blocked;
         if (pr.Checks == ChecksState.Pending || pr.ReviewDecision == ReviewDecision.ReviewRequired) return PrRail.Waiting;
@@ -79,7 +79,7 @@ public static partial class PullRequestTriage
 
     public static PrGroup Group(PullRequestSummary pr) =>
         pr.IsDraft ? PrGroup.Drafts
-        : pr.ViewerReviewRequested ? PrGroup.NeedsYourReview
+        : pr.WaitsForViewer ? PrGroup.NeedsYourReview
         : pr.IsViewerAuthor ? PrGroup.Yours
         : PrGroup.Others;
 

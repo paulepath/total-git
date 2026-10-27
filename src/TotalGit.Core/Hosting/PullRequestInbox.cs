@@ -22,10 +22,16 @@ public sealed record Inbox(string Viewer, IReadOnlyList<InboxPullRequest> PullRe
 /// <param name="Repository">The repository as <c>owner/name</c>.</param>
 public sealed record InboxPullRequest(string Repository, int Number, string Title, string Url, PrUser Author, bool IsDraft, string HeadSha)
 {
-    /// <summary>The user's review is requested (directly, not through a team).</summary>
+    /// <summary>The user's review is requested, directly or through a team.</summary>
     public bool ReviewRequested { get; init; }
 
     public bool Assigned { get; init; }
+
+    /// <summary>
+    /// The user's latest review, when they've reviewed it without approving (or their approval was dismissed): commits
+    /// after it are news to them.
+    /// </summary>
+    public UnapprovedReview? UnapprovedReview { get; init; }
 
     /// <summary>The event of the user's latest review request (a new one each time they're asked again), if known.</summary>
     public string? ReviewRequestId { get; init; }
@@ -49,3 +55,6 @@ public sealed record InboxPullRequest(string Repository, int Number, string Titl
 public sealed record InboxReview(string Id, ReviewState State, PrUser Author, bool HasBody);
 
 public sealed record InboxComment(string Id, PrUser Author);
+
+/// <param name="Sha">The commit the review was on, when known.</param>
+public sealed record UnapprovedReview(string Id, string? Sha);

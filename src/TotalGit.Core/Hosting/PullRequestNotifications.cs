@@ -3,6 +3,8 @@ namespace TotalGit.Core.Hosting;
 public enum InboxEventKind
 {
     ReviewRequested,
+    /// <summary>Commits were pushed after the user reviewed without approving: it's waiting for them again.</summary>
+    NewCommits,
     Assigned,
     ChangesRequested,
     Approved,
@@ -28,8 +30,9 @@ public static class PullRequestNotifications
 
     /// <summary>
     /// Everything notifiable in the inbox now. Review requests and assignments by their event on GitHub (asked again
-    /// after reviewing is new again); reviews and comments by id; failed checks once per commit. The user's own
-    /// reviews and comments, and anything by bots, are left out.
+    /// after reviewing is new again); commits after the user's review that wasn't an approval, once per review;
+    /// reviews and comments by id; failed checks once per commit. The user's own reviews and comments, and anything
+    /// by bots, are left out.
     /// </summary>
     public static IReadOnlyList<InboxEvent> Events(Inbox inbox)
     {
@@ -39,6 +42,9 @@ public static class PullRequestNotifications
             var key = $"{pr.Repository}#{pr.Number}";
             if (pr.ReviewRequested) events.Add(new($"rr:{key}:{pr.ReviewRequestId}", InboxEventKind.ReviewRequested, pr, pr.Author));
             if (pr.Assigned) events.Add(new($"as:{key}:{pr.AssignmentId}", InboxEventKind.Assigned, pr));
+            // Once per review of theirs, however many pushes follow it.
+            if (pr.UnapprovedReview is { Sha: { } reviewedSha } mine && reviewedSha != pr.HeadSha && !pr.IsDraft && !pr.IsViewerAuthor)
+                events.Add(new($"nc:{key}:{mine.Id}", InboxEventKind.NewCommits, pr, pr.Author));
             if (!pr.IsViewerAuthor) continue;
 
             bool Others(PrUser who) => !who.IsBot && !string.Equals(who.Login, inbox.Viewer, StringComparison.OrdinalIgnoreCase);
@@ -112,6 +118,7 @@ public static class PullRequestNotifications
             return g.Key switch
             {
                 InboxEventKind.ReviewRequested => $"{people} asked for your review",
+                InboxEventKind.NewCommits => $"{people} pushed changes since your review",
                 InboxEventKind.Assigned => "you were assigned",
                 InboxEventKind.ChangesRequested => $"{people} requested changes",
                 InboxEventKind.Approved => $"{people} approved",

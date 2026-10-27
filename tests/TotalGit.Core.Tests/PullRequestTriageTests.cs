@@ -59,9 +59,21 @@ public sealed class PullRequestTriageTests
     public void Groups_put_drafts_last_and_your_reviews_first()
     {
         Assert.Equal(PrGroup.Drafts, PullRequestTriage.Group(Pr(draft: true, yourReview: true)));
-        Assert.Equal(PrGroup.NeedsYourReview, PullRequestTriage.Group(Pr(yourReview: true, yours: true)));
+        Assert.Equal(PrGroup.NeedsYourReview, PullRequestTriage.Group(Pr(yourReview: true)));
         Assert.Equal(PrGroup.Yours, PullRequestTriage.Group(Pr(yours: true)));
         Assert.Equal(PrGroup.Others, PullRequestTriage.Group(Pr()));
+    }
+
+    [Fact]
+    public void Reviewed_without_approving_still_needs_your_review()
+    {
+        // GitHub drops the request once you review: commenting or asking for changes leaves it waiting for you.
+        var reviewed = Pr() with { ViewerReviewedNotApproved = true };
+        Assert.Equal(PrGroup.NeedsYourReview, PullRequestTriage.Group(reviewed));
+        Assert.Equal(PrRail.YourReview, PullRequestTriage.Rail(reviewed));
+        Assert.Equal(PrGroup.Others, PullRequestTriage.Group(Pr()));
+        Assert.Equal(PrGroup.Yours, PullRequestTriage.Group(Pr(yours: true) with { ViewerReviewedNotApproved = true })); // your own
+        Assert.False((reviewed with { State = PullRequestState.Merged }).WaitsForViewer);
     }
 
     [Theory]

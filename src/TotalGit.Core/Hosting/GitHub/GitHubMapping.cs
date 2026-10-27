@@ -5,7 +5,11 @@ namespace TotalGit.Core.Hosting.GitHub;
 /// <summary>Maps GitHub GraphQL responses (see <see cref="GitHubQueries"/>) to the provider-neutral records.</summary>
 internal static class GitHubMapping
 {
-    public static PullRequestSummary Summary(JsonElement pr, string viewer) => new(
+    /// <param name="requested">
+    /// Pull requests (by number) GitHub's search says ask for the viewer's review, which covers requests to their
+    /// teams. Without it only requests to the viewer by name count.
+    /// </param>
+    public static PullRequestSummary Summary(JsonElement pr, string viewer, IReadOnlySet<int>? requested = null) => new(
         pr.GetProperty("number").GetInt32(),
         pr.Str("title") ?? "",
         User(pr.Obj("author")),
@@ -24,12 +28,13 @@ internal static class GitHubMapping
             "REVIEW_REQUIRED" => ReviewDecision.ReviewRequired,
             _ => ReviewDecision.None,
         },
-        // Only direct requests count; a request to one of the viewer's teams isn't detected.
-        RequestedReviewers(pr).Any(r => r.Login is { } login && string.Equals(login, viewer, StringComparison.OrdinalIgnoreCase)),
+        RequestedReviewers(pr).Any(r => r.Login is { } login && string.Equals(login, viewer, StringComparison.OrdinalIgnoreCase))
+            || requested?.Contains(pr.GetProperty("number").GetInt32()) == true,
         pr.Str("url") ?? "")
     {
         Reviewers = Reviewers(pr),
         IsViewerAuthor = pr.Obj("author")?.Str("login") is { } author && string.Equals(author, viewer, StringComparison.OrdinalIgnoreCase),
+        ViewerReviewedNotApproved = ReviewedNotApproved(pr, viewer),
         CreatedAt = pr.Obj("createdAt") is { ValueKind: JsonValueKind.String } created ? created.GetDateTimeOffset() : null,
         Additions = pr.Int("additions"),
         Deletions = pr.Int("deletions"),
@@ -39,16 +44,17 @@ internal static class GitHubMapping
     };
 
     /// <summary>
-    /// The three searches of <see cref="GitHubQueries.Inbox"/> as one list: a pull request found by more than one
+    /// The searches of <see cref="GitHubQueries.Inbox"/> as one list: a pull request found by more than one
     /// (say, assigned and asked to review) appears once, with both marks.
     /// </summary>
     public static Inbox Inbox(JsonElement data)
     {
         var viewer = data.Obj("viewer")?.Str("login") ?? "";
         var byUrl = new Dictionary<string, InboxPullRequest>(StringComparer.Ordinal);
-        // Own pull requests first: only that search brings their reviews, comments and checks.
+        // The searches that bring more than the basics first: their own (reviews, comments and checks), then ones
+        // they've reviewed (everyone's latest review).
         foreach (var (alias, mark) in (ReadOnlySpan<(string, Func<InboxPullRequest, InboxPullRequest>)>)
-                 [("mine", p => p), ("requested", p => p with { ReviewRequested = true }), ("assigned", p => p with { Assigned = true })])
+                 [("mine", p => p), ("reviewed", p => p), ("requested", p => p with { ReviewRequested = true }), ("assigned", p => p with { Assigned = true })])
         {
             foreach (var node in Nodes(data.Obj(alias)))
             {
@@ -70,11 +76,14 @@ internal static class GitHubMapping
         string? LatestFor(string who) => timeline
             .Where(e => string.Equals(e.Obj(who)?.Str("login"), viewer, StringComparison.OrdinalIgnoreCase))
             .Select(e => e.Str("id")).LastOrDefault();
+        // Asked through a team: which teams the viewer is in isn't known, so the latest request to any team.
+        var teamRequest = timeline.Where(e => e.Obj("requestedReviewer")?.Str("__typename") == "Team").Select(e => e.Str("id")).LastOrDefault();
         return new(pr.Obj("repository")?.Str("nameWithOwner") ?? "", number, pr.Str("title") ?? "", url, author, pr.Bool("isDraft"), pr.Str("headRefOid") ?? "")
         {
             IsViewerAuthor = string.Equals(author.Login, viewer, StringComparison.OrdinalIgnoreCase),
-            ReviewRequestId = LatestFor("requestedReviewer"),
+            ReviewRequestId = LatestFor("requestedReviewer") ?? teamRequest,
             AssignmentId = LatestFor("assignee"),
+            UnapprovedReview = UnapprovedReview(pr, viewer) is { } review ? new(review.Id, review.Sha) : null,
             Reviews = Nodes(pr.Obj("reviews"))
                 .Select(r => new InboxReview(r.Str("id") ?? "", ReviewState(r.Str("state")), User(r.Obj("author")), !string.IsNullOrWhiteSpace(r.Str("body"))))
                 .Where(r => r.Id.Length > 0)
@@ -85,6 +94,30 @@ internal static class GitHubMapping
                 .ToList(),
             Checks = ChecksState(Rollup(pr)?.Str("state")),
         };
+    }
+
+    /// <summary>
+    /// The viewer has reviewed (any latest review that isn't pending) and doesn't approve now. Approval is read from the
+    /// latest opinionated review (approve or request changes), so comments left after approving don't undo it; a
+    /// dismissed approval doesn't count.
+    /// </summary>
+    private static bool ReviewedNotApproved(JsonElement pr, string viewer)
+    {
+        string? StateIn(string connection) => Nodes(pr.Obj(connection))
+            .Where(r => string.Equals(r.Obj("author")?.Str("login"), viewer, StringComparison.OrdinalIgnoreCase))
+            .Select(r => r.Str("state")).LastOrDefault(s => s is not null and not "PENDING");
+        var latest = StateIn("latestReviews");
+        var opinion = StateIn("latestOpinionatedReviews");
+        return (latest ?? opinion) is not null && (opinion ?? latest) != "APPROVED";
+    }
+
+    /// <summary>The viewer's latest review when they've reviewed without approving: (its id, the commit it was on).</summary>
+    private static (string Id, string? Sha)? UnapprovedReview(JsonElement pr, string viewer)
+    {
+        if (!ReviewedNotApproved(pr, viewer)) return null;
+        var mine = Nodes(pr.Obj("latestReviews"))
+            .LastOrDefault(r => string.Equals(r.Obj("author")?.Str("login"), viewer, StringComparison.OrdinalIgnoreCase) && r.Str("state") != "PENDING");
+        return mine.Str("id") is { } id ? (id, mine.Obj("commit")?.Str("oid")) : null;
     }
 
     private static MergeState MergeStateOf(JsonElement pr) =>

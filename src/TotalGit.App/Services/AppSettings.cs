@@ -253,7 +253,7 @@ public sealed class NotificationSettings
 
     public bool Wants(TotalGit.Core.Hosting.InboxEventKind kind) => Enabled && kind switch
     {
-        TotalGit.Core.Hosting.InboxEventKind.ReviewRequested => ReviewRequested,
+        TotalGit.Core.Hosting.InboxEventKind.ReviewRequested or TotalGit.Core.Hosting.InboxEventKind.NewCommits => ReviewRequested,
         TotalGit.Core.Hosting.InboxEventKind.Assigned => Assigned,
         TotalGit.Core.Hosting.InboxEventKind.Approved => Approved,
         TotalGit.Core.Hosting.InboxEventKind.ChangesRequested => ChangesRequested,

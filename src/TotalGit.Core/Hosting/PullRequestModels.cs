@@ -73,7 +73,7 @@ public sealed record PullRequestSummary(
     DateTimeOffset UpdatedAt,
     ChecksState Checks,
     ReviewDecision ReviewDecision,
-    /// <summary>The signed-in user is asked to review it.</summary>
+    /// <summary>The signed-in user is asked to review it, directly or (when the host says) through a team.</summary>
     bool ViewerReviewRequested,
     string Url)
 {
@@ -82,6 +82,18 @@ public sealed record PullRequestSummary(
 
     /// <summary>The signed-in user opened it.</summary>
     public bool IsViewerAuthor { get; init; }
+
+    /// <summary>
+    /// The signed-in user has reviewed it but doesn't approve it now: they only commented, asked for changes, or their
+    /// approval was dismissed.
+    /// </summary>
+    public bool ViewerReviewedNotApproved { get; init; }
+
+    /// <summary>
+    /// Still waiting for the signed-in user's approval: open, someone else's, and they're asked to review it or have
+    /// reviewed it without approving. Hosts drop the request once someone reviews, so asked alone isn't enough.
+    /// </summary>
+    public bool WaitsForViewer => State == PullRequestState.Open && !IsViewerAuthor && (ViewerReviewRequested || ViewerReviewedNotApproved);
 
     public DateTimeOffset? CreatedAt { get; init; }
 
