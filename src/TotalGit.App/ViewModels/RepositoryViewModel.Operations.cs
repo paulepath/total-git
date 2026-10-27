@@ -64,15 +64,17 @@ public partial class RepositoryViewModel
             $"Deleted {branch} from {remote}.");
     }
 
-    /// <summary>Local branches whose remote branch was deleted and which aren't checked out anywhere.</summary>
-    private List<RefInfo> GoneBranches() => _state?.Refs
-        .Where(r => r is { Kind: RefKind.LocalBranch, UpstreamGone: true, IsCurrent: false }
-                    && !_worktrees.Any(w => w.Branch == r.Name))
-        .ToList() ?? [];
+    /// <summary>
+    /// Local branches whose remote branch was deleted and which can be cleaned up: not checked out in the main
+    /// folder, and not in a locked worktree. A branch in another worktree goes with its worktree.
+    /// </summary>
+    private List<RefInfo> GoneBranches() => _state is null ? []
+        : BranchCleanup.Classify(_state.Refs, _worktrees).Where(g => g.CanCleanUp).Select(g => g.Branch).ToList();
 
     /// <summary>
     /// Fetches (pruning deleted remote branches), then lets the user pick which local branches whose remote branch
-    /// is gone to delete. The current branch and branches checked out in other worktrees are listed but can't be picked.
+    /// is gone to delete. A branch checked out in a worktree goes with its worktree; one in the main folder or a
+    /// locked worktree is listed but can't be picked.
     /// </summary>
     [RelayCommand]
     private async Task CleanUpBranchesAsync()
@@ -97,9 +99,10 @@ public partial class RepositoryViewModel
             BusyText = null;
         }
         await RefreshRefsAsync();
-        if (_state is null) return;
+        if (_state is not { } state) return;
+        var mainRoot = state.MainWorkingDirectory;
 
-        var gone = _state.Refs.Where(r => r is { Kind: RefKind.LocalBranch, UpstreamGone: true }).OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase).ToList();
+        var gone = BranchCleanup.Classify(state.Refs, _worktrees);
         if (gone.Count == 0)
         {
             ShowInfo(fetchFailed
@@ -111,41 +114,61 @@ public partial class RepositoryViewModel
         IReadOnlyList<BranchSummary> summaries;
         try
         {
-            summaries = await GitActions.GetBranchSummariesAsync(wt, gone.Select(r => r.Name));
+            summaries = await GitActions.GetBranchSummariesAsync(wt, gone.Select(g => g.Branch.Name));
         }
         catch (GitCommandException)
         {
             summaries = [];
         }
-        var items = gone.Select(r =>
+        var changes = WorktreeChangeCounts(state);
+        var items = gone.Select(g =>
         {
+            var r = g.Branch;
             var summary = summaries.FirstOrDefault(s => s.Name == r.Name);
-            var otherWorktree = _worktrees.FirstOrDefault(w => w.Branch == r.Name && !WorktreeService.SamePath(w.Path, wt));
-            var reason = r.IsCurrent ? "The branch you're on: switch to another branch first."
-                : otherWorktree is not null ? $"Checked out in the worktree {otherWorktree.Name}: remove the worktree first."
+            var worktree = g.Worktree is { } w
+                ? new BranchCleanupWorktree(w.Path, w.Name, w.IsPrunable, changes.FirstOrDefault(kv => WorktreeService.SamePath(kv.Key, w.Path)).Value)
                 : null;
-            return new BranchCleanupItem(r.Name, r.Upstream, summary?.Subject ?? "", summary?.LastCommit, summary?.UnpushedCount ?? 0, reason);
+            return new BranchCleanupItem(r.Name, r.Upstream, summary?.Subject ?? "", summary?.LastCommit, summary?.UnpushedCount ?? 0, g.BlockedReason, worktree);
         });
 
         var dialog = new BranchCleanupViewModel(items, fetchFailed);
         if (!await Dialogs.ShowBranchCleanupAsync(dialog)) return;
 
-        var selected = dialog.Selected.Select(i => i.Name).ToList();
+        var selected = dialog.Selected.ToList();
+        // The worktree open here is about to go: move to the main folder first, as removing one does.
+        if (selected.Any(i => i.Worktree is { } w && WorktreeService.SamePath(w.Path, wt)))
+            await LoadAsync(mainRoot);
+
         var failed = new List<string>();
+        var removed = 0;
+        var inUse = false;
         IsBusy = true;
         BusyText = $"Deleting {selected.Count} branch{(selected.Count == 1 ? "" : "es")}…";
         try
         {
             // Keep going past a failure, so one stuck branch doesn't leave the rest behind.
-            foreach (var name in selected)
+            foreach (var item in selected)
             {
+                if (item.Worktree is { } worktree)
+                {
+                    BusyText = $"Removing worktree {worktree.Name}…";
+                    // Forced only when the dialog showed its changes; changes made since then keep it (and the branch).
+                    if (await TryRemoveWorktreeAsync(mainRoot, worktree.Path, force: worktree.Changes > 0) is { } why)
+                    {
+                        // A file in use usually stops only the folder's deletion: git has let go, so the branch can still go.
+                        inUse |= why.EndsWith(" is in use", StringComparison.Ordinal);
+                        failed.Add($"the worktree {worktree.Name} ({why})");
+                    }
+                    else removed++;
+                }
                 try
                 {
-                    await GitActions.DeleteBranchAsync(wt, name, force: true);
+                    BusyText = $"Deleting {item.Name}…";
+                    await GitActions.DeleteBranchAsync(mainRoot, item.Name, force: true);
                 }
                 catch (GitCommandException ex)
                 {
-                    failed.Add($"{name} ({ex.Message.Trim()})");
+                    failed.Add($"{item.Name} ({ex.Message.Trim()})");
                 }
             }
         }
@@ -154,12 +177,18 @@ public partial class RepositoryViewModel
             IsBusy = false;
             BusyText = null;
         }
-
-        var deleted = selected.Count - failed.Count;
-        var message = $"Deleted {deleted} branch{(deleted == 1 ? "" : "es")}.";
-        if (failed.Count > 0) ShowError($"{message} Couldn't delete {string.Join(", ", failed)}.");
-        else ShowInfo(message);
         await RefreshRefsAsync();
+
+        var deleted = selected.Count - failed.Count(f => !f.StartsWith("the worktree ", StringComparison.Ordinal));
+        var message = $"Deleted {deleted} branch{(deleted == 1 ? "" : "es")}"
+            + (removed > 0 ? $" and removed {removed} worktree{(removed == 1 ? "" : "s")}." : ".");
+        if (failed.Count == 0)
+        {
+            ShowInfo(message);
+            return;
+        }
+        Banner = new Banner($"{message} Couldn't delete {string.Join(", ", failed)}.", true,
+            inUse ? [new MenuAction("Clean up leftovers…", CleanUpWorktreesCommand, Icon: MenuIcons.Delete)] : []) { CanReport = !inUse };
     }
 
     // ------------------------------------------------------------------ merge / rebase

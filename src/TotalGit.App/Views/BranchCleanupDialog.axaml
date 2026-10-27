@@ -12,7 +12,7 @@
     <StackPanel DockPanel.Dock="Top" Spacing="8" Margin="0,0,0,12">
       <TextBlock Text="Clean up branches" FontSize="18" FontWeight="SemiBold" Foreground="{x:Static t:Palette.TextPrimary}" />
       <TextBlock Foreground="{x:Static t:Palette.TextSecondary}" TextWrapping="Wrap"
-                 Text="These local branches tracked a remote branch that has since been deleted (usually after a PR was merged). Deleting is a force delete: commits that are only on these branches are lost." />
+                 Text="These local branches tracked a remote branch that has since been deleted (usually after a PR was merged). Deleting is a force delete: commits that are only on these branches are lost. A branch's worktree is removed with it." />
       <Border Background="{x:Static t:Palette.WarningFill}" CornerRadius="4" Padding="10,6" IsVisible="{Binding FetchFailed}" HorizontalAlignment="Left">
         <TextBlock Foreground="{x:Static t:Palette.WarningText}" TextWrapping="Wrap" Text="Couldn't reach the remote, so this list is from the last fetch." />
       </Border>
@@ -50,6 +50,8 @@
                 </DockPanel>
                 <TextBlock Text="{Binding Subject}" FontSize="12" Foreground="{x:Static t:Palette.TextSecondary}" TextTrimming="CharacterEllipsis" />
                 <TextBlock Text="{Binding UnpushedText}" IsVisible="{Binding HasUnpushed}" FontSize="12" Foreground="{x:Static t:Palette.Warning}" />
+                <TextBlock Text="{Binding WorktreeText}" IsVisible="{Binding HasWorktree}" FontSize="12" Foreground="{x:Static t:Palette.TextSecondary}" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding ChangesText}" IsVisible="{Binding HasChanges}" FontSize="12" Foreground="{x:Static t:Palette.Warning}" TextWrapping="Wrap" />
                 <TextBlock Text="{Binding Reason}" IsVisible="{Binding HasReason}" FontSize="12" Foreground="{x:Static t:Palette.Warning}" TextWrapping="Wrap" />
               </StackPanel>
               <TextBlock Grid.Column="2" Text="{Binding When}" FontSize="12" Foreground="{x:Static t:Palette.TextMuted}" VerticalAlignment="Top" Margin="12,0,0,0" />

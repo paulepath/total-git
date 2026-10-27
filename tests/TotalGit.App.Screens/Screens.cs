@@ -109,6 +109,7 @@ internal static class Screens
         await Dialog(main, "dialog-tabstyle", () => Run(tab.EditTabStyleCommand));
         await Dialog(main, "dialog-branchrules", () => Run(tab.EditBranchRulesCommand, null));
         await Dialog(main, "dialog-cleanup", () => Run(tab.CleanUpBranchesCommand));
+        await Dialog(main, "dialog-leftovers", () => Run(tab.CleanUpWorktreesCommand));
         await Dialog(main, "dialog-worktree", () => Run(tab.CreateWorktreeCommand, null));
         await Dialog(main, "dialog-crash", () => (Task)typeof(App).GetMethod("OfferCrashReportAsync", BindingFlags.NonPublic | BindingFlags.Static)!
             .Invoke(null, [main, "System.InvalidOperationException: Sequence contains no elements\n   at TotalGit.App.Foo()"])!);

@@ -66,7 +66,9 @@
 - **Tabs** for several repositories or worktrees at once, restored when you reopen the app. Give a
   repository's tabs a colour, an icon and a name of their own.
 - **A new tab** shows tiles of the repositories you've opened before, with their current branch.
-- **Worktrees** under `.worktrees/<name>`, opened in a tab, in VS Code or in Visual Studio.
+- **Worktrees** under `.worktrees/<name>`, opened in a tab, in VS Code or in Visual Studio. **Clean up
+  leftovers** deletes, in one go, the folders left behind when a removal was interrupted by a file in use.
+- **Clean up branches deleted on remote** removes a branch's worktree along with the branch.
 - **VS Code and Visual Studio extensions** list the worktrees and switch between them (see below).
 
 | Reviewing changes | Recent repositories and coloured tabs |

@@ -79,6 +79,10 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
     private RepositoryWatcher? _watcher;
     private RepositoryState? _state;
     private IReadOnlyList<WorktreeInfo> _worktrees = [];
+    /// <summary>Folders under .worktrees that git no longer tracks.</summary>
+    private IReadOnlyList<string> _leftovers = [];
+    /// <summary>Repositories (main folders) whose leftovers this tab has already offered to clean up.</summary>
+    private readonly HashSet<string> _leftoversOffered = new(StringComparer.OrdinalIgnoreCase);
     private WorkingTreeStatus _status = WorkingTreeStatus.Clean;
     private readonly List<CommitInfo> _commits = [];
     private bool _loadingMore;
@@ -355,6 +359,7 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
             RebuildGraph();
             // A repository or worktree just opened: its uncommitted changes are what it's likely opened for.
             if (!sameRepo) SelectChangesIfAny();
+            if (!sameRepo) OfferLeftoverCleanUp(state.MainWorkingDirectory);
             UpdatePullRequestHost();
             UpdateWorkflowHost();
             if (sameRepo) await ReloadSelectionAsync();
@@ -524,7 +529,8 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
         if (Staging is { } staging) staging.CanAmend = CanAmendHead;
         UpdateOperationBanner();
         LoadJiraProjects(state);
-        Sidebar.Update(state.Refs, state.Stashes, _worktrees, WorktreeService.FindLeftovers(state.MainWorkingDirectory, _worktrees), state.WorkingDirectory);
+        _leftovers = WorktreeService.FindLeftovers(state.MainWorkingDirectory, _worktrees);
+        Sidebar.Update(state.Refs, state.Stashes, _worktrees, _leftovers, state.WorkingDirectory);
     }
 
     private void RebuildGraph()
@@ -1060,7 +1066,8 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
     {
         if (!Directory.Exists(worktree.Path))
         {
-            ShowError($"{worktree.Path} no longer exists. Use 'Prune stale worktrees' to clean it up.");
+            Banner = new Banner($"{worktree.Path} no longer exists.", true,
+                [new MenuAction("Clean up leftovers…", CleanUpWorktreesCommand, Icon: MenuIcons.Delete)]);
             return;
         }
         await LoadAsync(worktree.Path);
@@ -1328,9 +1335,104 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
         await RefreshRefsAsync();
     }
 
+    /// <summary>Leftover folders plus worktrees whose folder has gone: what "Clean up leftovers" would deal with.</summary>
+    private int LeftoverCount => _leftovers.Count + _worktrees.Count(w => w.IsPrunable);
+
+    private string CleanUpLeftoversText => LeftoverCount > 0 ? $"Clean up leftovers ({LeftoverCount})…" : "Clean up leftovers…";
+
+    /// <summary>When a repository opens with leftover folders (from removals that were interrupted), offers to clean them up.</summary>
+    private void OfferLeftoverCleanUp(string mainRoot)
+    {
+        if (_leftovers.Count == 0 || !_leftoversOffered.Add(mainRoot)) return;
+        var what = _leftovers.Count == 1 ? "1 leftover worktree folder" : $"{_leftovers.Count} leftover worktree folders";
+        Banner = new Banner($"{what} from removals that were interrupted.", false,
+            [new MenuAction("Clean up…", CleanUpWorktreesCommand, Icon: MenuIcons.Delete)]);
+    }
+
+    /// <summary>
+    /// Deletes every leftover folder under .worktrees and forgets every worktree whose folder has gone, after one
+    /// confirmation. Folders still in use are reported together at the end.
+    /// </summary>
     [RelayCommand]
-    private Task PruneWorktreesAsync() => _state is null ? Task.CompletedTask
-        : RunGitAsync("Pruning worktrees…", () => WorktreeProvisioner.PruneAsync(_state.MainWorkingDirectory), "Pruned stale worktrees.");
+    private async Task CleanUpWorktreesAsync()
+    {
+        if (_state is null || Dialogs is null) return;
+        await RefreshRefsAsync();
+        if (_state is null) return;
+        var mainRoot = _state.MainWorkingDirectory;
+        var leftovers = _leftovers.ToList();
+        var missing = _worktrees.Where(w => w.IsPrunable).ToList();
+        if (leftovers.Count == 0 && missing.Count == 0)
+        {
+            ShowInfo("No leftover worktree folders or missing worktrees. Nothing to clean up.");
+            return;
+        }
+
+        var parts = new List<string>();
+        if (leftovers.Count > 0) parts.Add(leftovers.Count == 1 ? "delete 1 leftover folder" : $"delete {leftovers.Count} leftover folders");
+        if (missing.Count > 0) parts.Add(missing.Count == 1 ? "forget 1 worktree whose folder has gone" : $"forget {missing.Count} worktrees whose folders have gone");
+        var question = string.Join(" and ", parts);
+        if (!await Dialogs.ConfirmAsync("Clean up worktree leftovers",
+                $"{char.ToUpperInvariant(question[0])}{question[1..]}? Leftover folders are no longer worktrees; everything in them is deleted.",
+                [.. leftovers.Select(p => Path.GetRelativePath(mainRoot, p)), .. missing.Select(w => $"{Path.GetRelativePath(mainRoot, w.Path)} (folder gone)")],
+                "Clean up"))
+            return;
+
+        var failed = new List<(string Path, string Why)>();
+        IsBusy = true;
+        BusyText = "Cleaning up worktree leftovers…";
+        try
+        {
+            foreach (var path in leftovers)
+                if (await TryRemoveWorktreeAsync(mainRoot, path, force: false) is { } why) failed.Add((path, why));
+            if (missing.Count > 0) await WorktreeProvisioner.PruneAsync(mainRoot);
+        }
+        catch (GitCommandException ex)
+        {
+            failed.Add((mainRoot, ex.Message.Trim()));
+        }
+        finally
+        {
+            IsBusy = false;
+            BusyText = null;
+        }
+        await RefreshRefsAsync();
+
+        var done = leftovers.Count + missing.Count - failed.Count;
+        if (failed.Count == 0)
+        {
+            ShowInfo(done == 1 ? "Cleaned up 1 leftover." : $"Cleaned up {done} leftovers.");
+            return;
+        }
+        List<MenuAction> actions = [new MenuAction("Try again", CleanUpWorktreesCommand)];
+        if (failed.Count == 1) actions.Add(new MenuAction("Reveal folder", RevealCommand, failed[0].Path, Icon: MenuIcons.Folder));
+        Banner = new Banner(
+            $"Cleaned up {done} of {leftovers.Count + missing.Count}. Couldn't delete {string.Join("; ", failed.Select(f => $"{Path.GetFileName(f.Path)} ({f.Why})"))}. " +
+            "Close any VS Code window, terminal or dev server using them, then try again.",
+            true, actions);
+    }
+
+    /// <summary>Removes a worktree or leftover folder without asking; returns why it couldn't, or null when it's gone.</summary>
+    private static async Task<string?> TryRemoveWorktreeAsync(string mainRoot, string path, bool force)
+    {
+        try
+        {
+            await Task.Run(() => WorktreeProvisioner.RemoveAsync(mainRoot, path, force));
+            return null;
+        }
+        catch (WorktreeDirtyException ex)
+        {
+            return ex.Changes.Count == 1 ? "it has 1 uncommitted change" : $"it has {ex.Changes.Count} uncommitted changes";
+        }
+        catch (WorktreeLockedException ex)
+        {
+            return $"{Path.GetRelativePath(path, ex.LockedPath)} is in use";
+        }
+        catch (Exception ex) when (ex is GitCommandException or IOException or UnauthorizedAccessException)
+        {
+            return ex.Message.Trim();
+        }
+    }
 
     // ------------------------------------------------------------------ menus
 
@@ -1360,7 +1462,10 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
                 actions.Add(MenuAction.Separator);
                 actions.Add(new MenuAction("Remove worktree…", RemoveWorktreeCommand, wt, Icon: MenuIcons.Delete));
             }
-            if (wt.IsPrunable) actions.Add(new MenuAction("Prune stale worktrees", PruneWorktreesCommand));
+            if (wt.IsPrunable) actions.Add(new MenuAction(CleanUpLeftoversText, CleanUpWorktreesCommand, Icon: MenuIcons.Delete));
+            if (fromWorktreeSection && wt.Branch is { } branch
+                && _state?.Refs.Any(r => r is { Kind: RefKind.LocalBranch, UpstreamGone: true } && r.Name == branch) == true)
+                actions.Add(new MenuAction("Clean up branches deleted on remote…", CleanUpBranchesCommand, Icon: MenuIcons.Delete));
             if (fromWorktreeSection)
             {
                 actions.Add(MenuAction.Separator);
@@ -1569,7 +1674,7 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
             return
             [
                 new MenuAction("Create worktree with new branch…", CreateWorktreeCommand, Icon: MenuIcons.Worktree),
-                new MenuAction("Prune stale worktrees", PruneWorktreesCommand),
+                new MenuAction(CleanUpLeftoversText, CleanUpWorktreesCommand, Icon: MenuIcons.Delete),
             ];
         }
         if (node.IsPullRequestsSection)
@@ -1613,6 +1718,7 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
             return
             [
                 new MenuAction("Delete leftover folder…", DeleteLeftoverCommand, leftover, Icon: MenuIcons.Delete),
+                .. LeftoverCount > 1 ? [new MenuAction($"Clean up all leftovers ({LeftoverCount})…", CleanUpWorktreesCommand, Icon: MenuIcons.Delete)] : Array.Empty<MenuAction>(),
                 new MenuAction("Reveal folder", RevealCommand, leftover, Icon: MenuIcons.Folder),
                 MenuAction.Separator,
                 new MenuAction("Copy path", CopyCommand, leftover, Icon: MenuIcons.Copy),

@@ -110,7 +110,8 @@ public static class WorktreeProvisioner
             RemoveLinks(worktreePath);
         }
 
-        if (registered)
+        // A worktree whose folder has gone is only forgotten (git refuses to remove it): the prune below does that.
+        if (registered && Directory.Exists(worktreePath))
         {
             // Git stops at the first file it can't delete; on Windows that is usually a short-lived
             // lock (editor, indexer, antivirus), so retry before deleting the rest ourselves.

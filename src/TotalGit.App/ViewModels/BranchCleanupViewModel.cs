@@ -5,10 +5,16 @@ using TotalGit.App.Services;
 
 namespace TotalGit.App.ViewModels;
 
+/// <summary>The worktree a branch is checked out in, removed along with the branch.</summary>
+/// <param name="IsMissing">Its folder has already gone.</param>
+/// <param name="Changes">Uncommitted changes in it, lost when it's removed.</param>
+public sealed record BranchCleanupWorktree(string Path, string Name, bool IsMissing, int Changes);
+
 /// <summary>One local branch whose remote branch was deleted.</summary>
 public sealed partial class BranchCleanupItem : ObservableObject
 {
-    public BranchCleanupItem(string name, string? upstream, string subject, DateTimeOffset? lastCommit, int unpushed, string? blockedReason)
+    public BranchCleanupItem(string name, string? upstream, string subject, DateTimeOffset? lastCommit, int unpushed, string? blockedReason,
+        BranchCleanupWorktree? worktree = null)
     {
         Name = name;
         Upstream = upstream is null ? "remote branch deleted" : $"{upstream} (deleted)";
@@ -21,9 +27,30 @@ public sealed partial class BranchCleanupItem : ObservableObject
             _ => $"{unpushed} commits not on any remote",
         };
         Reason = blockedReason;
-        IsChecked = blockedReason is null;
+        Worktree = blockedReason is null ? worktree : null;
+        WorktreeText = Worktree switch
+        {
+            null => null,
+            { IsMissing: true } => $"Its worktree {Worktree.Name} is forgotten too (its folder has already gone).",
+            _ => $"Its worktree .worktrees/{Worktree.Name} is removed too.",
+        };
+        ChangesText = Worktree?.Changes switch
+        {
+            null or 0 => null,
+            1 => "The worktree has 1 uncommitted change, which will be lost.",
+            var n => $"The worktree has {n} uncommitted changes, which will be lost.",
+        };
+        // Losing uncommitted work needs a deliberate tick.
+        IsChecked = blockedReason is null && ChangesText is null;
         KindIcon = BranchIcons.ForBranch(name);
     }
+
+    /// <summary>The worktree removed with the branch, or null.</summary>
+    public BranchCleanupWorktree? Worktree { get; }
+    public string? WorktreeText { get; }
+    public bool HasWorktree => WorktreeText is not null;
+    public string? ChangesText { get; }
+    public bool HasChanges => ChangesText is not null;
 
     public string Name { get; }
     public string Upstream { get; }
@@ -36,7 +63,7 @@ public sealed partial class BranchCleanupItem : ObservableObject
     public string? UnpushedText { get; }
     public bool HasUnpushed => UnpushedText is not null;
 
-    /// <summary>Why the branch can't be deleted (current branch, checked out in a worktree), or null.</summary>
+    /// <summary>Why the branch can't be deleted (checked out in the main folder, or in a locked worktree), or null.</summary>
     public string? Reason { get; }
     public bool IsSelectable => Reason is null;
     public bool HasReason => Reason is not null;

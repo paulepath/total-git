@@ -301,4 +301,80 @@ public sealed class WorktreeTests : IDisposable
         await WorktreeProvisioner.RemoveAsync(_repo.Root, result.Path, force: true);
         Assert.False(Directory.Exists(result.Path));
     }
+
+    [Fact]
+    public void Gone_branches_in_linked_worktrees_go_with_them()
+    {
+        static RefInfo Gone(string name, bool current = false) =>
+            new(name, RefKind.LocalBranch, "sha", current, Upstream: $"origin/{name}", UpstreamGone: true);
+        static WorktreeInfo Wt(string path, string branch, bool main = false, bool locked = false) =>
+            new(path, branch, "sha", main, false, locked, false, null);
+        var refs = new[]
+        {
+            Gone("in-main"), Gone("in-linked", current: true), Gone("in-locked"), Gone("plain"),
+            new RefInfo("alive", RefKind.LocalBranch, "sha", false, Upstream: "origin/alive"),
+        };
+        var worktrees = new[] { Wt("D:/r", "in-main", main: true), Wt("D:/r/.worktrees/a", "in-linked"), Wt("D:/r/.worktrees/b", "in-locked", locked: true) };
+
+        var gone = BranchCleanup.Classify(refs, worktrees).ToDictionary(g => g.Branch.Name);
+
+        Assert.Equal(["in-linked", "in-locked", "in-main", "plain"], gone.Keys);
+        Assert.True(gone["in-linked"].CanCleanUp); // even though it's the current branch: you're in that worktree
+        Assert.Equal("a", gone["in-linked"].Worktree?.Name);
+        Assert.False(gone["in-main"].CanCleanUp);
+        Assert.Null(gone["in-main"].Worktree);
+        Assert.Contains("locked", gone["in-locked"].BlockedReason);
+        Assert.True(gone["plain"].CanCleanUp);
+        Assert.Null(gone["plain"].Worktree);
+
+        // Before the worktrees are listed, the current branch is blocked.
+        Assert.False(BranchCleanup.Classify(refs, []).Single(g => g.Branch.Name == "in-linked").CanCleanUp);
+    }
+
+    [Fact]
+    public async Task Removing_a_branchs_worktree_lets_the_branch_be_deleted()
+    {
+        var result = await WorktreeProvisioner.CreateAsync(new WorktreeCreateRequest(
+            _repo.Root, "done", WorktreeSource.NewBranch, "feature/done", CopyLocalFiles: false, LinkNodeModules: false));
+        await Assert.ThrowsAsync<BranchInUseException>(() => GitActions.DeleteBranchAsync(_repo.Root, "feature/done", force: true));
+
+        await WorktreeProvisioner.RemoveAsync(_repo.Root, result.Path);
+        await GitActions.DeleteBranchAsync(_repo.Root, "feature/done", force: true);
+
+        Assert.False(Directory.Exists(result.Path));
+        Assert.Single(await WorktreeService.ListAsync(_repo.Root));
+        Assert.Equal("", _repo.Git("branch", "--list", "feature/done"));
+    }
+
+    [Fact]
+    public async Task Missing_worktrees_are_forgotten_and_leftovers_deleted()
+    {
+        var missing = await WorktreeProvisioner.CreateAsync(new WorktreeCreateRequest(
+            _repo.Root, "missing", WorktreeSource.NewBranch, "missing", CopyLocalFiles: false, LinkNodeModules: false));
+        Directory.Delete(missing.Path, recursive: true);
+        var leftover = Path.Combine(_repo.Root, ".worktrees", "leftover");
+        Directory.CreateDirectory(leftover);
+        File.WriteAllText(Path.Combine(leftover, "a.txt"), "x");
+
+        var worktrees = await WorktreeService.ListAsync(_repo.Root);
+        Assert.True(worktrees.Single(w => !w.IsMain).IsPrunable);
+        foreach (var path in WorktreeService.FindLeftovers(_repo.Root, worktrees)) await WorktreeProvisioner.RemoveAsync(_repo.Root, path);
+        await WorktreeProvisioner.PruneAsync(_repo.Root);
+
+        Assert.False(Directory.Exists(leftover));
+        Assert.Single(await WorktreeService.ListAsync(_repo.Root));
+    }
+
+    [Fact]
+    public async Task Removing_a_worktree_whose_folder_has_gone_forgets_it()
+    {
+        var result = await WorktreeProvisioner.CreateAsync(new WorktreeCreateRequest(
+            _repo.Root, "gone", WorktreeSource.NewBranch, "feature/gone", CopyLocalFiles: false, LinkNodeModules: false));
+        Directory.Delete(result.Path, recursive: true);
+
+        await WorktreeProvisioner.RemoveAsync(_repo.Root, result.Path);
+        await GitActions.DeleteBranchAsync(_repo.Root, "feature/gone", force: true);
+
+        Assert.Single(await WorktreeService.ListAsync(_repo.Root));
+    }
 }
