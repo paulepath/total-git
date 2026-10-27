@@ -111,6 +111,10 @@ internal static class Screens
         await Dialog(main, "dialog-cleanup", () => Run(tab.CleanUpBranchesCommand));
         await Dialog(main, "dialog-leftovers", () => Run(tab.CleanUpWorktreesCommand));
         await Dialog(main, "dialog-worktree", () => Run(tab.CreateWorktreeCommand, null));
+        // Deleting a local branch that's on the remote too (one not checked out, when there is one).
+        if (Git(o.Repo, "for-each-ref", "--format=%(refname:short) %(objectname) %(upstream:short) %(HEAD)", "refs/heads").Split('\n')
+                .Select(l => l.Trim().Split(' ')).FirstOrDefault(p => p.Length == 3) is [var local, var tip, _])
+            await Dialog(main, "dialog-deletebranch", () => Run(tab.DeleteBranchCommand, new BranchTarget(RefKind.LocalBranch, local, tip)));
         await Dialog(main, "dialog-crash", () => (Task)typeof(App).GetMethod("OfferCrashReportAsync", BindingFlags.NonPublic | BindingFlags.Static)!
             .Invoke(null, [main, "System.InvalidOperationException: Sequence contains no elements\n   at TotalGit.App.Foo()"])!);
 

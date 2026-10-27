@@ -14,27 +14,67 @@ public partial class RepositoryViewModel
     private async Task DeleteBranchAsync(BranchTarget target)
     {
         if (_state is null || Dialogs is null || target.Kind != RefKind.LocalBranch) return;
-        if (!await Dialogs.ConfirmAsync("Delete branch", $"Delete the local branch '{target.Name}'?", null, "Delete"))
+        // A branch that's on a remote too gets a tick box to delete it there as well (off unless ticked).
+        var onRemote = RemoteBranchOf(target.Name);
+        var alsoRemote = false;
+        if (onRemote is { RemoteName: { } remote })
+        {
+            var branch = onRemote.ShortName;
+            var message = $"Delete the local branch '{target.Name}'?";
+            if (_pullRequests.FirstOrDefault(p => !p.IsCrossRepository && p.HeadRef == branch) is { } pr)
+                message += $" Pull request #{pr.Number} \"{pr.Title}\" uses it: deleting it from {remote} closes the pull request.";
+            var deleteRemote = FormField.CheckBox($"Also delete {onRemote.Name}, for everyone who uses {remote}");
+            if (!await Dialogs.ShowFormAsync(new FormSpec("Delete branch", message, "Delete", [deleteRemote]))) return;
+            alsoRemote = deleteRemote.IsChecked;
+            if (alsoRemote && BranchCategory.IsMainLine(branch) && !await Dialogs.ConfirmAsync("Delete a main line",
+                    $"'{branch}' is a main line (its branch rule marks it as one). Other branches are probably based on it. Really delete it from {remote}?",
+                    null, "Delete it"))
+                return;
+        }
+        else if (!await Dialogs.ConfirmAsync("Delete branch", $"Delete the local branch '{target.Name}'?", null, "Delete"))
             return;
 
         var wt = _state.WorkingDirectory;
+        var deleted = false;
         try
         {
             await GitActions.DeleteBranchAsync(wt, target.Name);
             ShowInfo($"Deleted {target.Name}.");
+            deleted = true;
         }
         catch (GitCommandException ex) when (ex.Message.Contains("not fully merged", StringComparison.OrdinalIgnoreCase))
         {
             if (await Dialogs.ConfirmAsync("Branch not merged",
                     $"'{target.Name}' has commits that aren't merged into the current branch or its upstream. Delete it anyway? Those commits will only be reachable from the reflog.",
                     null, "Delete anyway"))
-                await RunGitAsync($"Deleting {target.Name}…", () => GitActions.DeleteBranchAsync(wt, target.Name, force: true), $"Deleted {target.Name}.");
+                deleted = await RunGitAsync($"Deleting {target.Name}…", () => GitActions.DeleteBranchAsync(wt, target.Name, force: true), $"Deleted {target.Name}.");
         }
         catch (GitCommandException ex)
         {
             ShowError(ex.Message);
         }
-        await RefreshRefsAsync();
+
+        // The remote branch only goes once the local one has: a refused or cancelled delete leaves both.
+        if (deleted && alsoRemote && onRemote is { RemoteName: { } from })
+            await RunGitAsync($"Deleting {onRemote.ShortName} from {from}…", () => GitActions.DeleteRemoteBranchAsync(wt, from, onRemote.ShortName),
+                $"Deleted {target.Name}, and {onRemote.ShortName} from {from}.");
+        else
+            await RefreshRefsAsync();
+    }
+
+    /// <summary>
+    /// The remote branch a local branch is on: its upstream, or else one of the same name (origin first). Never the
+    /// remote's default branch, which can't be deleted.
+    /// </summary>
+    private RefInfo? RemoteBranchOf(string localBranch)
+    {
+        if (_state is null) return null;
+        var refs = _state.Refs;
+        var remote = refs.FirstOrDefault(r => r.Kind == RefKind.LocalBranch && r.Name == localBranch) is { Upstream: { } upstream, UpstreamGone: false }
+            ? refs.FirstOrDefault(r => r.Kind == RefKind.RemoteBranch && r.Name == upstream)
+            : refs.Where(r => r.Kind == RefKind.RemoteBranch && r.ShortName == localBranch)
+                .OrderBy(r => r.RemoteName == "origin" ? 0 : 1).FirstOrDefault();
+        return remote is null || _state.DefaultBranch is { } main && (main == remote.ShortName || main == remote.Name) ? null : remote;
     }
 
     /// <summary>Deletes a branch on its remote, for everyone. Local branches (even ones tracking it) are kept.</summary>
