@@ -16,7 +16,7 @@ internal static class GitHubQueries
     /// people behind each.
     /// </summary>
     private const string ReviewComment = $$"""
-        id body createdAt url authorAssociation lastEditedAt isMinimized minimizedReason
+        id body createdAt url authorAssociation lastEditedAt isMinimized minimizedReason state
         viewerCanUpdate viewerCanDelete viewerCanMinimize viewerCanReact
         author { {{Actor}} } commit { oid } originalCommit { oid }
         reactionGroups { content viewerHasReacted reactors(first: 5) { totalCount nodes {
@@ -128,7 +128,7 @@ internal static class GitHubQueries
                 comments(first: 100) { nodes { {{ReviewComment}} } }
               } }
               comments(first: 100) { nodes { id body createdAt author { {{Actor}} } } }
-              reviews(first: 100) { nodes { id body state submittedAt createdAt author { {{Actor}} } commit { oid } } }
+              reviews(first: 100) { nodes { id body state submittedAt createdAt author { {{Actor}} } commit { oid } comments { totalCount } } }
               id
               files(first: 100) { nodes { path viewerViewedState } pageInfo { hasNextPage endCursor } }
             }
@@ -153,6 +153,27 @@ internal static class GitHubQueries
 
     public const string PullRequestId = """
         query($owner: String!, $repo: String!, $n: Int!) { repository(owner: $owner, name: $repo) { pullRequest(number: $n) { id } } }
+        """;
+
+    /// <summary>The signed-in user's review in progress (only its author can see a pending review).</summary>
+    public const string PendingReview = """
+        query($owner: String!, $repo: String!, $n: Int!) {
+          repository(owner: $owner, name: $repo) { pullRequest(number: $n) { reviews(states: PENDING, first: 1) { nodes { id } } } }
+        }
+        """;
+
+    /// <summary>A line comment added to a pending review (GitHub takes no lone comments while one is open).</summary>
+    public const string AddReviewThread = """
+        mutation($review: ID!, $path: String!, $body: String!, $line: Int!, $side: DiffSide!, $startLine: Int, $startSide: DiffSide) {
+          addPullRequestReviewThread(input: {pullRequestReviewId: $review, path: $path, body: $body, line: $line, side: $side,
+                                             startLine: $startLine, startSide: $startSide}) { thread { id } }
+        }
+        """;
+
+    public const string SubmitPendingReview = """
+        mutation($review: ID!, $event: PullRequestReviewEvent!, $body: String) {
+          submitPullRequestReview(input: {pullRequestReviewId: $review, event: $event, body: $body}) { pullRequestReview { id } }
+        }
         """;
 
     public const string MarkViewed = "mutation($id: ID!, $path: String!) { markFileAsViewed(input: {pullRequestId: $id, path: $path}) { pullRequest { id } } }";

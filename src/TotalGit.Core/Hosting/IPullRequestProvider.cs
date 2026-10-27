@@ -58,15 +58,23 @@ public interface IPullRequestProvider
     /// <summary>A general comment on the pull request's conversation.</summary>
     Task AddCommentAsync(int number, string body, CancellationToken ct = default);
 
-    /// <summary>A single line comment, posted at once (not part of a review).</summary>
+    /// <summary>
+    /// A single line comment, posted at once (not part of a review). When the signed-in user has a review in progress
+    /// (started on the host's website or in another tool), hosts won't post one on its own: it's added to that review
+    /// instead, and false is returned.
+    /// </summary>
     /// <param name="headSha">The pull request head the line numbers refer to.</param>
-    Task AddLineCommentAsync(int number, CommentAnchor anchor, string body, string headSha, CancellationToken ct = default);
+    /// <returns>True when it was posted; false when it waits in the review in progress.</returns>
+    Task<bool> AddLineCommentAsync(int number, CommentAnchor anchor, string body, string headSha, CancellationToken ct = default);
 
     Task ReplyAsync(int number, ReviewThread thread, string body, CancellationToken ct = default);
 
     Task SetResolvedAsync(ReviewThread thread, bool resolved, CancellationToken ct = default);
 
-    /// <summary>Submits a review with its line comments in one go.</summary>
+    /// <summary>
+    /// Submits a review with its line comments in one go. A review the signed-in user has in progress on the host is
+    /// submitted with them, comments and all.
+    /// </summary>
     /// <param name="headSha">The pull request head the review (and its comments' line numbers) refer to.</param>
     Task SubmitReviewAsync(int number, ReviewVerdict verdict, string body, IReadOnlyList<DraftComment> comments, string headSha, CancellationToken ct = default);
 

@@ -164,6 +164,9 @@ public sealed record PrComment(string Id, PrUser Author, string Body, DateTimeOf
     public bool ViewerCanDelete { get; init; }
     public bool ViewerCanHide { get; init; }
     public bool ViewerCanReact { get; init; }
+
+    /// <summary>Part of the signed-in user's review in progress: only they can see it until the review is submitted.</summary>
+    public bool IsPending { get; init; }
 }
 
 /// <summary>A conversation about one place in the diff: a line comment and its replies.</summary>
@@ -225,6 +228,12 @@ public sealed record PullRequestDetails(
 
     /// <summary>The signed-in user, with their avatar, when the host said.</summary>
     public PrUser? Viewer { get; init; }
+
+    /// <summary>
+    /// The number of comments in the signed-in user's review in progress on the host (started on its website or in
+    /// another tool, and not submitted); null when there's none. They go with the next review.
+    /// </summary>
+    public int? PendingReviewComments { get; init; }
 }
 
 /// <summary>The signed-in user's "viewed" mark on one file of a pull request.</summary>

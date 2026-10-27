@@ -100,11 +100,22 @@ public sealed class GitHubPullRequestProvider : IPullRequestProvider
     public Task AddCommentAsync(int number, string body, CancellationToken ct = default) =>
         _http.RestAsync(HttpMethod.Post, $"{_repoPath}/issues/{number}/comments", new JsonObject { ["body"] = body }, ct);
 
-    public Task AddLineCommentAsync(int number, CommentAnchor anchor, string body, string headSha, CancellationToken ct = default)
+    public async Task<bool> AddLineCommentAsync(int number, CommentAnchor anchor, string body, string headSha, CancellationToken ct = default)
     {
         var comment = LineComment(anchor, body);
         comment["commit_id"] = headSha;
-        return ExplainUnplacedAsync(_http.RestAsync(HttpMethod.Post, $"{_repoPath}/pulls/{number}/comments", comment, ct));
+        try
+        {
+            await ExplainUnplacedAsync(_http.RestAsync(HttpMethod.Post, $"{_repoPath}/pulls/{number}/comments", comment, ct));
+            return true;
+        }
+        catch (HostException ex) when (IsReviewInProgress(ex))
+        {
+            var review = await PendingReviewIdAsync(number, ct);
+            if (review is null) throw;
+            await ExplainUnplacedAsync(AddToReviewAsync(review, anchor, body, ct));
+            return false;
+        }
     }
 
     public Task ReplyAsync(int number, ReviewThread thread, string body, CancellationToken ct = default) =>
@@ -185,7 +196,54 @@ public sealed class GitHubPullRequestProvider : IPullRequestProvider
         // GitHub rejects an empty body on a comment review but accepts it missing when there are line comments.
         if (!string.IsNullOrWhiteSpace(body)) review["body"] = body;
         if (comments.Count > 0) review["comments"] = new JsonArray([.. comments.Select(c => LineComment(c.Anchor, c.Body))]);
-        return ExplainUnplacedAsync(_http.RestAsync(HttpMethod.Post, $"{_repoPath}/pulls/{number}/reviews", review, ct));
+        return ExplainUnplacedAsync(PostReviewAsync());
+
+        async Task PostReviewAsync()
+        {
+            try
+            {
+                await _http.RestAsync(HttpMethod.Post, $"{_repoPath}/pulls/{number}/reviews", review, ct);
+            }
+            // A review is already in progress (GitHub allows one per person): this one's comments join it, then it's sent.
+            catch (HostException ex) when (IsReviewInProgress(ex))
+            {
+                var pending = await PendingReviewIdAsync(number, ct);
+                if (pending is null) throw;
+                foreach (var c in comments) await AddToReviewAsync(pending, c.Anchor, c.Body, ct);
+                var submit = new JsonObject { ["review"] = pending, ["event"] = review["event"]!.GetValue<string>() };
+                if (!string.IsNullOrWhiteSpace(body)) submit["body"] = body;
+                await _http.GraphQLAsync(GitHubQueries.SubmitPendingReview, submit, ct);
+            }
+        }
+    }
+
+    /// <summary>
+    /// GitHub's 422 for a lone comment or a new review while the user has one pending (started on github.com, in VS
+    /// Code, …): "user_id can only have one pending review per pull request".
+    /// </summary>
+    private static bool IsReviewInProgress(HostException ex) => ex.Message.Contains("one pending review", StringComparison.OrdinalIgnoreCase);
+
+    private async Task<string?> PendingReviewIdAsync(int number, CancellationToken ct)
+    {
+        var variables = RepoVariables();
+        variables["n"] = number;
+        var data = await _http.GraphQLAsync(GitHubQueries.PendingReview, variables, ct);
+        var nodes = data.Obj("repository")?.Obj("pullRequest")?.Obj("reviews")?.Obj("nodes");
+        return nodes is { ValueKind: System.Text.Json.JsonValueKind.Array } array ? array.EnumerateArray().Select(r => r.Str("id")).FirstOrDefault(id => id is not null) : null;
+    }
+
+    /// <summary>Adds a line comment to a pending review; it's posted when the review is submitted.</summary>
+    private Task AddToReviewAsync(string review, CommentAnchor anchor, string body, CancellationToken ct)
+    {
+        var line = anchor.Line ?? throw new ArgumentException("A new line comment needs a line.", nameof(anchor));
+        var side = anchor.Side == DiffSide.Left ? "LEFT" : "RIGHT";
+        var variables = new JsonObject { ["review"] = review, ["path"] = anchor.Path, ["body"] = body, ["line"] = line, ["side"] = side };
+        if (anchor.StartLine is { } start && start != line)
+        {
+            variables["startLine"] = start;
+            variables["startSide"] = side;
+        }
+        return _http.GraphQLAsync(GitHubQueries.AddReviewThread, variables, ct);
     }
 
     /// <summary>

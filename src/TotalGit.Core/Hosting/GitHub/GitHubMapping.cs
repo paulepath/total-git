@@ -154,6 +154,10 @@ internal static class GitHubMapping
             ViewedFiles = ViewedFiles(pr.Obj("files")),
             LastViewerReviewSha = LastReview(pr, viewer)?.Obj("commit")?.Str("oid"),
             LastViewerReviewAt = LastReview(pr, viewer) is { } r ? (r.Obj("submittedAt") ?? r.GetProperty("createdAt")).GetDateTimeOffset() : null,
+            PendingReviewComments = Nodes(pr.Obj("reviews"))
+                .Where(r => r.Str("state") == "PENDING" && string.Equals(r.Obj("author")?.Str("login"), viewer, StringComparison.OrdinalIgnoreCase))
+                .Select(r => (int?)(r.Obj("comments")?.Int("totalCount") ?? 0))
+                .FirstOrDefault(),
         };
     }
 
@@ -297,6 +301,7 @@ internal static class GitHubMapping
         ViewerCanDelete = c.Bool("viewerCanDelete"),
         ViewerCanHide = c.Bool("viewerCanMinimize"),
         ViewerCanReact = c.Bool("viewerCanReact"),
+        IsPending = c.Str("state") == "PENDING",
     };
 
     /// <summary>The reactions people have used, in GitHub's order; kinds nobody used are left out.</summary>

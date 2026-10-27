@@ -1056,8 +1056,12 @@ public sealed partial class PullRequestReviewViewModel : ObservableObject, IComm
     {
         if (Pr.HeadSha is not { } head) return false;
         if (Provider is not { } provider) return false;
-        var ok = await PostAsync("Commenting…", () => provider.AddLineCommentAsync(Number, composer.Anchor, composer.Text.Trim(), head));
+        var posted = true;
+        var ok = await PostAsync("Commenting…", async () => posted = await provider.AddLineCommentAsync(Number, composer.Anchor, composer.Text.Trim(), head));
         if (ok && Pr.Composer == composer) Pr.Composer = null;
+        // GitHub holds lone comments while you have a review in progress, so it went into that review.
+        if (ok && !posted)
+            ShowInfo("Added to your review in progress on GitHub (GitHub won't post a comment on its own while there is one). It's posted when you submit your review.");
         return ok;
     }
 
@@ -1113,15 +1117,17 @@ public sealed partial class PullRequestReviewViewModel : ObservableObject, IComm
             verdict.SelectedIndex = ask;
         var unreviewed = Files.Count(f => !f.IsDone && !f.IsGenerated);
         var rejected = Files.Count(f => f.IsRejectedOrChanged);
-        var pendingText = (pr.Pending.Count switch
+        var waiting = pr.Pending.Count + pr.ReviewInProgressCount;
+        var pendingText = (waiting switch
         {
             0 => "No line comments are waiting.",
             1 => "1 line comment will be sent with the review.",
             var n => $"{n} line comments will be sent with the review.",
-        }) + (unreviewed > 0 ? $" {unreviewed} file{(unreviewed == 1 ? " isn't" : "s aren't")} marked reviewed yet." : "")
+        }) + (pr.ReviewInProgressCount > 0 ? $" {pr.ReviewInProgressCount} of them {(pr.ReviewInProgressCount == 1 ? "is" : "are")} from your review in progress on GitHub." : "")
+           + (unreviewed > 0 ? $" {unreviewed} file{(unreviewed == 1 ? " isn't" : "s aren't")} marked reviewed yet." : "")
            + (rejected > 0 ? $" You rejected {rejected} file{(rejected == 1 ? "" : "s")}." : "");
         var spec = new FormSpec($"Review #{pr.Number}", pendingText, "Submit review", [summary, verdict], Validate: () =>
-            verdicts[verdict.SelectedIndex].Verdict != ReviewVerdict.Approve && summary.Text.Trim().Length == 0 && pr.Pending.Count == 0
+            verdicts[verdict.SelectedIndex].Verdict != ReviewVerdict.Approve && summary.Text.Trim().Length == 0 && waiting == 0
                 ? "Write a summary or add line comments."
                 : null);
         if (!await Dialogs.ShowFormAsync(spec)) return;

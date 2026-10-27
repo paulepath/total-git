@@ -284,6 +284,55 @@ public class GitHubProviderTests
         Assert.Contains("empty response", ex.Message);
     }
 
+    // What .NET throws when the network drops a connection: a message that says nothing, and the reason inside.
+    private static HttpRequestException Dropped() => new("An error occurred while sending the request.",
+        new IOException("Unable to read data from the transport connection: An existing connection was forcibly closed by the remote host.",
+            new System.Net.Sockets.SocketException(10054)));
+
+    private const string IdJson = """{"data":{"repository":{"pullRequest":{"id":"PR_node"}}}}""";
+    private const string MarkedJson = """{"data":{"markFileAsViewed":{"pullRequest":{"id":"PR_node"}}}}""";
+
+    [Fact]
+    public async Task A_read_is_sent_again_once_when_the_connection_drops()
+    {
+        var (provider, http) = Create();
+        var failures = 1;
+        http.Routes[GraphQL] = _ => failures-- > 0 ? throw Dropped() : FakeHttpHandler.Json(http.Bodies[^1]!.Contains("mutation") ? MarkedJson : IdJson);
+
+        await provider.SetFileViewedAsync(7, "src/a.py", viewed: true);
+
+        // The id lookup twice (dropped, then answered), then the mark.
+        Assert.Equal(3, http.Requests.Count);
+        Assert.Equal(http.Bodies[0], http.Bodies[1]);
+    }
+
+    [Fact]
+    public async Task A_write_is_not_sent_again_and_the_error_says_why()
+    {
+        var (provider, http) = Create();
+        http.Routes[GraphQL] = _ => http.Bodies[^1]!.Contains("mutation") ? throw Dropped() : FakeHttpHandler.Json(IdJson);
+
+        var ex = await Assert.ThrowsAsync<HostException>(() => provider.SetFileViewedAsync(7, "src/a.py", viewed: true));
+
+        // It may have reached GitHub before the connection failed, so it's sent once.
+        Assert.Equal(2, http.Requests.Count);
+        Assert.Equal(HostErrorKind.Network, ex.Kind);
+        Assert.Contains("An existing connection was forcibly closed by the remote host.", ex.Message);
+        Assert.DoesNotContain("An error occurred while sending the request", ex.Message);
+    }
+
+    [Fact]
+    public async Task A_read_that_fails_twice_is_an_error()
+    {
+        var (provider, http) = Create();
+        http.Routes[GraphQL] = _ => throw Dropped();
+
+        var ex = await Assert.ThrowsAsync<HostException>(() => provider.SetFileViewedAsync(7, "src/a.py", viewed: true));
+
+        Assert.Equal(2, http.Requests.Count);
+        Assert.StartsWith("Couldn't reach GitHub: An existing connection was forcibly closed", ex.Message);
+    }
+
     [Fact]
     public async Task Marks_and_unmarks_a_file_as_viewed_by_pull_request_id()
     {
@@ -501,6 +550,95 @@ public class GitHubProviderTests
         var body = Body(http);
         Assert.False(body.TryGetProperty("body", out _));
         Assert.False(body.TryGetProperty("comments", out _));
+    }
+
+    // ---- A review in progress (started on github.com or in another tool) -----------------------------------------
+
+    // GitHub's answers, word for word, when the user already has a pending review.
+    private static HttpResponseMessage OnePendingComment() => FakeHttpHandler.Json(
+        """{"message":"Validation Failed","errors":[{"resource":"PullRequestReview","code":"custom","field":"user_id","message":"user_id can only have one pending review per pull request"}]}""",
+        HttpStatusCode.UnprocessableEntity);
+
+    private static HttpResponseMessage OnePendingReview() => FakeHttpHandler.Json(
+        """{"message":"Unprocessable Entity","errors":["User can only have one pending review per pull request"]}""", HttpStatusCode.UnprocessableEntity);
+
+    private static void RoutePendingReview(FakeHttpHandler http, string? reviewId) =>
+        http.Routes[GraphQL] = _ => FakeHttpHandler.Json(http.Bodies[^1]!.Contains("states: PENDING")
+            ? """{"data":{"repository":{"pullRequest":{"reviews":{"nodes":[""" + (reviewId is null ? "" : $"{{\"id\":\"{reviewId}\"}}") + "]}}}}}"
+            : """{"data":{}}""");
+
+    [Fact]
+    public async Task Shows_the_review_in_progress_and_its_comments_as_pending()
+    {
+        var (provider, http) = Create();
+        http.Route(GraphQL, () => FakeHttpHandler.Json(DetailsJson
+            .Replace("""
+                "author":{"login":"me","avatarUrl":null}}]}
+                """, """
+                "author":{"login":"me","avatarUrl":null},"comments":{"totalCount":2}}]}
+                """)
+            .Replace("\"body\":\"Range\",", "\"body\":\"Range\",\"state\":\"PENDING\",")));
+
+        var pr = await provider.GetPullRequestAsync(7);
+
+        Assert.Equal(2, pr.PendingReviewComments);
+        Assert.True(pr.Threads.Single(t => t.Id == "T3").Comments[0].IsPending);
+        Assert.False(pr.Threads.Single(t => t.Id == "T2").Comments[0].IsPending);
+
+        // Without one, there's none.
+        http.Route(GraphQL, () => FakeHttpHandler.Json(DetailsJson.Replace("\"state\":\"PENDING\"", "\"state\":\"COMMENTED\"")));
+        Assert.Null((await provider.GetPullRequestAsync(7)).PendingReviewComments);
+    }
+
+    [Fact]
+    public async Task A_line_comment_joins_the_review_in_progress()
+    {
+        var (provider, http) = Create();
+        http.Route(Rest, OnePendingComment);
+        RoutePendingReview(http, "PRR_1");
+
+        var posted = await provider.AddLineCommentAsync(7, new CommentAnchor("src/b.py", DiffSide.Right, 5, StartLine: 3), "Range", "head1");
+
+        Assert.False(posted);
+        Assert.Equal(3, http.Requests.Count);
+        var (add, vars) = Call(http, 2);
+        Assert.Contains("addPullRequestReviewThread", add);
+        Assert.Equal(("PRR_1", "src/b.py", "Range"), (vars.GetProperty("review").GetString(), vars.GetProperty("path").GetString(), vars.GetProperty("body").GetString()));
+        Assert.Equal((5, "RIGHT", 3, "RIGHT"), (vars.GetProperty("line").GetInt32(), vars.GetProperty("side").GetString(),
+            vars.GetProperty("startLine").GetInt32(), vars.GetProperty("startSide").GetString()));
+    }
+
+    [Fact]
+    public async Task A_review_submits_the_review_in_progress_with_its_comments()
+    {
+        var (provider, http) = Create();
+        http.Route(Rest, OnePendingReview);
+        RoutePendingReview(http, "PRR_1");
+
+        await provider.SubmitReviewAsync(7, ReviewVerdict.Approve, "Looks good",
+            [new DraftComment(new CommentAnchor("src/a.py", DiffSide.Right, 10), "One"), new DraftComment(new CommentAnchor("src/a.py", DiffSide.Left, 4), "Two")], "head1");
+
+        // The REST review, the lookup, both comments into the pending review, then it's submitted.
+        Assert.Equal(5, http.Requests.Count);
+        Assert.Equal("One", Call(http, 2).Variables.GetProperty("body").GetString());
+        Assert.Equal("LEFT", Call(http, 3).Variables.GetProperty("side").GetString());
+        Assert.False(Call(http, 3).Variables.TryGetProperty("startLine", out _));
+        var (submit, vars) = Call(http, 4);
+        Assert.Contains("submitPullRequestReview", submit);
+        Assert.Equal(("PRR_1", "APPROVE", "Looks good"), (vars.GetProperty("review").GetString(), vars.GetProperty("event").GetString(), vars.GetProperty("body").GetString()));
+    }
+
+    [Fact]
+    public async Task Without_a_review_in_progress_GitHubs_refusal_stands()
+    {
+        var (provider, http) = Create();
+        http.Route(Rest, OnePendingReview);
+        RoutePendingReview(http, null);
+
+        var ex = await Assert.ThrowsAsync<HostException>(() => provider.SubmitReviewAsync(7, ReviewVerdict.Comment, "Hm", [], "head1"));
+
+        Assert.Contains("one pending review", ex.Message);
+        Assert.Equal(2, http.Requests.Count);
     }
 
     private static ReviewThread Thread(string id) => new(id, new CommentAnchor("a", DiffSide.Right, 1), false, false, [], true, true);

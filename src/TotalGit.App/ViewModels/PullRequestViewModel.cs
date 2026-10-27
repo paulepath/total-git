@@ -110,7 +110,8 @@ public sealed partial class PullRequestViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasDetails), nameof(Body), nameof(HasBody), nameof(StatsText), nameof(MergeText),
         nameof(MergeBrush), nameof(Reviewers), nameof(HasReviewers), nameof(Checks), nameof(HasChecks), nameof(ChecksTabText),
-        nameof(Conversation), nameof(ConversationTabText), nameof(ViewerIsAuthor))]
+        nameof(Conversation), nameof(ConversationTabText), nameof(ViewerIsAuthor), nameof(ReviewButtonText),
+        nameof(HasReviewInProgress), nameof(ReviewInProgressText))]
     public partial PullRequestDetails? Details { get; set; }
 
     public bool HasDetails => Details is not null;
@@ -252,7 +253,20 @@ public sealed partial class PullRequestViewModel : ObservableObject
     public ObservableCollection<PendingCommentViewModel> Pending { get; } = [];
 
     public bool HasPending => Pending.Count > 0;
-    public string ReviewButtonText => Pending.Count == 0 ? "Review…" : $"Finish review ({Pending.Count})";
+
+    /// <summary>Comments in your review in progress on the host (started on its website or in another tool).</summary>
+    public int ReviewInProgressCount => Details?.PendingReviewComments ?? 0;
+
+    public bool HasReviewInProgress => Details?.PendingReviewComments is not null;
+
+    public string ReviewInProgressText => ReviewInProgressCount switch
+    {
+        0 => "You have a review in progress on GitHub (started there or in another tool). It's sent when you submit this one.",
+        1 => "You have a review in progress on GitHub with 1 comment, marked Pending. It's sent when you submit this one.",
+        var n => $"You have a review in progress on GitHub with {n} comments, marked Pending. They're sent when you submit this one.",
+    };
+
+    public string ReviewButtonText => Pending.Count + ReviewInProgressCount is var n && n == 0 ? "Review…" : $"Finish review ({n})";
 
     public void AddPending(DraftComment draft)
     {

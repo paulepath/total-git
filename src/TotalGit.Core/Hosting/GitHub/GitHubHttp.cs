@@ -5,6 +5,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using TotalGit.Core.Diagnostics;
 
 namespace TotalGit.Core.Hosting.GitHub;
 
@@ -58,28 +59,41 @@ internal sealed class GitHubHttp(HttpClient http, ICredentialSource credentials,
         var token = await Task.Run(() => credentials.GetToken(host), ct)
             ?? throw new HostException(HostErrorKind.NotAuthenticated, SignInMessage);
 
-        using var request = new HttpRequestMessage(method, _apiBase + path);
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        request.Headers.UserAgent.ParseAdd("TotalGit");
-        request.Headers.Accept.ParseAdd("application/vnd.github+json");
-        request.Headers.Add("X-GitHub-Api-Version", "2022-11-28");
-        if (body is not null) request.Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json");
-        if (cache && revalidate && _etags.TryGetValue(path, out var known)) request.Headers.TryAddWithoutValidation("If-None-Match", known.ETag);
-
+        // A dropped connection (often a pooled one the network quietly closed) usually works on a second try. Only
+        // reads are sent again: a write may have reached GitHub before the connection failed.
+        var canRetry = method == HttpMethod.Get || path == "graphql" && !IsMutation(body);
         HttpResponseMessage response;
         string text;
-        try
+        for (var attempt = 1; ; attempt++)
         {
-            response = await http.SendAsync(request, ct);
-            text = await response.Content.ReadAsStringAsync(ct);
-        }
-        catch (HttpRequestException ex)
-        {
-            throw new HostException(HostErrorKind.Network, $"Couldn't reach GitHub: {ex.Message}", ex);
-        }
-        catch (TaskCanceledException ex) when (!ct.IsCancellationRequested)
-        {
-            throw new HostException(HostErrorKind.Network, "GitHub didn't respond in time.", ex);
+            using var request = new HttpRequestMessage(method, _apiBase + path);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            request.Headers.UserAgent.ParseAdd("TotalGit");
+            request.Headers.Accept.ParseAdd("application/vnd.github+json");
+            request.Headers.Add("X-GitHub-Api-Version", "2022-11-28");
+            if (body is not null) request.Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json");
+            if (cache && revalidate && _etags.TryGetValue(path, out var known)) request.Headers.TryAddWithoutValidation("If-None-Match", known.ETag);
+
+            try
+            {
+                response = await http.SendAsync(request, ct);
+                text = await response.Content.ReadAsStringAsync(ct);
+                break;
+            }
+            catch (HttpRequestException ex) when (canRetry && attempt == 1)
+            {
+                DiagnosticLog.Write($"GitHub {method} {path} failed, trying again: {Causes(ex)}");
+                await Task.Delay(RetryDelay, ct);
+            }
+            catch (HttpRequestException ex)
+            {
+                DiagnosticLog.Write($"GitHub {method} {path} failed: {Causes(ex)}");
+                throw new HostException(HostErrorKind.Network, $"Couldn't reach GitHub: {RootCause(ex)} Check your connection and try again.", ex);
+            }
+            catch (TaskCanceledException ex) when (!ct.IsCancellationRequested)
+            {
+                throw new HostException(HostErrorKind.Network, "GitHub didn't respond in time.", ex);
+            }
         }
 
         using (response)
@@ -100,6 +114,32 @@ internal sealed class GitHubHttp(HttpClient http, ICredentialSource credentials,
                 throw new HostException(HostErrorKind.Other, "GitHub sent a response Total Git couldn't read.", ex);
             }
         }
+    }
+
+    /// <summary>How long to wait before sending a read again after the connection failed.</summary>
+    internal static TimeSpan RetryDelay { get; set; } = TimeSpan.FromMilliseconds(500);
+
+    private static bool IsMutation(JsonNode? body) =>
+        body?["query"]?.GetValue<string>().TrimStart().StartsWith("mutation", StringComparison.Ordinal) == true;
+
+    /// <summary>
+    /// The innermost reason, e.g. "An existing connection was forcibly closed by the remote host.", rather than
+    /// .NET's "An error occurred while sending the request.", which says nothing.
+    /// </summary>
+    internal static string RootCause(Exception ex)
+    {
+        while (ex.InnerException is { } inner) ex = inner;
+        var message = ex.Message.Trim();
+        return message.EndsWith('.') ? message : message + ".";
+    }
+
+    /// <summary>Every exception in the chain, for the log: "HttpRequestException: … ← IOException: …".</summary>
+    private static string Causes(Exception ex)
+    {
+        var parts = new List<string>();
+        for (Exception? e = ex; e is not null; e = e.InnerException)
+            parts.Add(e is System.Net.Sockets.SocketException s ? $"{e.GetType().Name} {s.SocketErrorCode}: {e.Message}" : $"{e.GetType().Name}: {e.Message}");
+        return string.Join(" ← ", parts);
     }
 
     private (int? Remaining, DateTimeOffset? Reset) TrackRateLimit(HttpResponseMessage response, string resource)

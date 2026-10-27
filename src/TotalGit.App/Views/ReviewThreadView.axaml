@@ -278,6 +278,10 @@
                                 <Border Classes="badge" IsVisible="{Binding IsBot}" Margin="0,0,6,0"><TextBlock Text="bot" /></Border>
                                 <Border Classes="badge" IsVisible="{Binding IsPullRequestAuthor}" BorderBrush="{x:Static t:Palette.AuthorBadgeBorder}" Margin="0,0,6,0"><TextBlock Text="Author" /></Border>
                                 <Border Classes="badge" IsVisible="{Binding HasRole}" Margin="0,0,6,0"><TextBlock Text="{Binding RoleText}" /></Border>
+                                <Border Classes="badge" IsVisible="{Binding IsPending}" BorderBrush="{x:Static t:Palette.Warning}" Margin="0,0,6,0"
+                                        ToolTip.Tip="Part of your review in progress: only you can see it until you submit your review">
+                                  <TextBlock Text="Pending" Foreground="{x:Static t:Palette.Warning}" />
+                                </Border>
                                 <TextBlock Classes="muted" Text="{Binding When}" ToolTip.Tip="{Binding WhenToolTip}" Margin="0,0,6,0" />
                                 <Button Classes="plain" IsVisible="{Binding IsEdited}" ToolTip.Tip="{Binding EditedToolTip}" Command="{Binding LoadEditsCommand}"
                                         IsEnabled="{Binding CanSeeEdits}" Padding="2,0">

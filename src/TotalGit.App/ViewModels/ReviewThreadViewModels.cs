@@ -343,6 +343,9 @@ public sealed partial class CommentViewModel : ObservableObject, ISuggestionSour
     public string Body => Comment.Body.Trim();
 
     public bool IsEdited => Comment.EditedAt is not null;
+
+    /// <summary>In your review in progress: only you can see it until the review is submitted.</summary>
+    public bool IsPending => Comment.IsPending;
     public string EditedToolTip => Comment.EditedAt is { } at ? $"Edited {DateText.Relative(at)}" : "";
 
     // ------------------------------------------------------------------ hidden

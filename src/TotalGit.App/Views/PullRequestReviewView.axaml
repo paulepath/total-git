@@ -615,6 +615,8 @@
           <ScrollViewer HorizontalScrollBarVisibility="Disabled">
             <StackPanel Margin="14,10" Spacing="10">
               <TextBlock Text="{Binding ProgressText}" FontSize="12.5" Foreground="{x:Static t:Palette.TextPrimary}" />
+              <TextBlock Text="{Binding Pr.ReviewInProgressText}" IsVisible="{Binding Pr.HasReviewInProgress}" FontSize="12"
+                         Foreground="{x:Static t:Palette.Warning}" TextWrapping="Wrap" />
               <TextBlock Classes="muted" TextWrapping="Wrap" IsVisible="{Binding !Pr.HasPending}"
                          Text="No line comments yet. Hover a line in a file and click + to add one, then choose Add to review." />
               <ItemsControl ItemsSource="{Binding Pr.Pending}">
