@@ -1044,9 +1044,9 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
 
         var dir = _state.WorkingDirectory;
         if (target.Kind == RefKind.RemoteBranch && target.RemoteName is { } remote)
-            await CheckoutWithChangesAsync(name, mode, m => GitActions.CheckoutRemoteAsync(dir, remote, name, m));
+            await CheckoutWithChangesAsync(name, $"{remote}/{name}", mode, m => GitActions.CheckoutRemoteAsync(dir, remote, name, m));
         else
-            await CheckoutWithChangesAsync(name, mode, m => GitActions.CheckoutAsync(dir, name, m));
+            await CheckoutWithChangesAsync(name, name, mode, m => GitActions.CheckoutAsync(dir, name, m));
         SelectChangesIfAny();
     }
 

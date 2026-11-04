@@ -157,14 +157,71 @@ public static class GitActions
 
     /// <summary>Checks out a local branch. Throws <see cref="BranchInUseException"/> if another worktree has it.</summary>
     public static Task CheckoutAsync(string worktree, string branch, LocalChanges changes = LocalChanges.Keep) =>
-        WithDiscardBackupAsync(worktree, changes == LocalChanges.Discard,
+        WithDiscardBackupAsync(worktree, branch, changes,
             () => GitCli.RunAsync(worktree, ["switch", .. SwitchFlags(changes), branch]));
 
-    private static async Task WithDiscardBackupAsync(string worktree, bool discard, Func<Task> action)
+    /// <summary>
+    /// Discarding backs up tracked changes first. git won't overwrite untracked files the target has, even with
+    /// --discard-changes, so those are backed up too and deleted.
+    /// </summary>
+    private static async Task WithDiscardBackupAsync(string worktree, string target, LocalChanges changes, Func<Task> action)
     {
-        var backup = discard ? await DiscardBackup.CreateAsync(worktree, null, includeUntracked: false) : null;
-        try { await action(); }
+        if (changes != LocalChanges.Discard)
+        {
+            await action();
+            return;
+        }
+        var inTheWay = await UntrackedInTheWayAsync(worktree, target);
+        var backup = await DiscardBackup.CreateAsync(worktree, null, includeUntracked: false, alsoUntracked: inTheWay);
+        try
+        {
+            foreach (var batch in inTheWay.Chunk(50)) await GitCli.RunAsync(worktree, ["clean", "-f", "-q", "--", .. batch.Select(p => ":(literal)" + p)]);
+            await action();
+        }
         finally { if (backup is not null) await backup.CompleteAsync(worktree); }
+    }
+
+    /// <summary>
+    /// Untracked (not ignored) files that checking out <paramref name="target"/> would overwrite or remove, which git
+    /// refuses to do: a file the target has, a file inside a folder the target has as a file, or a file where the
+    /// target has a folder. Typically files a .gitignore on this branch doesn't ignore.
+    /// </summary>
+    public static async Task<IReadOnlyList<string>> UntrackedInTheWayAsync(string worktree, string target)
+    {
+        var untracked = (await GitCli.RunAsync(worktree, "ls-files", "--others", "--exclude-standard", "-z")).StdOut
+            .Split('\0', StringSplitOptions.RemoveEmptyEntries);
+        if (untracked.Length == 0) return [];
+        var tree = await GitCli.RunAsync(worktree, ["ls-tree", "-r", "-z", "--full-tree", "--name-only", target], throwOnError: false);
+        if (tree.ExitCode != 0) return [];
+        var files = tree.StdOut.Split('\0', StringSplitOptions.RemoveEmptyEntries).ToHashSet(StringComparer.Ordinal);
+        var folders = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var file in files)
+            for (var i = file.IndexOf('/'); i > 0; i = file.IndexOf('/', i + 1)) folders.Add(file[..i]);
+        return untracked.Where(p => files.Contains(p) || folders.Contains(p) || Parents(p).Any(files.Contains)).ToList();
+
+        static IEnumerable<string> Parents(string path)
+        {
+            for (var i = path.IndexOf('/'); i > 0; i = path.IndexOf('/', i + 1)) yield return path[..i];
+        }
+    }
+
+    /// <summary>
+    /// The files named in git's refusal to switch: changed files it would overwrite, and untracked files it would
+    /// overwrite or remove. Null when <paramref name="message"/> is some other error.
+    /// </summary>
+    public static CheckoutBlockers? ParseCheckoutBlockers(string message)
+    {
+        var changed = new List<string>();
+        var untracked = new List<string>();
+        List<string>? into = null;
+        foreach (var line in message.Split('\n'))
+        {
+            if (line.StartsWith('\t') && into is not null) into.Add(line.Trim().Trim('"'));
+            else if (line.Contains("Your local changes to the following files would be overwritten", StringComparison.Ordinal)) into = changed;
+            else if (line.Contains("untracked working tree files would be", StringComparison.Ordinal)) into = untracked;
+            else into = null;
+        }
+        return changed.Count + untracked.Count == 0 ? null : new CheckoutBlockers(changed, untracked);
     }
 
     /// <summary>
@@ -188,8 +245,8 @@ public static class GitActions
         if (exists.ExitCode == 0)
             await CheckoutAsync(worktree, branch, changes);
         else
-            await WithDiscardBackupAsync(worktree, changes == LocalChanges.Discard,
-                () => GitCli.RunAsync(worktree, ["switch", .. SwitchFlags(changes), "--track", "-c", branch, $"{remoteName}/{branch}"]));
+            await WithDiscardBackupAsync(worktree, $"{remoteName}/{branch}", changes,
+                () =>GitCli.RunAsync(worktree, ["switch", .. SwitchFlags(changes), "--track", "-c", branch, $"{remoteName}/{branch}"]));
         return branch;
     }
 
@@ -227,8 +284,8 @@ public static class GitActions
 
     /// <summary>Checks out a commit without a branch (detached HEAD). Uncommitted changes come along, as with a branch switch.</summary>
     public static Task CheckoutDetachedAsync(string worktree, string sha, LocalChanges changes = LocalChanges.Keep) =>
-        WithDiscardBackupAsync(worktree, changes == LocalChanges.Discard,
-            () => GitCli.RunAsync(worktree, ["switch", .. SwitchFlags(changes), "--detach", sha]));
+        WithDiscardBackupAsync(worktree, sha, changes,
+            () =>GitCli.RunAsync(worktree, ["switch", .. SwitchFlags(changes), "--detach", sha]));
 
     /// <summary>Creates a branch at a commit, optionally switching to it.</summary>
     public static Task CreateBranchAsync(string worktree, string name, string sha, bool checkout) => checkout
@@ -276,12 +333,20 @@ public static class GitActions
     }
 
     /// <summary>Stashes all uncommitted changes (optionally including untracked files).</summary>
-    public static Task StashAsync(string worktree, string? message, bool includeUntracked)
+    /// <param name="alsoUntracked">Untracked files to stash as well, without stashing every untracked file.</param>
+    public static async Task StashAsync(string worktree, string? message, bool includeUntracked, IReadOnlyList<string>? alsoUntracked = null)
     {
         var args = new List<string> { "stash", "push" };
-        if (includeUntracked) args.Add("--include-untracked");
+        if (includeUntracked || alsoUntracked is { Count: > 0 }) args.Add("--include-untracked");
         if (!string.IsNullOrWhiteSpace(message)) args.AddRange(["-m", message.Trim()]);
-        return GitCli.RunAsync(worktree, args);
+        if (includeUntracked || alsoUntracked is not { Count: > 0 })
+        {
+            await GitCli.RunAsync(worktree, args);
+            return;
+        }
+        // Paths limit the stash, so they name every change as well as those untracked files.
+        var paths = (await DiscardBackup.ChangedPathsAsync(worktree, includeUntracked: false)).Concat(alsoUntracked).Distinct(StringComparer.Ordinal).ToArray();
+        await RunWithPathsAsync(worktree, [.. args], paths);
     }
 
     public static Task StashApplyAsync(string worktree, int index) => GitCli.RunAsync(worktree, "stash", "apply", $"stash@{{{index}}}");
@@ -501,7 +566,8 @@ public static class GitActions
 
     /// <summary>Moves the current branch (or detached HEAD) to <paramref name="sha"/>.</summary>
     public static Task ResetAsync(string worktree, string sha, ResetMode mode) =>
-        WithDiscardBackupAsync(worktree, mode == ResetMode.Hard,
+        // A hard reset overwrites untracked files in the way without asking: they're backed up with the rest.
+        WithDiscardBackupAsync(worktree, sha, mode == ResetMode.Hard ? LocalChanges.Discard : LocalChanges.Keep,
             () => GitCli.RunAsync(worktree, "reset", "--" + mode.ToString().ToLowerInvariant(), sha));
 
     /// <summary>

@@ -31,17 +31,16 @@ public sealed class DiscardBackup
 
     /// <param name="paths">Literal paths and folders, or null for everything with uncommitted changes.</param>
     /// <param name="includeUntracked">With <paramref name="paths"/> null: back up untracked files too (they're about to be deleted).</param>
-    public static async Task<DiscardBackup?> CreateAsync(string worktree, IReadOnlyList<string>? paths, bool includeUntracked = true)
+    /// <param name="alsoUntracked">With <paramref name="paths"/> null: untracked files to back up as well (ones in a checkout's way).</param>
+    public static async Task<DiscardBackup?> CreateAsync(string worktree, IReadOnlyList<string>? paths, bool includeUntracked = true,
+        IReadOnlyList<string>? alsoUntracked = null)
     {
         var entries = await IndexAsync(worktree);
         List<string> names;
         if (paths is null)
         {
             // Only what has changed: copying the whole tree would take minutes in a large repository.
-            var status = await GitCli.RunAsync(worktree, "status", "--porcelain=v1", "-z", "--no-renames",
-                includeUntracked ? "--untracked-files=all" : "--untracked-files=no");
-            names = status.StdOut.Split('\0', StringSplitOptions.RemoveEmptyEntries)
-                .Where(e => e.Length > 3 && !e.StartsWith("!!", StringComparison.Ordinal)).Select(e => e[3..])
+            names = (await ChangedPathsAsync(worktree, includeUntracked)).Concat(alsoUntracked ?? [])
                 .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
         }
         else
@@ -94,6 +93,15 @@ public sealed class DiscardBackup
             Directory.Delete(folder, recursive: true);
             throw; // A failed backup must stop the discard.
         }
+    }
+
+    /// <summary>Paths with uncommitted changes (staged or not; a rename as its two sides), and untracked files if asked.</summary>
+    internal static async Task<IEnumerable<string>> ChangedPathsAsync(string worktree, bool includeUntracked)
+    {
+        var status = await GitCli.RunAsync(worktree, "status", "--porcelain=v1", "-z", "--no-renames",
+            includeUntracked ? "--untracked-files=all" : "--untracked-files=no");
+        return status.StdOut.Split('\0', StringSplitOptions.RemoveEmptyEntries)
+            .Where(e => e.Length > 3 && !e.StartsWith("!!", StringComparison.Ordinal)).Select(e => e[3..]);
     }
 
     public async Task CompleteAsync(string worktree)

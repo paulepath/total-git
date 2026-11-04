@@ -677,7 +677,7 @@ public partial class RepositoryViewModel
         if (await AskLocalChangesAsync("Check out commit", message, "Check out", alwaysAsk: true) is not { } mode) return;
 
         var wt = _state.WorkingDirectory;
-        await CheckoutWithChangesAsync(commit.ShortSha, mode, m => GitActions.CheckoutDetachedAsync(wt, commit.Sha, m),
+        await CheckoutWithChangesAsync(commit.ShortSha, commit.Sha, mode, m => GitActions.CheckoutDetachedAsync(wt, commit.Sha, m),
             $"Checked out {commit.ShortSha} (detached HEAD). Create a branch here to keep any new commits.");
     }
 

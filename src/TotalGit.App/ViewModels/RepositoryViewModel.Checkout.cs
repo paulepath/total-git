@@ -1,3 +1,4 @@
+using CommunityToolkit.Mvvm.Input;
 using TotalGit.Core.Git;
 
 namespace TotalGit.App.ViewModels;
@@ -10,7 +11,7 @@ public sealed partial class RepositoryViewModel
         new("Don't change", "Bring your changes along. Git stops if a changed file is also different on the other side."),
         new("Merge", "Bring your changes along, merging them into files that differ. May leave conflicts to resolve."),
         new("Stash", "Put your changes in the stash list, so you start clean. Pop the stash later to get them back."),
-        new("Discard", "Discard tracked changes, keeping a backup for Undo (up to seven days, last 20 discards).", IsWarning: true),
+        new("Discard", "Discard your changes, and untracked files in the way, keeping a backup for Undo (up to seven days, last 20 discards).", IsWarning: true),
     ];
 
     private static readonly FormChoice[] ResetChoices =
@@ -94,18 +95,39 @@ public sealed partial class RepositoryViewModel
         return mode;
     }
 
-    /// <summary>Runs a checkout, stashing first when asked to; a stash is reported with a way to get it back.</summary>
-    private async Task CheckoutWithChangesAsync(string what, LocalChanges mode, Func<LocalChanges, Task> checkout, string? success = null)
+    /// <summary>
+    /// Runs a checkout of <paramref name="target"/>, stashing first when asked to; a stash is reported with a way to
+    /// get it back. When git refuses because of changed or untracked files, offers to discard or stash them and go on.
+    /// </summary>
+    private async Task CheckoutWithChangesAsync(string what, string target, LocalChanges mode, Func<LocalChanges, Task> checkout, string? success = null)
     {
         var wt = _state!.WorkingDirectory;
         if (mode == LocalChanges.Stash
-            && !await RunGitAsync("Stashing your changes…", () => GitActions.StashAsync(wt, $"Before checking out {what}", includeUntracked: false), refresh: Refresh.None))
+            && !await RunGitAsync("Stashing your changes…", async () => await GitActions.StashAsync(wt, $"Before checking out {what}", includeUntracked: false,
+                    alsoUntracked: await GitActions.UntrackedInTheWayAsync(wt, target)), refresh: Refresh.None))
             return;
 
         // Always report the checkout, so an older banner (e.g. from a stash) doesn't linger.
         success ??= $"Checked out {what}.";
         var started = DateTimeOffset.UtcNow;
-        var ok = await RunGitAsync($"Checking out {what}…", () => checkout(mode), success);
+        CheckoutBlockers? blockers = null;
+        var ok = await RunGitAsync($"Checking out {what}…", async () =>
+        {
+            try
+            {
+                await checkout(mode);
+            }
+            catch (GitCommandException ex) when (mode is LocalChanges.Keep or LocalChanges.Merge)
+            {
+                blockers = GitActions.ParseCheckoutBlockers(ex.Message);
+                throw;
+            }
+        }, success);
+        if (blockers is not null)
+        {
+            Banner = BlockedCheckoutBanner(what, target, blockers, checkout, success);
+            return;
+        }
         if (ok && mode == LocalChanges.Discard) await OfferDiscardUndoAsync(success, started);
         if (mode != LocalChanges.Stash) return;
 
@@ -113,5 +135,25 @@ public sealed partial class RepositoryViewModel
         Banner = ok
             ? new Banner($"{success} Your changes are in the stash list.", false, [pop])
             : new Banner($"{Banner?.Message}\nYour changes are saved in the stash list.", true, [pop]);
+    }
+
+    /// <summary>git's refusal, said shortly, with the two ways past it.</summary>
+    private Banner BlockedCheckoutBanner(string what, string target, CheckoutBlockers blockers, Func<LocalChanges, Task> checkout, string success)
+    {
+        static string Files(int n) => $"{n} file{(n == 1 ? "" : "s")}";
+        var parts = new List<string>();
+        if (blockers.Changed.Count > 0) parts.Add($"your changes to {Files(blockers.Changed.Count)}");
+        if (blockers.Untracked.Count > 0)
+            parts.Add($"{Files(blockers.Untracked.Count)} that {(blockers.Untracked.Count == 1 ? "isn't" : "aren't")} committed on this branch");
+        var paths = blockers.Changed.Concat(blockers.Untracked).ToList();
+        var list = string.Join('\n', paths.Take(5)) + (paths.Count > 5 ? $"\n…and {paths.Count - 5} more" : "");
+        return new Banner(
+            $"Checking out {what} would overwrite {string.Join(" and ", parts)}:\n{list}\n"
+            + "Discard throws away your changes and those files, keeping a backup for Undo. Stash puts them in the stash list.",
+            true,
+            [
+                new MenuAction("Discard and check out", new AsyncRelayCommand(() => CheckoutWithChangesAsync(what, target, LocalChanges.Discard, checkout, success))),
+                new MenuAction("Stash and check out", new AsyncRelayCommand(() => CheckoutWithChangesAsync(what, target, LocalChanges.Stash, checkout, success))),
+            ]);
     }
 }

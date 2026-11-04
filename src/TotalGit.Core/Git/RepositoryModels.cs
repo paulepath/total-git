@@ -127,6 +127,9 @@ public enum IgnoreTarget
 
 public sealed record IgnorePreview(IReadOnlyList<string> Untracked, int TrackedCount);
 
+/// <summary>Files git named when it refused to switch: changed files, and untracked files in the way.</summary>
+public sealed record CheckoutBlockers(IReadOnlyList<string> Changed, IReadOnlyList<string> Untracked);
+
 /// <summary>What to do with uncommitted changes when checking out another branch or commit.</summary>
 public enum LocalChanges
 {
@@ -139,7 +142,7 @@ public enum LocalChanges
     /// <summary>Stash them first, so the other branch starts clean.</summary>
     Stash,
 
-    /// <summary>Throw away changes to tracked files (untracked files are kept).</summary>
+    /// <summary>Throw away changes to tracked files, and untracked files the target has (other untracked files are kept).</summary>
     Discard,
 }
 
