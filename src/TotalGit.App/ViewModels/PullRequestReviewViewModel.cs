@@ -131,11 +131,6 @@ public sealed partial class PullRequestReviewViewModel : ObservableObject, IComm
                 OnMergeStateChanged();
             }
         };
-        vm.PendingCommentsChanged += () =>
-        {
-            RebuildDiffThreads();
-            OnPropertyChanged(nameof(ReviewButtonText));
-        };
         return vm;
     }
 
@@ -1007,24 +1002,8 @@ public sealed partial class PullRequestReviewViewModel : ObservableObject, IComm
                 items.Add(new DiffThreadItem(line, Pr.ThreadFor(thread), thread.Anchor.Side));
             }
         }
-        foreach (var pending in Pr.Pending.Where(p => p.Draft.Anchor.Path == file.Path))
-        {
-            if (LineIndexOf(diff, pending.Draft.Anchor) is { } line) items.Add(new DiffThreadItem(line, pending, pending.Draft.Anchor.Side));
-        }
         if (Pr.Composer is { } composer && composer.Anchor.Path == file.Path) items.Add(new DiffThreadItem(composer.LineIndex, composer, composer.Anchor.Side));
         DiffThreads = items.OrderBy(i => i.LineIndex).ToList();
-    }
-
-    private static int? LineIndexOf(FileDiff diff, CommentAnchor anchor)
-    {
-        for (var i = 0; i < diff.Lines.Count; i++)
-        {
-            var line = diff.Lines[i];
-            if (anchor.Side == DiffSide.Right ? line.Kind != DiffLineKind.Removed && line.NewLine == anchor.Line
-                    : line.Kind != DiffLineKind.Added && line.OldLine == anchor.Line)
-                return i;
-        }
-        return null;
     }
 
     /// <summary>The "+" on a diff line (or C): starts writing a comment there.</summary>
@@ -1039,13 +1018,9 @@ public sealed partial class PullRequestReviewViewModel : ObservableObject, IComm
         if (CommentComposerViewModel.AnchorFor(file.Path, diff.Lines[lineIndex]) is not { } anchor) return;
         if (Pr.Composer is { Text.Length: > 0 } && Pr.Composer.LineIndex == lineIndex) return;
         var pr = Pr;
-        pr.Composer = new CommentComposerViewModel(anchor, lineIndex, pr.Pending.Count,
+        pr.Composer = new CommentComposerViewModel(anchor, lineIndex, pr.ReviewInProgressCount,
             postNow: PostLineCommentAsync,
-            addToReview: c =>
-            {
-                pr.AddPending(new DraftComment(c.Anchor, c.Text.Trim()));
-                pr.Composer = null;
-            },
+            addToReview: AddToReviewAsync,
             cancel: _ => pr.Composer = null,
             host: this,
             suggestionLines: anchor.Side == DiffSide.Right ? [diff.Lines[lineIndex].Text] : null,
@@ -1062,6 +1037,19 @@ public sealed partial class PullRequestReviewViewModel : ObservableObject, IComm
         // GitHub holds lone comments while you have a review in progress, so it went into that review.
         if (ok && !posted)
             ShowInfo("Added to your review in progress on GitHub (GitHub won't post a comment on its own while there is one). It's posted when you submit your review.");
+        return ok;
+    }
+
+    /// <summary>
+    /// Start a review / Add to review: the comment goes into your review in progress on GitHub straight away (only you
+    /// see it until you submit), so it's kept if you leave the pull request.
+    /// </summary>
+    private async Task<bool> AddToReviewAsync(CommentComposerViewModel composer)
+    {
+        if (Pr.HeadSha is not { } head || Provider is not { } provider) return false;
+        var pr = Pr;
+        var ok = await PostAsync("Adding to your review…", () => provider.AddToReviewAsync(pr.Number, composer.Anchor, composer.Text.Trim(), head));
+        if (ok && pr.Composer == composer) pr.Composer = null;
         return ok;
     }
 
@@ -1117,13 +1105,13 @@ public sealed partial class PullRequestReviewViewModel : ObservableObject, IComm
             verdict.SelectedIndex = ask;
         var unreviewed = Files.Count(f => !f.IsDone && !f.IsGenerated);
         var rejected = Files.Count(f => f.IsRejectedOrChanged);
-        var waiting = pr.Pending.Count + pr.ReviewInProgressCount;
+        var waiting = pr.ReviewInProgressCount;
         var pendingText = (waiting switch
         {
             0 => "No line comments are waiting.",
             1 => "1 line comment will be sent with the review.",
             var n => $"{n} line comments will be sent with the review.",
-        }) + (pr.ReviewInProgressCount > 0 ? $" {pr.ReviewInProgressCount} of them {(pr.ReviewInProgressCount == 1 ? "is" : "are")} from your review in progress on GitHub." : "")
+        })
            + (unreviewed > 0 ? $" {unreviewed} file{(unreviewed == 1 ? " isn't" : "s aren't")} marked reviewed yet." : "")
            + (rejected > 0 ? $" You rejected {rejected} file{(rejected == 1 ? "" : "s")}." : "");
         var spec = new FormSpec($"Review #{pr.Number}", pendingText, "Submit review", [summary, verdict], Validate: () =>
@@ -1132,11 +1120,9 @@ public sealed partial class PullRequestReviewViewModel : ObservableObject, IComm
                 : null);
         if (!await Dialogs.ShowFormAsync(spec)) return;
 
-        var drafts = pr.Pending.Select(p => p.Draft).ToList();
         var choice = verdicts[verdict.SelectedIndex].Verdict;
-        if (await PostAsync("Submitting review…", () => provider.SubmitReviewAsync(pr.Number, choice, summary.Text.Trim(), drafts, head)))
+        if (await PostAsync("Submitting review…", () => provider.SubmitReviewAsync(pr.Number, choice, summary.Text.Trim(), [], head)))
         {
-            pr.ClearPending();
             ShowInfo(choice switch
             {
                 ReviewVerdict.Approve => $"Approved #{pr.Number}.",

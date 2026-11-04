@@ -787,15 +787,15 @@ public sealed partial class ReviewThreadViewModel : ObservableObject
     }
 }
 
-/// <summary>A new line comment being written: post it now, or add it to a review to send later.</summary>
+/// <summary>A new line comment being written: post it now, or add it to your review in progress (sent when you submit it).</summary>
 public sealed partial class CommentComposerViewModel : ObservableObject
 {
     private readonly Func<CommentComposerViewModel, Task<bool>> _postNow;
-    private readonly Action<CommentComposerViewModel> _addToReview;
+    private readonly Func<CommentComposerViewModel, Task<bool>> _addToReview;
     private readonly Action<CommentComposerViewModel> _cancel;
 
     public CommentComposerViewModel(CommentAnchor anchor, int lineIndex, int pendingCount,
-        Func<CommentComposerViewModel, Task<bool>> postNow, Action<CommentComposerViewModel> addToReview, Action<CommentComposerViewModel> cancel,
+        Func<CommentComposerViewModel, Task<bool>> postNow, Func<CommentComposerViewModel, Task<bool>> addToReview, Action<CommentComposerViewModel> cancel,
         ICommentHost? host = null, IReadOnlyList<string>? suggestionLines = null, PrUser? viewer = null)
     {
         Anchor = anchor;
@@ -850,7 +850,12 @@ public sealed partial class CommentComposerViewModel : ObservableObject
     }
 
     [RelayCommand(CanExecute = nameof(HasText))]
-    private void AddToReview() => _addToReview(this);
+    private async Task AddToReviewAsync()
+    {
+        IsBusy = true;
+        try { await _addToReview(this); }
+        finally { IsBusy = false; }
+    }
 
     [RelayCommand]
     private void Cancel() => _cancel(this);
@@ -865,68 +870,4 @@ public sealed partial class CommentComposerViewModel : ObservableObject
         { Kind: DiffLineKind.Added or DiffLineKind.Context, NewLine: { } n } => new CommentAnchor(path, DiffSide.Right, n),
         _ => null,
     };
-}
-
-/// <summary>A line comment added to the review being written: sent when the review is submitted; can be changed until then.</summary>
-public sealed partial class PendingCommentViewModel : ObservableObject
-{
-    private readonly Action<PendingCommentViewModel> _remove;
-    private readonly Action<PendingCommentViewModel, DraftComment> _replace;
-
-    public PendingCommentViewModel(DraftComment draft, Action<PendingCommentViewModel> remove, Action<PendingCommentViewModel, DraftComment>? replace = null,
-        PersonViewModel? viewer = null, int pendingCount = 1)
-    {
-        Draft = draft;
-        _remove = remove;
-        _replace = replace ?? ((_, _) => { });
-        Viewer = viewer;
-        PendingCount = pendingCount;
-    }
-
-    public DraftComment Draft { get; private set; }
-    public string Body => Draft.Body;
-    public string Location => $"{Draft.Anchor.Path}:{Draft.Anchor.Line}";
-    public PersonViewModel? Viewer { get; }
-    public bool HasViewer => Viewer is not null;
-    public string ViewerName => Viewer?.Name ?? "You";
-    public int PendingCount { get; }
-    public string PendingText => PendingCount == 1 ? "Sent when you submit your review." : $"Sent when you submit your review ({PendingCount} pending).";
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsShowing))]
-    public partial bool IsEditing { get; private set; }
-
-    public bool IsShowing => !IsEditing;
-
-    [ObservableProperty]
-    public partial CommentEditorViewModel? Editor { get; private set; }
-
-    [RelayCommand]
-    private void Remove() => _remove(this);
-
-    [RelayCommand]
-    private void StartEdit()
-    {
-        Editor = new CommentEditorViewModel(null, "Edit the comment", null, () => []) { Text = Draft.Body };
-        Editor.SubmitCommand = SaveEditCommand;
-        IsEditing = true;
-        Editor.RequestFocus();
-    }
-
-    [RelayCommand]
-    private void SaveEdit()
-    {
-        if (Editor is not { } editor || editor.Text.Trim().Length == 0) return;
-        Draft = Draft with { Body = editor.Text.Trim() };
-        OnPropertyChanged(nameof(Body));
-        CancelEdit();
-        _replace(this, Draft);
-    }
-
-    [RelayCommand]
-    private void CancelEdit()
-    {
-        IsEditing = false;
-        Editor = null;
-    }
 }

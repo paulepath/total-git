@@ -132,7 +132,7 @@ public sealed class GitHubPullRequestProvider : IPullRequestProvider
         {
             var review = await PendingReviewIdAsync(number, ct);
             if (review is null) throw;
-            await ExplainUnplacedAsync(AddToReviewAsync(review, anchor, body, ct));
+            await ExplainUnplacedAsync(AddThreadAsync(review, anchor, body, ct));
             return false;
         }
     }
@@ -200,6 +200,28 @@ public sealed class GitHubPullRequestProvider : IPullRequestProvider
         return GitHubMapping.Users(data.Obj("repository")?.Obj("mentionableUsers"));
     }
 
+    public async Task AddToReviewAsync(int number, CommentAnchor anchor, string body, string headSha, CancellationToken ct = default)
+    {
+        if (await PendingReviewIdAsync(number, ct) is { } pending)
+        {
+            await ExplainUnplacedAsync(AddThreadAsync(pending, anchor, body, ct));
+            return;
+        }
+        // A review with no event stays pending: only its author sees it until it's submitted.
+        var review = new JsonObject { ["commit_id"] = headSha, ["comments"] = new JsonArray(LineComment(anchor, body)) };
+        try
+        {
+            await ExplainUnplacedAsync(_http.RestAsync(HttpMethod.Post, $"{_repoPath}/pulls/{number}/reviews", review, ct));
+        }
+        // One was started meanwhile (on github.com, in another window).
+        catch (HostException ex) when (IsReviewInProgress(ex))
+        {
+            var started = await PendingReviewIdAsync(number, ct);
+            if (started is null) throw;
+            await ExplainUnplacedAsync(AddThreadAsync(started, anchor, body, ct));
+        }
+    }
+
     public Task SubmitReviewAsync(int number, ReviewVerdict verdict, string body, IReadOnlyList<DraftComment> comments, string headSha, CancellationToken ct = default)
     {
         var review = new JsonObject
@@ -219,6 +241,14 @@ public sealed class GitHubPullRequestProvider : IPullRequestProvider
 
         async Task PostReviewAsync()
         {
+            // Nothing to add to a comment review: GitHub would refuse it as empty, so it can only mean sending the
+            // review in progress.
+            if (verdict == ReviewVerdict.Comment && comments.Count == 0 && string.IsNullOrWhiteSpace(body)
+                && await PendingReviewIdAsync(number, ct) is { } inProgress)
+            {
+                await SubmitPendingAsync(inProgress);
+                return;
+            }
             try
             {
                 await _http.RestAsync(HttpMethod.Post, $"{_repoPath}/pulls/{number}/reviews", review, ct);
@@ -228,11 +258,16 @@ public sealed class GitHubPullRequestProvider : IPullRequestProvider
             {
                 var pending = await PendingReviewIdAsync(number, ct);
                 if (pending is null) throw;
-                foreach (var c in comments) await AddToReviewAsync(pending, c.Anchor, c.Body, ct);
-                var submit = new JsonObject { ["review"] = pending, ["event"] = review["event"]!.GetValue<string>() };
-                if (!string.IsNullOrWhiteSpace(body)) submit["body"] = body;
-                await _http.GraphQLAsync(GitHubQueries.SubmitPendingReview, submit, ct);
+                foreach (var c in comments) await AddThreadAsync(pending, c.Anchor, c.Body, ct);
+                await SubmitPendingAsync(pending);
             }
+        }
+
+        Task SubmitPendingAsync(string pending)
+        {
+            var submit = new JsonObject { ["review"] = pending, ["event"] = review["event"]!.GetValue<string>() };
+            if (!string.IsNullOrWhiteSpace(body)) submit["body"] = body;
+            return _http.GraphQLAsync(GitHubQueries.SubmitPendingReview, submit, ct);
         }
     }
 
@@ -252,7 +287,7 @@ public sealed class GitHubPullRequestProvider : IPullRequestProvider
     }
 
     /// <summary>Adds a line comment to a pending review; it's posted when the review is submitted.</summary>
-    private Task AddToReviewAsync(string review, CommentAnchor anchor, string body, CancellationToken ct)
+    private Task AddThreadAsync(string review, CommentAnchor anchor, string body, CancellationToken ct)
     {
         var line = anchor.Line ?? throw new ArgumentException("A new line comment needs a line.", nameof(anchor));
         var side = anchor.Side == DiffSide.Left ? "LEFT" : "RIGHT";

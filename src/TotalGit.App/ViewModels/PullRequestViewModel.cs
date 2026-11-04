@@ -111,7 +111,7 @@ public sealed partial class PullRequestViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(HasDetails), nameof(Body), nameof(HasBody), nameof(StatsText), nameof(MergeText),
         nameof(MergeBrush), nameof(Reviewers), nameof(HasReviewers), nameof(Checks), nameof(HasChecks), nameof(ChecksTabText),
         nameof(Conversation), nameof(ConversationTabText), nameof(ViewerIsAuthor), nameof(ReviewButtonText),
-        nameof(HasReviewInProgress), nameof(ReviewInProgressText))]
+        nameof(HasReviewInProgress), nameof(ReviewInProgressText), nameof(PendingThreads), nameof(HasPending))]
     public partial PullRequestDetails? Details { get; set; }
 
     public bool HasDetails => Details is not null;
@@ -249,56 +249,27 @@ public sealed partial class PullRequestViewModel : ObservableObject
     [ObservableProperty]
     public partial CommentComposerViewModel? Composer { get; set; }
 
-    /// <summary>Line comments waiting to be sent with the review.</summary>
-    public ObservableCollection<PendingCommentViewModel> Pending { get; } = [];
-
-    public bool HasPending => Pending.Count > 0;
-
-    /// <summary>Comments in your review in progress on the host (started on its website or in another tool).</summary>
+    /// <summary>
+    /// Your review in progress, kept on the host as you add to it (only you see it until it's submitted), so it
+    /// survives leaving the pull request, and can be finished here, on the host's website or in another tool.
+    /// </summary>
     public int ReviewInProgressCount => Details?.PendingReviewComments ?? 0;
 
     public bool HasReviewInProgress => Details?.PendingReviewComments is not null;
 
+    /// <summary>The threads with comments in your review in progress, for the Your review tab.</summary>
+    public IReadOnlyList<ReviewThreadViewModel> PendingThreads => FileThreads.Where(t => t.Thread.Comments.Any(c => c.IsPending)).ToList();
+
+    public bool HasPending => PendingThreads.Count > 0;
+
     public string ReviewInProgressText => ReviewInProgressCount switch
     {
-        0 => "You have a review in progress on GitHub (started there or in another tool). It's sent when you submit this one.",
-        1 => "You have a review in progress on GitHub with 1 comment, marked Pending. It's sent when you submit this one.",
-        var n => $"You have a review in progress on GitHub with {n} comments, marked Pending. They're sent when you submit this one.",
+        0 => "You have a review in progress on GitHub. It's sent when you submit your review.",
+        1 => "Your review in progress has 1 comment, saved on GitHub and marked Pending: only you can see it until you submit your review.",
+        var n => $"Your review in progress has {n} comments, saved on GitHub and marked Pending: only you can see them until you submit your review.",
     };
 
-    public string ReviewButtonText => Pending.Count + ReviewInProgressCount is var n && n == 0 ? "Review…" : $"Finish review ({n})";
-
-    public void AddPending(DraftComment draft)
-    {
-        var viewer = CommentHost?.Viewer is { } me ? new PersonViewModel(me, CommentHost.Avatars) : null;
-        Pending.Add(new PendingCommentViewModel(draft, p => RemovePending(p), ReplacePending, viewer, Pending.Count + 1));
-        PendingChanged();
-    }
-
-    /// <summary>A pending comment was edited: the review sends the new text.</summary>
-    private void ReplacePending(PendingCommentViewModel pending, DraftComment draft) => PendingChanged();
-
-    public void RemovePending(PendingCommentViewModel pending)
-    {
-        Pending.Remove(pending);
-        PendingChanged();
-    }
-
-    public void ClearPending()
-    {
-        Pending.Clear();
-        PendingChanged();
-    }
-
-    /// <summary>Raised when the pending comments change, so the diff can show them.</summary>
-    public event Action? PendingCommentsChanged;
-
-    private void PendingChanged()
-    {
-        OnPropertyChanged(nameof(HasPending));
-        OnPropertyChanged(nameof(ReviewButtonText));
-        PendingCommentsChanged?.Invoke();
-    }
+    public string ReviewButtonText => ReviewInProgressCount == 0 ? "Review…" : $"Finish review ({ReviewInProgressCount})";
 
     /// <summary>You opened it: hosts don't let authors approve or request changes on their own pull requests.</summary>
     public bool ViewerIsAuthor => Details?.ViewerIsAuthor == true;

@@ -657,6 +657,56 @@ public class GitHubProviderTests
     }
 
     [Fact]
+    public async Task Adding_to_a_review_starts_one_on_GitHub_when_there_is_none()
+    {
+        var (provider, http) = Create();
+        http.Route(Rest, () => FakeHttpHandler.Json("{}"));
+        RoutePendingReview(http, null);
+
+        await provider.AddToReviewAsync(7, new CommentAnchor("src/b.py", DiffSide.Right, 5, StartLine: 3), "Range", "head1");
+
+        // The lookup, then a review with no event: GitHub keeps it pending.
+        Assert.Equal(2, http.Requests.Count);
+        Assert.Equal($"{Rest}/pulls/7/reviews", http.Requests[1].RequestUri!.ToString());
+        var body = Body(http, 1);
+        Assert.False(body.TryGetProperty("event", out _));
+        Assert.Equal("head1", body.GetProperty("commit_id").GetString());
+        var comment = body.GetProperty("comments")[0];
+        Assert.Equal(("src/b.py", 5, 3, "Range"), (comment.GetProperty("path").GetString(), comment.GetProperty("line").GetInt32(),
+            comment.GetProperty("start_line").GetInt32(), comment.GetProperty("body").GetString()));
+    }
+
+    [Fact]
+    public async Task Adding_to_a_review_joins_the_one_in_progress()
+    {
+        var (provider, http) = Create();
+        RoutePendingReview(http, "PRR_1");
+
+        await provider.AddToReviewAsync(7, new CommentAnchor("src/a.py", DiffSide.Left, 4), "Why?", "head1");
+
+        Assert.Equal(2, http.Requests.Count);
+        var (add, vars) = Call(http, 1);
+        Assert.Contains("addPullRequestReviewThread", add);
+        Assert.Equal(("PRR_1", "LEFT", "Why?"), (vars.GetProperty("review").GetString(), vars.GetProperty("side").GetString(), vars.GetProperty("body").GetString()));
+    }
+
+    [Fact]
+    public async Task A_comment_review_with_nothing_new_sends_the_review_in_progress()
+    {
+        var (provider, http) = Create();
+        RoutePendingReview(http, "PRR_1");
+
+        await provider.SubmitReviewAsync(7, ReviewVerdict.Comment, " ", [], "head1");
+
+        // No empty REST review (GitHub refuses those): the one in progress is submitted.
+        Assert.Equal(2, http.Requests.Count);
+        var (submit, vars) = Call(http, 1);
+        Assert.Contains("submitPullRequestReview", submit);
+        Assert.Equal(("PRR_1", "COMMENT"), (vars.GetProperty("review").GetString(), vars.GetProperty("event").GetString()));
+        Assert.False(vars.TryGetProperty("body", out _));
+    }
+
+    [Fact]
     public async Task Without_a_review_in_progress_GitHubs_refusal_stands()
     {
         var (provider, http) = Create();

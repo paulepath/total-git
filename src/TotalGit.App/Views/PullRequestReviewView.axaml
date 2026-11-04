@@ -617,18 +617,17 @@
               <TextBlock Text="{Binding ProgressText}" FontSize="12.5" Foreground="{x:Static t:Palette.TextPrimary}" />
               <TextBlock Text="{Binding Pr.ReviewInProgressText}" IsVisible="{Binding Pr.HasReviewInProgress}" FontSize="12"
                          Foreground="{x:Static t:Palette.Warning}" TextWrapping="Wrap" />
-              <TextBlock Classes="muted" TextWrapping="Wrap" IsVisible="{Binding !Pr.HasPending}"
-                         Text="No line comments yet. Hover a line in a file and click + to add one, then choose Add to review." />
-              <ItemsControl ItemsSource="{Binding Pr.Pending}">
+              <TextBlock Classes="muted" TextWrapping="Wrap" IsVisible="{Binding !Pr.HasReviewInProgress}"
+                         Text="No line comments yet. Hover a line in a file and click + to add one, then choose Start a review. Your review is saved on GitHub as you go, so you can leave and come back to it." />
+              <ItemsControl ItemsSource="{Binding Pr.PendingThreads}">
                 <ItemsControl.ItemTemplate>
-                  <DataTemplate x:DataType="vm:PendingCommentViewModel">
-                    <Border Background="{x:Static t:Palette.SubtleFill}" CornerRadius="4" Padding="10,6" Margin="0,0,0,6">
-                      <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
-                        <TextBlock Text="{Binding Location}" FontFamily="Cascadia Mono, Consolas, monospace" FontSize="11" Foreground="{x:Static t:Palette.BranchText}" />
-                        <Button Grid.Column="1" Classes="link" Content="Remove" Command="{Binding RemoveCommand}" />
-                        <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Text="{Binding Body}" FontSize="12" Foreground="{x:Static t:Palette.TextBody}" TextWrapping="Wrap" Margin="0,4,0,0" />
-                      </Grid>
-                    </Border>
+                  <DataTemplate x:DataType="vm:ReviewThreadViewModel">
+                    <StackPanel Margin="0,0,0,6">
+                      <Button Classes="link" Content="{Binding Location}" HorizontalAlignment="Left" ToolTip.Tip="Open the file"
+                              Command="{Binding $parent[views:PullRequestReviewView].((vm:PullRequestReviewViewModel)DataContext).OpenThreadCommand}"
+                              CommandParameter="{Binding}" />
+                      <views:ReviewThreadView DataContext="{Binding}" />
+                    </StackPanel>
                   </DataTemplate>
                 </ItemsControl.ItemTemplate>
               </ItemsControl>

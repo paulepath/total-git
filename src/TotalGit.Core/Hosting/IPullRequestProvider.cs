@@ -73,6 +73,13 @@ public interface IPullRequestProvider
     /// <returns>True when it was posted; false when it waits in the review in progress.</returns>
     Task<bool> AddLineCommentAsync(int number, CommentAnchor anchor, string body, string headSha, CancellationToken ct = default);
 
+    /// <summary>
+    /// Adds a line comment to the signed-in user's review in progress on the host, starting one if there's none. It's
+    /// kept there (only its author sees it) until the review is submitted, wherever that's done.
+    /// </summary>
+    /// <param name="headSha">The pull request head the line numbers refer to.</param>
+    Task AddToReviewAsync(int number, CommentAnchor anchor, string body, string headSha, CancellationToken ct = default);
+
     Task ReplyAsync(int number, ReviewThread thread, string body, CancellationToken ct = default);
 
     Task SetResolvedAsync(ReviewThread thread, bool resolved, CancellationToken ct = default);
