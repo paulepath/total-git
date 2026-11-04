@@ -10,14 +10,15 @@ namespace TotalGit.App.ViewModels;
 /// <param name="Changes">Uncommitted changes in it, lost when it's removed.</param>
 public sealed record BranchCleanupWorktree(string Path, string Name, bool IsMissing, int Changes);
 
-/// <summary>One local branch whose remote branch was deleted.</summary>
+/// <summary>One local branch whose remote branch was deleted (or, with no upstream, whose pull request was merged).</summary>
 public sealed partial class BranchCleanupItem : ObservableObject
 {
     public BranchCleanupItem(string name, string? upstream, string subject, DateTimeOffset? lastCommit, int unpushed, string? blockedReason,
-        BranchCleanupWorktree? worktree = null)
+        BranchCleanupWorktree? worktree = null, int? mergedPullRequest = null)
     {
         Name = name;
-        Upstream = upstream is null ? "remote branch deleted" : $"{upstream} (deleted)";
+        Upstream = mergedPullRequest is { } merged ? $"PR #{merged} merged, not on the remote"
+            : upstream is null ? "remote branch deleted" : $"{upstream} (deleted)";
         Subject = subject;
         When = lastCommit is { } when ? DateText.Relative(when) : "";
         UnpushedText = unpushed switch

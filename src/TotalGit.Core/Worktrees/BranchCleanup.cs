@@ -12,12 +12,13 @@ public sealed record GoneBranch(RefInfo Branch, WorktreeInfo? Worktree, string? 
 public static class BranchCleanup
 {
     /// <summary>
-    /// Every local branch whose upstream is gone, by name. One checked out in a linked worktree goes with its
-    /// worktree; one in the main folder (which can't be removed) or in a locked worktree can't be cleaned up.
+    /// Every local branch gone from the remote (its upstream deleted, or its pull request merged), by name. One
+    /// checked out in a linked worktree goes with its worktree; one in the main folder (which can't be removed) or in
+    /// a locked worktree can't be cleaned up.
     /// </summary>
     public static IReadOnlyList<GoneBranch> Classify(IEnumerable<RefInfo> refs, IReadOnlyList<WorktreeInfo> worktrees)
     {
-        return refs.Where(r => r is { Kind: RefKind.LocalBranch, UpstreamGone: true })
+        return refs.Where(r => r is { Kind: RefKind.LocalBranch, IsGone: true })
             .OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
             .Select(r =>
             {

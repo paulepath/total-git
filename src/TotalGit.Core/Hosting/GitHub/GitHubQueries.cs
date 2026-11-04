@@ -60,6 +60,18 @@ internal static class GitHubQueries
     public static string TeamRequested(string owner, string repo) => $"repo:{owner}/{repo} is:pr is:open review-requested:@me";
 
     /// <summary>
+    /// The latest merged pull requests from each of <paramref name="count"/> branches (<c>$h0</c>, <c>$h1</c>, …), one
+    /// alias each (<c>b0</c>, <c>b1</c>, …).
+    /// </summary>
+    public static string MergedFrom(int count)
+    {
+        var heads = string.Join(", ", Enumerable.Range(0, count).Select(i => $"$h{i}: String!"));
+        var lists = string.Join("\n", Enumerable.Range(0, count).Select(i =>
+            $"    b{i}: pullRequests(headRefName: $h{i}, states: MERGED, first: 5, orderBy: {{field: UPDATED_AT, direction: DESC}}) {{ nodes {{ number headRefOid isCrossRepository }} }}"));
+        return $"query($owner: String!, $repo: String!, {heads}) {{\n  repository(owner: $owner, name: $repo) {{\n{lists}\n  }}\n}}";
+    }
+
+    /// <summary>
     /// The viewer's pull requests in every repository, for notifications: four searches (their own, ones they've
     /// reviewed, asked to review, assigned). Their own come with the reviews, comments and checks that notifications
     /// are about; ones they've reviewed with everyone's latest review, to tell whether theirs is still an approval.

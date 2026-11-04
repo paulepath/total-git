@@ -139,6 +139,8 @@ public partial class RepositoryViewModel
             BusyText = null;
         }
         await RefreshRefsAsync();
+        // Branches pushed without an upstream count as gone once their pull request is merged.
+        await FindMergedBranchesAsync(again: !fetchFailed);
         if (_state is not { } state) return;
         var mainRoot = state.MainWorkingDirectory;
 
@@ -168,7 +170,8 @@ public partial class RepositoryViewModel
             var worktree = g.Worktree is { } w
                 ? new BranchCleanupWorktree(w.Path, w.Name, w.IsPrunable, changes.FirstOrDefault(kv => WorktreeService.SamePath(kv.Key, w.Path)).Value)
                 : null;
-            return new BranchCleanupItem(r.Name, r.Upstream, summary?.Subject ?? "", summary?.LastCommit, summary?.UnpushedCount ?? 0, g.BlockedReason, worktree);
+            return new BranchCleanupItem(r.Name, r.Upstream, summary?.Subject ?? "", summary?.LastCommit, summary?.UnpushedCount ?? 0, g.BlockedReason, worktree,
+                r.MergedPullRequest);
         });
 
         var dialog = new BranchCleanupViewModel(items, fetchFailed);

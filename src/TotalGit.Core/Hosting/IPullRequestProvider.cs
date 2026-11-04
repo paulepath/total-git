@@ -52,6 +52,12 @@ public interface IPullRequestProvider
     /// <summary>Open pull requests, most recently updated first.</summary>
     Task<IReadOnlyList<PullRequestSummary>> ListOpenAsync(CancellationToken ct = default);
 
+    /// <summary>
+    /// For each of <paramref name="branches"/> that was the head of a merged pull request in this repository (not a
+    /// fork's), the latest one. Branches without one are left out.
+    /// </summary>
+    Task<IReadOnlyList<MergedPullRequest>> FindMergedAsync(IReadOnlyList<string> branches, CancellationToken ct = default);
+
     /// <summary>One pull request with its reviewers, checks, line comment threads and conversation.</summary>
     Task<PullRequestDetails> GetPullRequestAsync(int number, CancellationToken ct = default);
 

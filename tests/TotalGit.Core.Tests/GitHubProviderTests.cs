@@ -200,6 +200,34 @@ public class GitHubProviderTests
         Assert.Single(http.Requests);
     }
 
+    [Fact]
+    public async Task Finds_the_merged_pull_request_of_each_branch_but_not_a_forks()
+    {
+        var (provider, http) = Create();
+        http.Route(GraphQL, () => FakeHttpHandler.Json("""
+            {"data":{"repository":{
+              "b0":{"nodes":[{"number":12,"headRefOid":"tip1","isCrossRepository":false},{"number":3,"headRefOid":"old","isCrossRepository":false}]},
+              "b1":{"nodes":[]},
+              "b2":{"nodes":[{"number":40,"headRefOid":"fork","isCrossRepository":true}]}}}}
+            """));
+        var merged = await provider.FindMergedAsync(["feature/jwt", "feature/never-pushed", "patch-1"]);
+
+        Assert.Equal([new MergedPullRequest("feature/jwt", 12, "tip1")], merged);
+        var body = Body(http);
+        Assert.Contains("b2: pullRequests(headRefName: $h2, states: MERGED", body.GetProperty("query").GetString());
+        Assert.Equal("feature/never-pushed", body.GetProperty("variables").GetProperty("h1").GetString());
+        Assert.Equal("widgets", body.GetProperty("variables").GetProperty("repo").GetString());
+    }
+
+    [Fact]
+    public async Task Asks_about_many_branches_in_batches()
+    {
+        var (provider, http) = Create();
+        http.Route(GraphQL, () => FakeHttpHandler.Json("""{"data":{"repository":{}}}"""));
+        Assert.Empty(await provider.FindMergedAsync([.. Enumerable.Range(0, 60).Select(i => $"b{i}")]));
+        Assert.Equal(3, http.Requests.Count);
+    }
+
     private const string DetailsJson = """
         {"data":{"viewer":{"login":"me"},"repository":{"pullRequest":{
           "number":7,"title":"Widgets","isDraft":false,"state":"OPEN","baseRefName":"main","headRefName":"feature/x",

@@ -41,6 +41,8 @@ public partial class RepositoryViewModel
         _prProvider = host is null ? null : PullRequestProviders!.TryCreate(host);
         _pullRequests = [];
         _prHighlight = null;
+        _mergedBranches.Clear();
+        _mergedAsked.Clear();
         CloseReviewWindows();
         if (_prProvider is null)
         {
@@ -70,6 +72,7 @@ public partial class RepositoryViewModel
             UpdatePullRequestHighlight();
             // The branch labels' pull request chips.
             if (_state is not null) RebuildGraph();
+            await FindMergedBranchesAsync();
         }
         catch (HostException ex)
         {
@@ -84,6 +87,64 @@ public partial class RepositoryViewModel
             _prListLoadedAt = default; // try again next time
             Sidebar.SetPullRequests(true, _pullRequests, ex.Message);
         }
+    }
+
+    /// <summary>
+    /// Local branches with no upstream whose pull request was merged, with the tip it merged: a branch pushed without
+    /// -u never learns that its remote branch was deleted, so this is how it counts as gone. Kept while the tip stays.
+    /// </summary>
+    private Dictionary<string, (int Number, string Tip)> _mergedBranches = new(StringComparer.Ordinal);
+
+    /// <summary>Branch tips already asked about, so each is asked once (unless <c>again</c>).</summary>
+    private readonly HashSet<string> _mergedAsked = new(StringComparer.Ordinal);
+
+    /// <summary>The state with <see cref="RefInfo.MergedPullRequest"/> set on the branches found merged.</summary>
+    private RepositoryState WithMergedBranches(RepositoryState state) => _mergedBranches.Count == 0 ? state : state with
+    {
+        Refs = [.. state.Refs.Select(r => r is { Kind: RefKind.LocalBranch, Upstream: null } && _mergedBranches.TryGetValue(r.Name, out var m) && m.Tip == r.TargetSha
+            ? r with { MergedPullRequest = m.Number }
+            : r)],
+    };
+
+    /// <summary>
+    /// Asks the host which local-only branches (no upstream, no remote branch of the same name) were the head of a
+    /// merged pull request, and counts those that haven't moved since as gone. Refreshes when that changes.
+    /// </summary>
+    /// <param name="again">Ask about every such branch, not only tips not asked about yet.</param>
+    private async Task FindMergedBranchesAsync(bool again = false)
+    {
+        if (_prProvider is not { } provider || _state is not { } state) return;
+        var onRemote = state.Refs.Where(r => r.Kind == RefKind.RemoteBranch).Select(r => r.ShortName).ToHashSet(StringComparer.Ordinal);
+        var candidates = state.Refs.Where(r => r is { Kind: RefKind.LocalBranch, Upstream: null, IsNew: false } && !onRemote.Contains(r.Name)).ToList();
+        var ask = candidates.Where(r => again || !_mergedAsked.Contains($"{r.Name}@{r.TargetSha}")).ToList();
+
+        var found = new Dictionary<string, (int Number, string Tip)>(StringComparer.Ordinal);
+        foreach (var r in candidates)
+            if (_mergedBranches.TryGetValue(r.Name, out var known) && known.Tip == r.TargetSha && !ask.Contains(r)) found[r.Name] = known;
+        if (ask.Count > 0)
+        {
+            try
+            {
+                var merged = await Task.Run(() => provider.FindMergedAsync([.. ask.Select(r => r.Name)]));
+                if (provider != _prProvider || _state is null) return;
+                foreach (var pr in merged)
+                {
+                    var branch = ask.First(r => r.Name == pr.HeadRef);
+                    // Commits added after the merge are new work: then the branch isn't gone.
+                    if (branch.TargetSha == pr.HeadSha || await GitActions.IsAncestorAsync(state.WorkingDirectory, branch.TargetSha, pr.HeadSha))
+                        found[branch.Name] = (pr.Number, branch.TargetSha);
+                }
+                foreach (var r in ask) _mergedAsked.Add($"{r.Name}@{r.TargetSha}");
+            }
+            catch (HostException)
+            {
+                return; // the pull request list shows what went wrong
+            }
+        }
+
+        var changed = found.Count != _mergedBranches.Count || found.Any(kv => !_mergedBranches.TryGetValue(kv.Key, out var m) || m != kv.Value);
+        _mergedBranches = found;
+        if (changed) await RefreshRefsAsync();
     }
 
     /// <summary>

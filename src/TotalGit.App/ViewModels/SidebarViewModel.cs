@@ -536,12 +536,13 @@ public partial class SidebarViewModel : ObservableObject
                 IsCurrent = r.IsCurrent,
                 Ahead = r.Ahead > 0 ? $"{r.Ahead}↑" : null,
                 Behind = r.Behind > 0 ? $"{r.Behind}↓" : null,
-                IsUpstreamGone = r.UpstreamGone,
+                IsUpstreamGone = r.IsGone,
                 HasWorktree = otherWorktree is not null,
                 ActiveRunsTip = running.GetValueOrDefault(r.Name),
                 ToolTip = r.Name
                     + (otherWorktree is not null ? $"\nChecked out in worktree {otherWorktree.Path}" : "")
-                    + (r.UpstreamGone ? $"\n{r.Upstream} was deleted on the remote" : ""),
+                    + (r.UpstreamGone ? $"\n{r.Upstream} was deleted on the remote" : "")
+                    + (r.MergedPullRequest is { } merged ? $"\nPull request #{merged} was merged, and the branch is no longer on the remote" : ""),
             });
         }
         localTree.Build();

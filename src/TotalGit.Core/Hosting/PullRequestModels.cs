@@ -59,6 +59,9 @@ public sealed record PrUser(string Login, string? AvatarUrl, string? Name = null
     public string NameAndLogin => DisplayName == Login ? Login : $"{DisplayName} ({Login})";
 }
 
+/// <summary>A merged pull request from one of this repository's branches: its number and the head commit merged.</summary>
+public sealed record MergedPullRequest(string HeadRef, int Number, string HeadSha);
+
 public sealed record PullRequestSummary(
     int Number,
     string Title,

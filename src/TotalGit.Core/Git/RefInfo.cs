@@ -17,6 +17,10 @@ public enum RefKind
 /// its own yet.
 /// </param>
 /// <param name="CreatedFrom">For a new branch, the branch it was made from (or another branch holding its commit).</param>
+/// <param name="MergedPullRequest">
+/// For a local branch with no upstream and no remote branch of its name: the merged pull request it was the head of,
+/// when the branch hasn't moved since (a branch pushed without -u, merged, then deleted on the remote).
+/// </param>
 public sealed record RefInfo(
     string Name,
     RefKind Kind,
@@ -28,8 +32,12 @@ public sealed record RefInfo(
     int Behind = 0,
     bool UpstreamGone = false,
     bool IsNew = false,
-    string? CreatedFrom = null)
+    string? CreatedFrom = null,
+    int? MergedPullRequest = null)
 {
+    /// <summary>For local branches, gone from the remote: its upstream was deleted, or its pull request merged.</summary>
+    public bool IsGone => UpstreamGone || MergedPullRequest is not null;
+
     /// <summary>Branch name without the remote prefix (<c>origin/feature/x</c> → <c>feature/x</c>).</summary>
     public string ShortName => RemoteName is not null && Name.StartsWith(RemoteName + "/", StringComparison.Ordinal)
         ? Name[(RemoteName.Length + 1)..]

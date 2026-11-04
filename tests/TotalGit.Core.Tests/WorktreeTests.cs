@@ -313,12 +313,15 @@ public sealed class WorktreeTests : IDisposable
         {
             Gone("in-main"), Gone("in-linked", current: true), Gone("in-locked"), Gone("plain"),
             new RefInfo("alive", RefKind.LocalBranch, "sha", false, Upstream: "origin/alive"),
+            // Pushed without an upstream: gone once its pull request is merged.
+            new RefInfo("merged", RefKind.LocalBranch, "sha", false, MergedPullRequest: 12),
+            new RefInfo("local-only", RefKind.LocalBranch, "sha", false),
         };
         var worktrees = new[] { Wt("D:/r", "in-main", main: true), Wt("D:/r/.worktrees/a", "in-linked"), Wt("D:/r/.worktrees/b", "in-locked", locked: true) };
 
         var gone = BranchCleanup.Classify(refs, worktrees).ToDictionary(g => g.Branch.Name);
 
-        Assert.Equal(["in-linked", "in-locked", "in-main", "plain"], gone.Keys);
+        Assert.Equal(["in-linked", "in-locked", "in-main", "merged", "plain"], gone.Keys);
         Assert.True(gone["in-linked"].CanCleanUp); // even though it's the current branch: you're in that worktree
         Assert.Equal("a", gone["in-linked"].Worktree?.Name);
         Assert.False(gone["in-main"].CanCleanUp);
@@ -326,6 +329,7 @@ public sealed class WorktreeTests : IDisposable
         Assert.Contains("locked", gone["in-locked"].BlockedReason);
         Assert.True(gone["plain"].CanCleanUp);
         Assert.Null(gone["plain"].Worktree);
+        Assert.True(gone["merged"].CanCleanUp);
 
         // Before the worktrees are listed, the current branch is blocked.
         Assert.False(BranchCleanup.Classify(refs, []).Single(g => g.Branch.Name == "in-linked").CanCleanUp);

@@ -338,7 +338,7 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
 
             var sameRepo = keepView && _state is not null && WorktreeService.SamePath(_state.WorkingDirectory, state.WorkingDirectory);
             ReplaceSession(session);
-            _state = state;
+            _state = WithMergedBranches(state);
             _worktrees = worktrees;
             _status = status;
             _commits.Clear();
@@ -433,7 +433,7 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
             });
             if (session != _session) return;
 
-            _state = state;
+            _state = WithMergedBranches(state);
             _worktrees = worktrees;
             _status = status;
             _commits.Clear();
@@ -1464,7 +1464,7 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
             }
             if (wt.IsPrunable) actions.Add(new MenuAction(CleanUpLeftoversText, CleanUpWorktreesCommand, Icon: MenuIcons.Delete));
             if (fromWorktreeSection && wt.Branch is { } branch
-                && _state?.Refs.Any(r => r is { Kind: RefKind.LocalBranch, UpstreamGone: true } && r.Name == branch) == true)
+                && _state?.Refs.Any(r => r is { Kind: RefKind.LocalBranch, IsGone: true } && r.Name == branch) == true)
                 actions.Add(new MenuAction("Clean up branches deleted on remote…", CleanUpBranchesCommand, Icon: MenuIcons.Delete));
             if (fromWorktreeSection)
             {
@@ -1493,7 +1493,7 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
                 if (isCheckedOutHere && _state!.Refs.Any(r => r is { Kind: RefKind.LocalBranch, IsCurrent: true, Upstream: not null, UpstreamGone: false }))
                     dangerous.Add(new MenuAction("Force push…", ForcePushCommand, Icon: MenuIcons.Push));
                 if (!isCheckedOutHere && wt is null) dangerous.Add(new MenuAction("Delete branch…", DeleteBranchCommand, target, Icon: MenuIcons.Delete));
-                if (_state?.Refs.Any(r => r is { Kind: RefKind.LocalBranch, UpstreamGone: true } && r.Name == target.Name) == true)
+                if (_state?.Refs.Any(r => r is { Kind: RefKind.LocalBranch, IsGone: true } && r.Name == target.Name) == true)
                     dangerous.Add(new MenuAction("Clean up branches deleted on remote…", CleanUpBranchesCommand, Icon: MenuIcons.Delete));
                 break;
             case RefKind.RemoteBranch:

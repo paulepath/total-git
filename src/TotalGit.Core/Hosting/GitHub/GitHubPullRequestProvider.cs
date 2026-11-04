@@ -56,6 +56,25 @@ public sealed class GitHubPullRequestProvider : IPullRequestProvider
         return nodes is { } array ? array.EnumerateArray().Select(pr => GitHubMapping.Summary(pr, viewer, requested)).ToList() : [];
     }
 
+    public async Task<IReadOnlyList<MergedPullRequest>> FindMergedAsync(IReadOnlyList<string> branches, CancellationToken ct = default)
+    {
+        var found = new List<MergedPullRequest>();
+        foreach (var chunk in branches.Distinct(StringComparer.Ordinal).Chunk(25))
+        {
+            var variables = RepoVariables();
+            for (var i = 0; i < chunk.Length; i++) variables[$"h{i}"] = chunk[i];
+            var repo = (await _http.GraphQLAsync(GitHubQueries.MergedFrom(chunk.Length), variables, ct)).Obj("repository");
+            for (var i = 0; i < chunk.Length; i++)
+            {
+                // A fork's branch of the same name is someone else's.
+                if (repo?.Obj($"b{i}")?.Obj("nodes") is not { ValueKind: System.Text.Json.JsonValueKind.Array } nodes) continue;
+                var pr = nodes.EnumerateArray().FirstOrDefault(n => !n.Bool("isCrossRepository") && n.Int("number") is not null && n.Str("headRefOid") is not null);
+                if (pr.ValueKind == System.Text.Json.JsonValueKind.Object) found.Add(new MergedPullRequest(chunk[i], pr.Int("number")!.Value, pr.Str("headRefOid")!));
+            }
+        }
+        return found;
+    }
+
     public async Task<PullRequestDetails> GetPullRequestAsync(int number, CancellationToken ct = default)
     {
         var variables = RepoVariables();
