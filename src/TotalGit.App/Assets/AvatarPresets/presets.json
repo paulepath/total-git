@@ -5,6 +5,16 @@
     "file": "detective.png"
   },
   {
+    "id": "moustache",
+    "label": "Moustache",
+    "file": "moustache.png"
+  },
+  {
+    "id": "beard",
+    "label": "Beard",
+    "file": "beard.png"
+  },
+  {
     "id": "wizard",
     "label": "Wizard",
     "file": "wizard.png"
@@ -118,5 +128,85 @@
     "id": "phoenix",
     "label": "Phoenix",
     "file": "phoenix.png"
+  },
+  {
+    "id": "fox-sly",
+    "label": "Sly fox",
+    "file": "fox-sly.png"
+  },
+  {
+    "id": "robot-happy",
+    "label": "Happy robot",
+    "file": "robot-happy.png"
+  },
+  {
+    "id": "hooded-rogue",
+    "label": "Hooded rogue",
+    "file": "hooded-rogue.png"
+  },
+  {
+    "id": "owl-blue",
+    "label": "Blue owl",
+    "file": "owl-blue.png"
+  },
+  {
+    "id": "adventurer",
+    "label": "Adventurer",
+    "file": "adventurer.png"
+  },
+  {
+    "id": "raven",
+    "label": "Raven",
+    "file": "raven.png"
+  },
+  {
+    "id": "astronaut-green",
+    "label": "Spacewalker",
+    "file": "astronaut-green.png"
+  },
+  {
+    "id": "tiger",
+    "label": "Tiger",
+    "file": "tiger.png"
+  },
+  {
+    "id": "hawaiian-shirt",
+    "label": "Hawaiian shirt",
+    "file": "hawaiian-shirt.png"
+  },
+  {
+    "id": "dragon-green",
+    "label": "Green dragon",
+    "file": "dragon-green.png"
+  },
+  {
+    "id": "panther",
+    "label": "Panther",
+    "file": "panther.png"
+  },
+  {
+    "id": "samurai",
+    "label": "Samurai",
+    "file": "samurai.png"
+  },
+  {
+    "id": "octopus-captain",
+    "label": "Captain octopus",
+    "file": "octopus-captain.png"
+  },
+  {
+    "id": "redhead-glasses",
+    "label": "Redhead with glasses",
+    "file": "redhead-glasses.png"
+  },
+  {
+    "id": "stag",
+    "label": "Stag",
+    "file": "stag.png"
+  },
+  {
+    "id": "pirate-bandana",
+    "label": "Bandana pirate",
+    "file": "pirate-bandana.png"
   }
 ]
