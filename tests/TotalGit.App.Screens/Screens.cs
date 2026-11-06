@@ -118,6 +118,24 @@ internal static class Screens
         await Dialog(main, "dialog-crash", () => (Task)typeof(App).GetMethod("OfferCrashReportAsync", BindingFlags.NonPublic | BindingFlags.Static)!
             .Invoke(null, [main, "System.InvalidOperationException: Sequence contains no elements\n   at TotalGit.App.Foo()"])!);
 
+        // Choosing a picture for someone: the dialog as it opens, then with one chosen, shown everywhere, and listed.
+        var author = Git(o.Repo, "log", "-1", "--format=%an|%ae").Split('|');
+        var person = new PersonRef(author[0], author[1]);
+        await Dialog(main, "dialog-picture", () => Run(tab.SetPictureCommand, person));
+        if (Wanted("picture"))
+        {
+            var preset = AvatarImages.Presets.FirstOrDefault();
+            var png = preset is not null ? AvatarImages.PresetPng(preset) : AvatarImages.ToSquarePng(new Avalonia.Media.Imaging.RenderTargetBitmap(new PixelSize(64, 64)));
+            var logins = new List<string>();
+            if (o.Pr is { } prNumber && tab.Sidebar.CardForPullRequest(prNumber) is { Author.Login: { } prLogin }) logins.Add(prLogin);
+            shell.Avatars.Custom.Set(null, person.Name, [person.Email!], logins, png, preset?.Id);
+            await Settle(() => false, 2);
+            await Save(main, "picture-main");
+            await Dialog(main, "picture-dialog-set", () => Run(tab.SetPictureCommand, person));
+            await Dialog(main, "picture-people", () =>
+                new PeoplePicturesDialog { DataContext = new PeoplePicturesViewModel(shell.Avatars) }.ShowDialog(main));
+        }
+
         // An error, with its Report and Copy details buttons.
         if (Wanted("error-banner"))
         {

@@ -1,0 +1,122 @@
+[
+  {
+    "id": "detective",
+    "label": "Detective",
+    "file": "detective.png"
+  },
+  {
+    "id": "wizard",
+    "label": "Wizard",
+    "file": "wizard.png"
+  },
+  {
+    "id": "astronaut",
+    "label": "Astronaut",
+    "file": "astronaut.png"
+  },
+  {
+    "id": "pirate",
+    "label": "Pirate",
+    "file": "pirate.png"
+  },
+  {
+    "id": "knight",
+    "label": "Knight",
+    "file": "knight.png"
+  },
+  {
+    "id": "robot",
+    "label": "Robot",
+    "file": "robot.png"
+  },
+  {
+    "id": "ninja",
+    "label": "Ninja",
+    "file": "ninja.png"
+  },
+  {
+    "id": "viking",
+    "label": "Viking",
+    "file": "viking.png"
+  },
+  {
+    "id": "chef",
+    "label": "Chef",
+    "file": "chef.png"
+  },
+  {
+    "id": "explorer",
+    "label": "Explorer",
+    "file": "explorer.png"
+  },
+  {
+    "id": "punk",
+    "label": "Punk",
+    "file": "punk.png"
+  },
+  {
+    "id": "lumberjack",
+    "label": "Lumberjack",
+    "file": "lumberjack.png"
+  },
+  {
+    "id": "scholar",
+    "label": "Scholar",
+    "file": "scholar.png"
+  },
+  {
+    "id": "dj",
+    "label": "DJ",
+    "file": "dj.png"
+  },
+  {
+    "id": "alien",
+    "label": "Alien",
+    "file": "alien.png"
+  },
+  {
+    "id": "dragon",
+    "label": "Dragon",
+    "file": "dragon.png"
+  },
+  {
+    "id": "fox",
+    "label": "Fox",
+    "file": "fox.png"
+  },
+  {
+    "id": "owl",
+    "label": "Owl",
+    "file": "owl.png"
+  },
+  {
+    "id": "wolf",
+    "label": "Wolf",
+    "file": "wolf.png"
+  },
+  {
+    "id": "bear",
+    "label": "Bear",
+    "file": "bear.png"
+  },
+  {
+    "id": "cat",
+    "label": "Cat",
+    "file": "cat.png"
+  },
+  {
+    "id": "lion",
+    "label": "Lion",
+    "file": "lion.png"
+  },
+  {
+    "id": "octopus",
+    "label": "Octopus",
+    "file": "octopus.png"
+  },
+  {
+    "id": "phoenix",
+    "label": "Phoenix",
+    "file": "phoenix.png"
+  }
+]

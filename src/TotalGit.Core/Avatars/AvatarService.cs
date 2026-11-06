@@ -38,6 +38,7 @@ public sealed class AvatarService : IDisposable
     {
         _cacheDir = cacheDir;
         Directory.CreateDirectory(cacheDir);
+        Custom = new CustomAvatars(Path.Combine(cacheDir, "custom"));
         _missFile = Path.Combine(cacheDir, "misses.json");
         _misses = LoadMisses(_missFile);
         _token = new Lazy<string?>(gitHubToken ?? DefaultGitHubToken);
@@ -45,6 +46,9 @@ public sealed class AvatarService : IDisposable
         _http = http ?? new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
         _http.DefaultRequestHeaders.UserAgent.ParseAdd("TotalGit/0.1");
     }
+
+    /// <summary>Pictures chosen for people on this PC, and the GitHub logins learned for commit emails.</summary>
+    public CustomAvatars Custom { get; }
 
     /// <param name="email">Author email.</param>
     /// <param name="gitHubRepo">owner/repo of the GitHub origin, if any.</param>
@@ -97,7 +101,13 @@ public sealed class AvatarService : IDisposable
     {
         var gitHubFile = Path.Combine(_cacheDir, $"gh-{key}.img");
         var gravatarFile = Path.Combine(_cacheDir, $"gv-{key}.img");
-        if (File.Exists(gitHubFile)) return await File.ReadAllBytesAsync(gitHubFile);
+        if (AvatarIdentity.GitHubNoReplyLogin(email) is { } noReplyLogin) Custom.Link(email, noReplyLogin);
+        if (File.Exists(gitHubFile))
+        {
+            // Found before logins were remembered: learn it once, in the background.
+            if (Custom.LoginFor(email) is null && !IsRecentMiss("ln:" + key)) _ = LearnLoginAsync(key, email, gitHubRepo, sha);
+            return await File.ReadAllBytesAsync(gitHubFile);
+        }
 
         await _throttle.WaitAsync();
         try
@@ -152,7 +162,7 @@ public sealed class AvatarService : IDisposable
             asked = true;
             var (url, ok) = await GitHubApiAsync($"repos/{gh.Owner}/{gh.Repo}/commits/{sha}", search: false,
                 root => root.TryGetProperty("author", out var author) && author.ValueKind == JsonValueKind.Object
-                    ? AvatarUrl(author)
+                    ? AvatarUrl(author, email)
                     : null);
             answered &= ok;
             if ((bytes = await TryDownloadAsync(url)) is not null) return (bytes, true);
@@ -164,7 +174,7 @@ public sealed class AvatarService : IDisposable
             asked = true;
             var (url, ok) = await GitHubApiAsync($"search/users?q={Uri.EscapeDataString(email + " in:email")}", search: true,
                 root => root.TryGetProperty("items", out var items) && items.GetArrayLength() > 0
-                    ? AvatarUrl(items[0])
+                    ? AvatarUrl(items[0], email)
                     : null);
             answered &= ok;
             if ((bytes = await TryDownloadAsync(url)) is not null) return (bytes, true);
@@ -173,8 +183,42 @@ public sealed class AvatarService : IDisposable
         return (null, asked && answered);
     }
 
-    private static string? AvatarUrl(JsonElement user)
+    /// <summary>Asks GitHub who wrote <paramref name="sha"/> (or whose email it is), only to remember their login.</summary>
+    private async Task LearnLoginAsync(string key, string email, (string Owner, string Repo)? repo, string? sha)
     {
+        await _throttle.WaitAsync();
+        try
+        {
+            if (Custom.LoginFor(email) is not null) return;
+            var answered = true;
+            if (repo is { } gh && sha is not null)
+            {
+                var (_, ok) = await GitHubApiAsync($"repos/{gh.Owner}/{gh.Repo}/commits/{sha}", search: false,
+                    root => root.TryGetProperty("author", out var author) && author.ValueKind == JsonValueKind.Object ? AvatarUrl(author, email) : null);
+                answered &= ok;
+            }
+            if (Custom.LoginFor(email) is null && _token.Value is not null)
+            {
+                var (_, ok) = await GitHubApiAsync($"search/users?q={Uri.EscapeDataString(email + " in:email")}", search: true,
+                    root => root.TryGetProperty("items", out var items) && items.GetArrayLength() > 0 ? AvatarUrl(items[0], email) : null);
+                answered &= ok;
+            }
+            if (Custom.LoginFor(email) is null && answered) RecordMiss("ln:" + key);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or IOException or JsonException or ObjectDisposedException)
+        {
+            // Retried next launch.
+        }
+        finally
+        {
+            _throttle.Release();
+        }
+    }
+
+    /// <summary>A GitHub user's avatar address (small), remembering that <paramref name="email"/> is them.</summary>
+    private string? AvatarUrl(JsonElement user, string email)
+    {
+        if (user.TryGetProperty("login", out var login) && login.GetString() is { Length: > 0 } name) Custom.Link(email, name);
         if (!user.TryGetProperty("avatar_url", out var url) || url.GetString() is not { } avatarUrl) return null;
         return avatarUrl + (avatarUrl.Contains('?') ? "&" : "?") + "s=64";
     }

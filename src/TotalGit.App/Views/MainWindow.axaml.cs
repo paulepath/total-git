@@ -153,6 +153,8 @@ public partial class MainWindow : Window, IDialogService
         if (_shell.Notifier is { } notifier) notifier.Notified += FlashTaskbar;
 
         _shell.Dialogs = this;
+        PeoplePicturesButton.Click += async (_, _) =>
+            await Zoomed(new PeoplePicturesDialog { DataContext = new PeoplePicturesViewModel(_shell.Avatars) }).ShowDialog(this);
         if (!IsVisible) RestorePlacement(_shell.Settings);
         Zoom.Initialize(_shell.Settings);
         ApplyZoom(showIndicator: false);
@@ -371,6 +373,9 @@ public partial class MainWindow : Window, IDialogService
 
     public Task<bool> ShowTabStyleAsync(TabStyleViewModel viewModel) =>
         Zoomed(new TabStyleDialog { DataContext = viewModel }).ShowDialog<bool>(this);
+
+    public Task<bool> ShowPersonPictureAsync(PersonPictureViewModel viewModel) =>
+        Zoomed(new PersonPictureDialog { DataContext = viewModel }).ShowDialog<bool>(this);
 
     public Task<bool> ShowBranchRulesAsync(BranchRulesViewModel viewModel) =>
         Zoomed(new BranchRulesDialog { DataContext = viewModel }).ShowDialog<bool>(this);

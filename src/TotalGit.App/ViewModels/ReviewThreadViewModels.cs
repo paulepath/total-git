@@ -61,15 +61,23 @@ public interface ICommentHost
 }
 
 /// <summary>Someone on a pull request: their avatar (initials until it loads, or when there's none) and names.</summary>
-public sealed partial class PersonViewModel : ObservableObject
+public sealed partial class PersonViewModel : ObservableObject, IAvatarWatcher
 {
+    private readonly AvatarCache? _avatars;
+
     public PersonViewModel(PrUser user, AvatarCache? avatars)
     {
         User = user;
+        _avatars = avatars;
         Initials = Core.Avatars.AvatarIdentity.Initials(user.DisplayName);
         InitialsBrush = new SolidColorBrush(HslColor.FromHsl(Core.Avatars.AvatarIdentity.Hue(user.Login), 0.45, 0.42).ToRgb());
-        if (user.AvatarUrl is { } url && avatars is not null) _ = LoadAsync(avatars, url);
+        if (avatars is null) return;
+        avatars.WatchWeakly(this);
+        _ = LoadAsync();
     }
+
+    /// <summary>The pictures they can be given, for "Set picture for…" (null without them).</summary>
+    public AvatarCache? Avatars => _avatars;
 
     public PrUser User { get; }
     public string Login => User.Login;
@@ -86,7 +94,12 @@ public sealed partial class PersonViewModel : ObservableObject
     /// <summary>The circle behind the initials; none behind a picture.</summary>
     public IBrush? Background => HasAvatar ? null : InitialsBrush;
 
-    private async Task LoadAsync(AvatarCache avatars, string url) => Avatar = await avatars.GetUrlAsync(url);
+    private async Task LoadAsync()
+    {
+        if (_avatars is not null) Avatar = await _avatars.GetUserAsync(User.Login, User.AvatarUrl);
+    }
+
+    void IAvatarWatcher.AvatarsChanged() => _ = LoadAsync();
 }
 
 /// <summary>A reaction to offer in the picker.</summary>

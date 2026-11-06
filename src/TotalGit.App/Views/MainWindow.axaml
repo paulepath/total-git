@@ -141,6 +141,10 @@
             </MenuFlyout>
           </Button.Flyout>
         </Button>
+        <Button x:Name="PeoplePicturesButton" Background="Transparent" Padding="8" VerticalAlignment="Center"
+                ToolTip.Tip="People's pictures: the ones you've chosen for people who have none (or one you'd rather not see)">
+          <PathIcon Data="{StaticResource PersonIcon}" Width="14" Height="14" Foreground="{x:Static t:Palette.TextSecondary}" />
+        </Button>
         <Button Background="Transparent" Padding="8" VerticalAlignment="Center" Command="{Binding ReportProblemCommand}"
                 ToolTip.Tip="Report a problem: opens a GitHub issue with Total Git's version and recent log, for you to describe and submit">
           <PathIcon Data="{StaticResource ReportIcon}" Width="14" Height="14" Foreground="{x:Static t:Palette.TextSecondary}" />

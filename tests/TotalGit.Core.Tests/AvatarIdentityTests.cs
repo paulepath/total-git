@@ -12,6 +12,13 @@ public class AvatarIdentityTests
         Assert.Equal(expected, AvatarIdentity.GitHubNoReplyAvatarUrl(email));
 
     [Theory]
+    [InlineData("12345+octocat@users.noreply.github.com", "octocat")]
+    [InlineData("Octocat@users.noreply.github.com", "Octocat")]
+    [InlineData("someone@example.com", null)]
+    public void GitHub_noreply_addresses_name_the_login(string email, string? expected) =>
+        Assert.Equal(expected, AvatarIdentity.GitHubNoReplyLogin(email));
+
+    [Theory]
     [InlineData("https://github.com/dotnet/runtime.git", "dotnet", "runtime")]
     [InlineData("git@github.com:owner/my.repo.git", "owner", "my.repo")]
     [InlineData("https://github.com/owner/repo", "owner", "repo")]

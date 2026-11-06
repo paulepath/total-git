@@ -1,0 +1,119 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:t="using:TotalGit.App.Services"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:TotalGit.App.ViewModels"
+        x:Class="TotalGit.App.Views.PersonPictureDialog"
+        x:DataType="vm:PersonPictureViewModel"
+        Title="{Binding Title}"
+        Width="560" Height="640" MinWidth="460" MinHeight="480"
+        WindowStartupLocation="CenterOwner"
+        Background="{x:Static t:Palette.Dialog}">
+  <Window.Styles>
+    <Style Selector="TextBlock.field">
+      <Setter Property="Foreground" Value="{x:Static t:Palette.TextPrimary}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Margin" Value="0,14,0,6" />
+    </Style>
+    <Style Selector="Button.small">
+      <Setter Property="Padding" Value="10,3" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="MinHeight" Value="0" />
+    </Style>
+    <Style Selector="ListBox.presets ListBoxItem">
+      <Setter Property="Padding" Value="4" />
+      <Setter Property="Margin" Value="1" />
+      <Setter Property="CornerRadius" Value="26" />
+    </Style>
+    <Style Selector="Border#DropTarget.dragging">
+      <Setter Property="BorderBrush" Value="{x:Static t:Palette.Accent}" />
+    </Style>
+  </Window.Styles>
+
+  <DockPanel Margin="20">
+    <StackPanel DockPanel.Dock="Top" Spacing="6">
+      <TextBlock Text="{Binding Title}" FontSize="18" FontWeight="SemiBold" Foreground="{x:Static t:Palette.TextPrimary}" />
+      <TextBlock Foreground="{x:Static t:Palette.TextSecondary}" TextWrapping="Wrap"
+                 Text="Shown instead of their GitHub or Gravatar picture everywhere in Total Git. Kept on this PC only." />
+
+      <Grid ColumnDefinitions="Auto,*" Margin="0,12,0,0">
+        <!-- Drop a picture here. -->
+        <Border x:Name="DropTarget" Width="104" Height="104" CornerRadius="52" BorderThickness="2"
+                BorderBrush="{x:Static t:Palette.BorderInput}" DragDrop.AllowDrop="True" ToolTip.Tip="Drop a picture here">
+          <Border CornerRadius="50" ClipToBounds="True" Background="{Binding InitialsBrush}">
+            <Panel>
+              <TextBlock Text="{Binding Initials}" FontSize="36" FontWeight="SemiBold" Foreground="White"
+                         HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding !HasPreview}" />
+              <Border Background="{x:Static t:Palette.Dialog}" IsVisible="{Binding HasPreview}">
+                <Image Source="{Binding Preview}" Stretch="UniformToFill" />
+              </Border>
+            </Panel>
+          </Border>
+        </Border>
+        <StackPanel Grid.Column="1" Margin="18,0,0,0" Spacing="8" VerticalAlignment="Center">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <Button Classes="small" Content="Choose a picture…" Click="OnChoose"
+                    ToolTip.Tip="A PNG, JPG, BMP or GIF, up to 10 MB; the middle square is used" />
+            <Button x:Name="PasteButton" Classes="small" Content="Paste" Click="OnPaste"
+                    ToolTip.Tip="Use the picture you copied" />
+          </StackPanel>
+          <TextBlock FontSize="11" Foreground="{x:Static t:Palette.TextMuted}" TextWrapping="Wrap"
+                     Text="Or drop one on the circle, or pick one of the built-in pictures below." />
+          <TextBlock Foreground="{x:Static t:Palette.Failure}" FontSize="11" TextWrapping="Wrap" Text="{Binding Error}" IsVisible="{Binding HasError}" />
+        </StackPanel>
+      </Grid>
+
+      <TextBlock Classes="field" Text="Used for" />
+      <ItemsControl ItemsSource="{Binding Addresses}">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <WrapPanel />
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="x:String">
+            <Border Background="{x:Static t:Palette.NeutralChip}" CornerRadius="10" Padding="9,2,3,2" Margin="0,0,6,6">
+              <StackPanel Orientation="Horizontal" Spacing="4">
+                <TextBlock Text="{Binding}" FontSize="12" Foreground="{x:Static t:Palette.TextPrimary}" VerticalAlignment="Center" />
+                <Button Content="✕" FontSize="10" Padding="4,0" MinHeight="0" Background="Transparent" BorderThickness="0"
+                        ToolTip.Tip="Not for this one"
+                        Command="{Binding $parent[Window].((vm:PersonPictureViewModel)DataContext).RemoveAddressCommand}" CommandParameter="{Binding}" />
+              </StackPanel>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBox x:Name="NewAddressBox" Text="{Binding NewAddress}" PlaceholderText="Another commit email or GitHub login" />
+        <Button Grid.Column="1" Classes="small" Content="Add" Margin="6,0,0,0" Command="{Binding AddAddressCommand}" />
+      </Grid>
+
+      <TextBlock Classes="field" Text="Built-in pictures" IsVisible="{Binding HasPresets}" />
+    </StackPanel>
+
+    <Grid DockPanel.Dock="Bottom" ColumnDefinitions="Auto,*,Auto" Margin="0,14,0,0">
+      <Button Classes="small" Content="Use their own picture" Command="{Binding RemoveCustomCommand}" IsVisible="{Binding HasCustom}"
+              ToolTip.Tip="Forget this picture: show their GitHub or Gravatar picture (or initials) again" />
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
+        <Button Content="Cancel" IsCancel="True" Click="OnCancel" />
+        <Button Content="Save" IsDefault="True" Classes="accent" Command="{Binding SaveCommand}" />
+      </StackPanel>
+    </Grid>
+
+    <Border Background="{x:Static t:Palette.Well}" CornerRadius="4" IsVisible="{Binding HasPresets}">
+      <ListBox Classes="presets" Background="Transparent" ItemsSource="{Binding Presets}" SelectedItem="{Binding SelectedPreset}"
+               ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+        <ListBox.ItemsPanel>
+          <ItemsPanelTemplate>
+            <WrapPanel />
+          </ItemsPanelTemplate>
+        </ListBox.ItemsPanel>
+        <ListBox.ItemTemplate>
+          <DataTemplate x:DataType="vm:PresetChoice">
+            <Image Source="{Binding Thumbnail}" Width="44" Height="44" ToolTip.Tip="{Binding Label}" />
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+    </Border>
+  </DockPanel>
+</Window>

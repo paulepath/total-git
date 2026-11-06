@@ -10,14 +10,28 @@ using TotalGit.Core.Graph;
 namespace TotalGit.App.ViewModels;
 
 /// <summary>One entry of the graph's author filter: everyone, or one developer (by email).</summary>
-public sealed class AuthorOption(string? email, string name, int count, bool isMe, Bitmap? avatar)
+public sealed class AuthorOption(string? email, string name, int count, bool isMe, Bitmap? avatar, string? sampleSha = null) : ObservableObject
 {
+    private Bitmap? _avatar = avatar;
+
     public string? Email { get; } = email;
     public string Name { get; } = name;
+
+    /// <summary>One of their commits, for finding their avatar on GitHub.</summary>
+    public string? SampleSha { get; } = sampleSha;
     public bool IsEveryone => Email is null;
     public string Label => IsEveryone ? "Everyone" : isMe ? $"Me · {Name}" : Name;
     public string CountText => IsEveryone ? "" : count.ToString("N0");
-    public Bitmap? Avatar { get; } = avatar;
+
+    public Bitmap? Avatar
+    {
+        get => _avatar;
+        set
+        {
+            if (SetProperty(ref _avatar, value)) OnPropertyChanged(nameof(HasAvatar));
+        }
+    }
+
     public bool HasAvatar => Avatar is not null;
     public string Initials => IsEveryone ? "" : AvatarIdentity.Initials(Name);
     public IBrush InitialsBrush => new SolidColorBrush(HslColor.FromHsl(AvatarIdentity.Hue(Email ?? ""), 0.45, 0.42).ToRgb());
@@ -243,7 +257,7 @@ public partial class RepositoryViewModel
         var github = AvatarIdentity.ParseGitHubRemote(state.OriginUrl);
         var selected = SelectedAuthor?.Email;
         Authors = [Everyone, .. ordered.Select(p => new AuthorOption(p.Email, p.Name, p.Count,
-            string.Equals(p.Email, me, StringComparison.OrdinalIgnoreCase), Avatars.TryGet(p.Email, github, p.Sample)))];
+            string.Equals(p.Email, me, StringComparison.OrdinalIgnoreCase), Avatars.TryGet(p.Email, github, p.Sample), p.Sample))];
         _loadingFilterSettings = true;
         SelectedAuthor = Authors.FirstOrDefault(a => string.Equals(a.Email, selected, StringComparison.OrdinalIgnoreCase)) ?? Everyone;
         _loadingFilterSettings = false;
@@ -292,4 +306,20 @@ public partial class RepositoryViewModel
         else if (FoldableRunAt(commit.Sha) is { } run)
             yield return new MenuAction($"Collapse these {run.Count} commits", CollapseRunCommand, run, Icon: MenuIcons.Collapse);
     }
+
+    /// <summary>
+    /// Shows avatars that have loaded since the author list and commit details were made; with <paramref name="all"/>,
+    /// asks again for every one (someone's chosen picture changed).
+    /// </summary>
+    private void RefreshAvatars(bool all)
+    {
+        var github = Graph?.GitHubRepo;
+        foreach (var a in Authors)
+            if (a.Email is { } email && (all || a.Avatar is null)) a.Avatar = Avatars.TryGet(email, github, a.SampleSha);
+        if (Details is { } d && (all || d.Avatar is null)) d.Avatar = Avatars.TryGet(d.AuthorEmail, github, d.Sha);
+    }
+
+    private void OnAvatarsUpdated() => RefreshAvatars(all: false);
+
+    private void OnAvatarsChanged() => RefreshAvatars(all: true);
 }

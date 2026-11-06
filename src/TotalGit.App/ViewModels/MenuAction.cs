@@ -45,6 +45,7 @@ public static class MenuIcons
     public const string Expand = "ExpandIcon";
     public const string Collapse = "CollapseIcon";
     public const string Squash = "SquashIcon";
+    public const string Person = "PersonIcon";
 }
 
 /// <summary>A branch, tag or worktree that actions can target.</summary>
@@ -96,6 +97,9 @@ public interface IDialogService
     Task<bool> ShowRebaseCommitsAsync(RebaseCommitsViewModel viewModel);
     Task<bool> ShowBranchRulesAsync(BranchRulesViewModel viewModel);
     Task<bool> ShowTabStyleAsync(TabStyleViewModel viewModel);
+
+    /// <summary>Chooses a picture for someone; true once it was saved or removed.</summary>
+    Task<bool> ShowPersonPictureAsync(PersonPictureViewModel viewModel);
     Task CopyToClipboardAsync(string text);
     Task RevealFolderAsync(string path);
 }

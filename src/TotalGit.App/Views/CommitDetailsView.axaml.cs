@@ -26,6 +26,12 @@ public partial class CommitDetailsView : UserControl
             ShowCopied(false);
         };
         Files.FileContextRequested += (file, row) => FileContextRequested?.Invoke(file, row);
+        AuthorAvatar.ContextRequested += (_, e) =>
+        {
+            if (DataContext is not CommitDetailsViewModel vm) return;
+            AuthorContextRequested?.Invoke(new PersonRef(vm.AuthorName, vm.AuthorEmail), AuthorAvatar);
+            e.Handled = true;
+        };
     }
 
     private void ShowCopied(bool copied)
@@ -42,6 +48,9 @@ public partial class CommitDetailsView : UserControl
     }
 
     public event Action<string>? CopyRequested;
+
+    /// <summary>Right-click on the author's avatar.</summary>
+    public event Action<PersonRef, Control>? AuthorContextRequested;
 
     /// <summary>Right-click on a file in the commit's file list.</summary>
     public event Action<FileChangeItem, Control>? FileContextRequested;

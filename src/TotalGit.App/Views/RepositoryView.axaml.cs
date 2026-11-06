@@ -103,6 +103,10 @@ public partial class RepositoryView : UserControl
         {
             if (_vm is not null) ShowMenu(control, _vm.ActionsForFile(file));
         };
+        DetailsView.AuthorContextRequested += (person, control) =>
+        {
+            if (_vm is not null) ShowMenu(control, _vm.PictureActions(person));
+        };
         DetailsView.CopyRequested += sha => _ = _vm?.Dialogs?.CopyToClipboardAsync(sha);
         RecentTiles.ContextRequested += (_, e) =>
         {

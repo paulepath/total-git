@@ -95,6 +95,8 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
         _settings = settings;
         Avatars = avatars;
         Sidebar.Avatars = avatars;
+        avatars.Updated += OnAvatarsUpdated;
+        avatars.Changed += OnAvatarsChanged;
         IconLibrary.Changed += OnBranchRulesChanged;
         settings.TabStyleChanged += OnTabStyleChanged;
         PendingPath = path;
@@ -153,6 +155,8 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
         _session?.Dispose();
         _session = null;
         Sidebar.Avatars = null; // the cache is shared by every tab
+        Avatars.Updated -= OnAvatarsUpdated;
+        Avatars.Changed -= OnAvatarsChanged;
         IconLibrary.Changed -= OnBranchRulesChanged;
         _settings.TabStyleChanged -= OnTabStyleChanged;
         _wfTimer?.Stop();
@@ -1580,6 +1584,11 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
         actions.Add(new MenuAction("Create worktree from this commit…", CreateWorktreeCommand, here, Icon: MenuIcons.Worktree));
         actions.Add(new MenuAction("Copy commit SHA", CopyCommand, commit.Sha, Icon: MenuIcons.Copy));
         actions.Add(new MenuAction("Copy commit message", CopyCommand, commit.MessageShort, Icon: MenuIcons.Copy));
+        if (commit.AuthorEmail.Length > 0)
+        {
+            actions.Add(MenuAction.Separator);
+            actions.AddRange(PictureActions(new PersonRef(commit.AuthorName, commit.AuthorEmail)));
+        }
         if (FoldActions(commit).ToList() is { Count: > 0 } fold)
         {
             actions.Add(MenuAction.Separator);

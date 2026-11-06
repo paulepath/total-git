@@ -563,6 +563,8 @@ public partial class RepositoryViewModel
         new MenuAction("Copy link", CopyCommand, pr.Url, Icon: MenuIcons.Copy),
         new MenuAction("Copy branch name", CopyCommand, pr.HeadRef, Icon: MenuIcons.Copy),
         MenuAction.Separator,
+        .. PictureActions(new PersonRef(pr.Author.DisplayName, Login: pr.Author.Login, AvatarUrl: pr.Author.AvatarUrl)),
+        MenuAction.Separator,
         new MenuAction("Set Jira address…", SetJiraUrlCommand),
     ];
 }

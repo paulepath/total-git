@@ -16,6 +16,9 @@ public partial class ShellViewModel : ObservableObject
 {
     private readonly AppSettings _settings;
     private readonly AvatarCache _avatars;
+
+    /// <summary>Avatars shared by every tab, with the pictures chosen for people.</summary>
+    public AvatarCache Avatars => _avatars;
     private readonly UpdateService? _updates;
     private readonly IPullRequestProviderFactory? _pullRequests;
     private readonly IWorkflowProviderFactory? _workflows;

@@ -136,4 +136,42 @@ public sealed class AvatarServiceTests : IDisposable
 
         Assert.DoesNotContain(handler.Requests, r => r.RequestUri!.AbsolutePath.StartsWith("/search/"));
     }
+
+    [Fact]
+    public async Task Learns_the_login_from_the_commit_author()
+    {
+        var handler = Handler();
+        handler.Routes["https://api.github.com/repos/owner/repo/commits/"] = _ =>
+            Json("""{"author":{"login":"devlogin","avatar_url":"https://avatars.githubusercontent.com/u/42?v=4"}}""");
+        using var service = Service(handler);
+
+        await service.GetAvatarAsync(Email, Repo, "abc123");
+
+        Assert.Equal("devlogin", service.Custom.LoginFor(Email));
+    }
+
+    [Fact]
+    public async Task Learns_the_login_from_a_search_by_email()
+    {
+        var handler = Handler(commitAuthor: false);
+        handler.Routes["https://api.github.com/search/users"] = _ =>
+            Json("""{"total_count":1,"items":[{"login":"found","avatar_url":"https://avatars.githubusercontent.com/u/42?v=4"}]}""");
+        using var service = Service(handler);
+
+        await service.GetAvatarAsync(Email, gitHubRepo: null, sampleCommitSha: null);
+
+        Assert.Equal("found", service.Custom.LoginFor(Email));
+    }
+
+    [Fact]
+    public async Task Learns_the_login_from_a_noreply_address_without_asking()
+    {
+        var handler = new FakeHttpHandler();
+        handler.Routes["https://avatars.githubusercontent.com/u/7"] = _ => Bytes(GitHubImage);
+        using var service = Service(handler);
+
+        await service.GetAvatarAsync("7+someone@users.noreply.github.com", Repo, "abc123");
+
+        Assert.Equal("someone", service.Custom.LoginFor("7+someone@users.noreply.github.com"));
+    }
 }

@@ -172,9 +172,10 @@ public partial class SidebarNode : ObservableObject
 /// <summary>Someone on a pull request row: their avatar (or initials until it loads) and, for a reviewer, their review.</summary>
 public sealed partial class PrPerson : ObservableObject
 {
-    public PrPerson(string name, string? avatarUrl, string toolTip, ReviewState state = ReviewState.None)
+    public PrPerson(string name, string? login, string? avatarUrl, string toolTip, ReviewState state = ReviewState.None)
     {
         Name = name;
+        Login = login;
         AvatarUrl = avatarUrl;
         ToolTip = toolTip;
         State = state;
@@ -183,6 +184,9 @@ public sealed partial class PrPerson : ObservableObject
     }
 
     public string Name { get; }
+
+    /// <summary>Their login on the hosting service.</summary>
+    public string? Login { get; }
     public string? AvatarUrl { get; }
     public string ToolTip { get; }
     public ReviewState State { get; }
@@ -228,10 +232,11 @@ public sealed partial class PrPerson : ObservableObject
 /// </summary>
 public sealed partial class BranchOwnerBadge : ObservableObject
 {
-    public BranchOwnerBadge(string name, string? email, string? avatarUrl, string? sampleSha, bool isGuess, string toolTip)
+    public BranchOwnerBadge(string name, string? email, string? avatarUrl, string? sampleSha, bool isGuess, string toolTip, string? login = null)
     {
         Name = name;
         Email = email;
+        Login = login;
         AvatarUrl = avatarUrl;
         SampleSha = sampleSha;
         IsGuess = isGuess;
@@ -242,6 +247,9 @@ public sealed partial class BranchOwnerBadge : ObservableObject
 
     public string Name { get; }
     public string? Email { get; }
+
+    /// <summary>Their login on the hosting service, when the owner is a pull request's author.</summary>
+    public string? Login { get; }
     public string? AvatarUrl { get; }
     public string? SampleSha { get; }
     public bool IsGuess { get; }
@@ -355,9 +363,17 @@ public partial class SidebarViewModel : ObservableObject
         get => _avatars;
         set
         {
-            if (_avatars is not null) _avatars.Updated -= RefreshAvatars;
+            if (_avatars is not null)
+            {
+                _avatars.Updated -= RefreshNewAvatars;
+                _avatars.Changed -= RefreshAllAvatars;
+            }
             _avatars = value;
-            if (_avatars is not null) _avatars.Updated += RefreshAvatars;
+            if (_avatars is not null)
+            {
+                _avatars.Updated += RefreshNewAvatars;
+                _avatars.Changed += RefreshAllAvatars;
+            }
         }
     }
 
@@ -395,8 +411,8 @@ public partial class SidebarViewModel : ObservableObject
         if (_pullRequests.FirstOrDefault(p => p.Number == number) is not { } pr) return null;
         if (Flatten(Nodes.Where(n => n.IsPullRequestsSection)).FirstOrDefault(n => n.PullRequest?.Number == number)?.Card is { } card)
             return card;
-        var author = Person(pr.Author.DisplayName, pr.Author.AvatarUrl, $"Opened by {pr.Author.NameAndLogin}");
-        var reviewers = pr.Reviewers.Select(r => Person(r.DisplayName, r.AvatarUrl, PrPerson.Describe(r), r.State)).ToList();
+        var author = Person(pr.Author.DisplayName, pr.Author.Login, pr.Author.AvatarUrl, $"Opened by {pr.Author.NameAndLogin}");
+        var reviewers = pr.Reviewers.Select(r => Person(r.DisplayName, r.Name, r.AvatarUrl, PrPerson.Describe(r), r.State)).ToList();
         return new PrCardViewModel(pr, author, reviewers, PullRequestTriage.Ticket(pr.Title).Key);
     }
 
@@ -412,7 +428,7 @@ public partial class SidebarViewModel : ObservableObject
         BranchOwnerBadge? badge = null;
         if (prs.TryGetValue(target.ShortName, out var pr))
             badge = new BranchOwnerBadge(pr.Author.DisplayName, null, pr.Author.AvatarUrl, null, false,
-                $"Owner: {pr.Author.NameAndLogin}, who opened pull request #{pr.Number}");
+                $"Owner: {pr.Author.NameAndLogin}, who opened pull request #{pr.Number}", pr.Author.Login);
         else if (_owners.TryGetValue(target.Name, out var owner))
             badge = BranchOwnerBadge.From(owner);
         if (badge is not null) badge.Avatar = AvatarOf(badge);
@@ -420,22 +436,36 @@ public partial class SidebarViewModel : ObservableObject
     }
 
     private Bitmap? AvatarOf(BranchOwnerBadge badge) =>
-        badge.AvatarUrl is { } url ? _avatars?.TryGetUrl(url)
+        badge.Login is not null || badge.AvatarUrl is not null ? _avatars?.TryGetUser(badge.Login, badge.AvatarUrl)
         : badge.Email is { } email ? _avatars?.TryGet(email, _gitHubRepo, badge.SampleSha)
         : null;
 
-    /// <summary>Fills in avatars that have loaded since the rows were built (without rebuilding the tree).</summary>
-    private void RefreshAvatars()
+    /// <summary>
+    /// Fills in avatars that have loaded since the rows were built (without rebuilding the tree); with
+    /// <paramref name="all"/>, asks again for every one (someone's chosen picture changed).
+    /// </summary>
+    private void RefreshAvatars(bool all)
     {
         foreach (var node in Flatten(Nodes.Where(n => n.IsSection && n.Label == "REMOTE")))
-            if (node.Owner is { Avatar: null } badge) badge.Avatar = AvatarOf(badge);
+            if (node.Owner is { } badge && (all || badge.Avatar is null)) badge.Avatar = AvatarOf(badge);
         foreach (var node in Flatten(Nodes.Where(n => n.IsPullRequestsSection || n.IsWorkflowsSection)).Where(n => n.IsPullRequest || n.IsRun))
             foreach (var person in (node.Card?.Reviewers.Select(r => r.Person) ?? []).Prepend(node.Author))
-                if (person is { Avatar: null, AvatarUrl: { } url }) person.Avatar = _avatars?.TryGetUrl(url);
+                if (person is not null && (all || person.Avatar is null)) person.Avatar = AvatarOf(person);
     }
 
-    private PrPerson Person(string name, string? url, string toolTip, ReviewState state = ReviewState.None) =>
-        new(name, url, toolTip, state) { Avatar = url is null ? null : _avatars?.TryGetUrl(url) };
+    private void RefreshNewAvatars() => RefreshAvatars(all: false);
+
+    private void RefreshAllAvatars() => RefreshAvatars(all: true);
+
+    private Bitmap? AvatarOf(PrPerson person) =>
+        person.Login is null && person.AvatarUrl is null ? null : _avatars?.TryGetUser(person.Login, person.AvatarUrl);
+
+    private PrPerson Person(string name, string? login, string? url, string toolTip, ReviewState state = ReviewState.None)
+    {
+        var person = new PrPerson(name, login, url, toolTip, state);
+        person.Avatar = AvatarOf(person);
+        return person;
+    }
 
     [ObservableProperty]
     public partial string Filter { get; set; } = "";
@@ -667,8 +697,8 @@ public partial class SidebarViewModel : ObservableObject
             {
                 var (ticket, title) = titled[p.Number];
                 ticket ??= PullRequestTriage.TicketFromBranch(p.HeadRef, projects);
-                var author = Person(p.Author.DisplayName, p.Author.AvatarUrl, $"Opened by {p.Author.NameAndLogin}");
-                var reviewers = p.Reviewers.Select(r => Person(r.DisplayName, r.AvatarUrl, PrPerson.Describe(r), r.State)).ToList();
+                var author = Person(p.Author.DisplayName, p.Author.Login, p.Author.AvatarUrl, $"Opened by {p.Author.NameAndLogin}");
+                var reviewers = p.Reviewers.Select(r => Person(r.DisplayName, r.Name, r.AvatarUrl, PrPerson.Describe(r), r.State)).ToList();
                 heading.Children.Add(new SidebarNode(SidebarNodeKind.PullRequest, title)
                 {
                     PullRequest = p,
@@ -705,7 +735,7 @@ public partial class SidebarViewModel : ObservableObject
 
         SidebarNode RunNode(WorkflowRun run)
         {
-            var actor = Person(run.Actor.Login, run.Actor.AvatarUrl, $"Started by {run.Actor.Login}");
+            var actor = Person(run.Actor.Login, run.Actor.Login, run.Actor.AvatarUrl, $"Started by {run.Actor.Login}");
             var card = new RunCardViewModel(run, actor, _loadJobs) { DurationText = Duration(run) };
             return new SidebarNode(SidebarNodeKind.WorkflowRun, run.WorkflowName)
             {

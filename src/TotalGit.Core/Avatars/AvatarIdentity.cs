@@ -22,6 +22,10 @@ public static partial class AvatarIdentity
             : $"https://github.com/{m.Groups["user"].Value}.png?size=64";
     }
 
+    /// <summary>The GitHub login in a GitHub "noreply" commit email, or null for any other address.</summary>
+    public static string? GitHubNoReplyLogin(string email) =>
+        GitHubNoReply().Match(email.Trim()) is { Success: true } m ? m.Groups["user"].Value : null;
+
     /// <summary>Extracts owner/repo from an https or ssh GitHub remote URL.</summary>
     public static (string Owner, string Repo)? ParseGitHubRemote(string? url) =>
         Hosting.RemoteHostParser.Parse(url) is { Kind: Hosting.HostKind.GitHub } host ? (host.Owner, host.Repo) : null;
