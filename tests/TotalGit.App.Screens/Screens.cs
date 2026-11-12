@@ -149,6 +149,19 @@ internal static class Screens
             tab.DismissBannerCommand.Execute(null);
         }
 
+        // A folded person (the email in TOTALGIT_SCREENS_FOLD): their own branches as one row, then opened for a look.
+        if (Wanted("person-fold") && Environment.GetEnvironmentVariable("TOTALGIT_SCREENS_FOLD") is { Length: > 0 } foldEmail)
+        {
+            var foldName = Git(o.Repo, "log", "--all", "-1", $"--author={foldEmail}", "--format=%an");
+            tab.FoldPersonCommand.Execute(new PersonRef(foldName, foldEmail));
+            await Settle(() => false, 0.8);
+            await Save(main, "person-fold");
+            tab.TogglePersonFoldCommand.Execute(foldEmail);
+            await Settle(() => false, 0.8);
+            await Save(main, "person-fold-open");
+            tab.StopFoldingPersonCommand.Execute(foldEmail);
+        }
+
         if (o.Pr is { } number)
         {
             var list = (IReadOnlyList<PullRequestSummary>)typeof(RepositoryViewModel)

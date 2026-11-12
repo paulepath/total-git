@@ -27,15 +27,27 @@ public sealed record CommitInfo(
     /// <summary>The branch a new branch's row stands for; null for any other SHA.</summary>
     public static string? NewBranchOf(string sha) => sha.StartsWith(NewBranchPrefix, StringComparison.Ordinal) ? sha[NewBranchPrefix.Length..] : null;
 
-    /// <summary>A row that isn't a commit, by its SHA: a WIP row or a new branch's row.</summary>
+    private const string PersonFoldPrefix = "PERSON-FOLD:";
+
+    /// <summary>Pseudo-SHA of the row standing for one person's folded branches.</summary>
+    public static string PersonFoldSha(string email) => PersonFoldPrefix + email.ToLowerInvariant();
+
+    /// <summary>The person (email, lower case) a folded-person row stands for; null for any other SHA.</summary>
+    public static string? PersonFoldOf(string sha) => sha.StartsWith(PersonFoldPrefix, StringComparison.Ordinal) ? sha[PersonFoldPrefix.Length..] : null;
+
+    /// <summary>A row that isn't a commit, by its SHA: a WIP row, a new branch's row or a folded person's row.</summary>
     public static bool IsPlaceholderSha(string sha) =>
-        sha.StartsWith(WorkingTreeSha, StringComparison.Ordinal) || sha.StartsWith(NewBranchPrefix, StringComparison.Ordinal);
+        sha.StartsWith(WorkingTreeSha, StringComparison.Ordinal) || sha.StartsWith(NewBranchPrefix, StringComparison.Ordinal)
+        || sha.StartsWith(PersonFoldPrefix, StringComparison.Ordinal);
 
     /// <summary>For a new branch's row, the branch.</summary>
     public string? NewBranchName { get; init; }
 
-    /// <summary>A row that isn't a commit: a WIP row or a new branch's row.</summary>
-    public bool IsPlaceholder => IsWorkingTree || NewBranchName is not null;
+    /// <summary>The row standing for one person's folded branches (the author fields name them).</summary>
+    public bool IsPersonFold { get; init; }
+
+    /// <summary>A row that isn't a commit: a WIP row, a new branch's row or a folded person's row.</summary>
+    public bool IsPlaceholder => IsWorkingTree || NewBranchName is not null || IsPersonFold;
 
     /// <summary>When the commit was written (a rebase rewrites this but keeps the author date); null when unknown.</summary>
     public DateTimeOffset? CommitDate { get; init; }

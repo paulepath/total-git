@@ -36,6 +36,9 @@ public sealed record GraphData(
     /// <summary>Commits folded away, mapped to the folded row that stands for them (where their labels go).</summary>
     public IReadOnlyDictionary<string, string> ShownAs { get; init; } = new Dictionary<string, string>();
 
+    /// <summary>Rows that stand for one person's folded branches, by the row's SHA.</summary>
+    public IReadOnlyDictionary<string, PersonFoldInfo> PersonFolds { get; init; } = new Dictionary<string, PersonFoldInfo>();
+
     /// <summary>The pull request picked in the sidebar: its commits stand out and a row shows where it would merge.</summary>
     public PullRequestHighlight? PullRequest { get; init; }
 
@@ -55,6 +58,12 @@ public sealed record GraphData(
     public string RowOf(RefInfo r) =>
         LabelRows.TryGetValue(r.Name, out var row) ? row : ShownAs.GetValueOrDefault(r.TargetSha, r.TargetSha);
 }
+
+/// <summary>One person's folded branches, shown as one row.</summary>
+/// <param name="Branches">How many branches point at the folded commits.</param>
+/// <param name="Open">The row is opened for a look: the commits show under it until it's folded again.</param>
+/// <param name="SampleSha">One of the commits, for finding the person's avatar.</param>
+public sealed record PersonFoldInfo(string Email, string Name, int Branches, int Commits, bool Open, string SampleSha);
 
 /// <summary>A branch with no commits yet, drawn as a row of its own above the commit it was made from.</summary>
 /// <param name="BaseName">The branch it was made from, when known.</param>
@@ -571,6 +580,7 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
         {
             Folds = projected.Folds,
             ShownAs = projected.ShownAs,
+            PersonFolds = _personFolds,
             PullRequest = _prHighlight,
             PullRequestsByBranch = _pullRequests.Where(p => !p.IsCrossRepository)
                 .GroupBy(p => p.HeadRef, StringComparer.Ordinal)
@@ -630,7 +640,7 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
         }
         NewBranch = null;
 
-        if (sha is null || CommitInfo.NewBranchOf(sha) is not null)
+        if (sha is null || CommitInfo.NewBranchOf(sha) is not null || CommitInfo.PersonFoldOf(sha) is not null)
         {
             Details = null;
             Staging = null;
@@ -791,6 +801,13 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
 
         for (var i = 0; i < 25 && Graph is not null && !_commits.Any(c => c.Sha == sha) && _session?.HasMoreHistory == true; i++)
             await LoadMoreAsync();
+
+        // In a folded person's branches: open their row so the commit shows.
+        if (_personHidden.TryGetValue(sha, out var person))
+        {
+            _openPersonFolds.Add(person);
+            RebuildGraph();
+        }
 
         if (Graph is { } graph && !graph.Layout.Rows.Any(r => r.Commit.Sha == sha) && _shownAs.TryGetValue(sha, out var row))
         {
@@ -1551,6 +1568,8 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
             return ActionsFor(BranchTarget.From(newBranch.Branch, newBranchWorktree));
         }
 
+        if (Graph?.PersonFolds.GetValueOrDefault(commit.Sha) is { } personFold) return PersonFoldRowActions(personFold);
+
         var actions = new List<MenuAction>();
         // Including labels of commits folded into this row, and of new branches whose label is on their WIP row.
         var refs = Graph?.Refs.Where(r => Graph.RowOf(r) == commit.Sha && r.Kind != RefKind.DetachedHead).ToList() ?? [];
@@ -1585,6 +1604,7 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
         {
             actions.Add(MenuAction.Separator);
             actions.AddRange(PictureActions(new PersonRef(commit.AuthorName, commit.AuthorEmail)));
+            actions.Add(PersonFoldAction(commit));
         }
         if (FoldActions(commit).ToList() is { Count: > 0 } fold)
         {

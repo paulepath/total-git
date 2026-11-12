@@ -102,6 +102,7 @@ public partial class RepositoryViewModel
         HistoryQuery = "";
         _foldedByUser.Clear();
         _unfoldedByUser.Clear();
+        _openPersonFolds.Clear();
         _loadingFilterSettings = true;
         Authors = [Everyone];
         SelectedAuthor = Everyone;
@@ -125,6 +126,8 @@ public partial class RepositoryViewModel
         _loadingFilterSettings = true;
         CurrentBranchOnly = repo.CurrentBranchOnly;
         FoldRuns = repo.FoldRuns;
+        _foldedPeople.Clear();
+        _foldedPeople.UnionWith(repo.FoldedPeople ?? []);
         _loadingFilterSettings = false;
     }
 
@@ -134,6 +137,7 @@ public partial class RepositoryViewModel
         var repo = _settings.ForRepository(_state.MainWorkingDirectory);
         repo.CurrentBranchOnly = CurrentBranchOnly;
         repo.FoldRuns = FoldRuns;
+        repo.FoldedPeople = _foldedPeople.Count == 0 ? null : [.. _foldedPeople.Order(StringComparer.OrdinalIgnoreCase)];
         _settings.Save();
     }
 
@@ -150,9 +154,17 @@ public partial class RepositoryViewModel
 
     /// <summary>
     /// The loaded history as the graph shows it: the filters' commits only (lines joined across the rest), then runs
-    /// of commits folded into one row (rebased runs automatically, others when the user collapses them).
+    /// of commits folded into one row (rebased runs automatically, others when the user collapses them). Folded people's
+    /// branches go with the filters, and a row for each is added at the end.
     /// </summary>
     private ProjectedHistory ProjectHistory(RepositoryState state)
+    {
+        var people = FindPersonFolds(state);
+        var projected = ProjectFiltersAndRuns(state);
+        return projected with { Commits = WithPersonFoldRows(projected.Commits, people, state) };
+    }
+
+    private ProjectedHistory ProjectFiltersAndRuns(RepositoryState state)
     {
         var filtered = HistoryProjection.Project(_commits, KeepFilter(state));
         _filteredOut = filtered.Hidden;
@@ -184,9 +196,11 @@ public partial class RepositoryViewModel
     {
         var email = SelectedAuthor is { IsEveryone: false } a ? a.Email : null;
         var path = CurrentBranchOnly ? BranchPath(state) : null;
-        if (email is null && path is null) return null;
+        var folded = _personHidden;
+        if (email is null && path is null && folded.Count == 0) return null;
         return c => (email is null || string.Equals(c.AuthorEmail, email, StringComparison.OrdinalIgnoreCase))
-                    && (path is null || path.Contains(c.Sha));
+                    && (path is null || path.Contains(c.Sha))
+                    && !folded.ContainsKey(c.Sha);
     }
 
     /// <summary>

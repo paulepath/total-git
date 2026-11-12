@@ -32,6 +32,9 @@ public sealed class RepoSettings
 
     /// <summary>The graph folds runs of consecutive commits on one line into one row.</summary>
     public bool FoldRuns { get; set; } = true;
+
+    /// <summary>People (by email) whose own branches the graph folds into one row.</summary>
+    public List<string>? FoldedPeople { get; set; }
 }
 
 public sealed class AppSettings

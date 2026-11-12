@@ -72,7 +72,11 @@ public sealed partial class RepositoryViewModel
         UpdateHistorySearchSummary();
     }
 
-    /// <summary>The commit has its own graph row, or is inside a folded run (selecting it unfolds the run).</summary>
+    /// <summary>
+    /// The commit has its own graph row, or is inside a folded run or a folded person's branches (selecting it
+    /// unfolds them).
+    /// </summary>
     private bool IsShownInGraph(string sha, HashSet<string> rows) => Graph is { } graph && (rows.Contains(sha)
+        || _personHidden.ContainsKey(sha)
         || _shownAs.TryGetValue(sha, out var row) && graph.Folds.TryGetValue(row, out var fold) && fold.Shas.Contains(sha));
 }

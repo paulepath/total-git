@@ -55,6 +55,7 @@ public sealed class CommitGraphView : Control
     private static readonly IBrush PillHoverBrush = Palette.PillHoverOverlay;
     private static readonly IPen SeparatorPen = new Pen(Palette.Border, 1);
 
+    private static readonly Geometry ChevronDownIcon = Geometry.Parse("M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z");
     private static readonly Geometry ChevronRightIcon = Geometry.Parse("M8.59,16.58L13.17,12L8.59,7.41L10,6L16,12L10,18L8.59,16.58Z");
     private static readonly IBrush FoldChipBrush = Palette.FoldChip;
     private static readonly Geometry CheckIcon = Geometry.Parse("M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z");
@@ -235,6 +236,9 @@ public sealed class CommitGraphView : Control
 
     /// <summary>A folded row's chevron was clicked, or the row double-clicked: show its commits again.</summary>
     public event Action<string>? ExpandFoldRequested;
+
+    /// <summary>A folded person's row was opened or folded again (their email).</summary>
+    public event Action<string>? PersonFoldToggleRequested;
 
     /// <summary>Raised on right-click with the commit under the pointer.</summary>
     public event Action<CommitInfo, Point>? CommitContextRequested;
@@ -623,6 +627,15 @@ public sealed class CommitGraphView : Control
         }
 
         var row = RowAt(point.Position.Y);
+        if (row >= 0 && point.Properties.IsLeftButtonPressed && Data?.PersonFolds.GetValueOrDefault(Rows[row].Commit.Sha) is { } personFold
+            && (e.ClickCount == 2 || (point.Position.X >= MessageLeft - 4 && point.Position.X <= MessageLeft + FoldChevronWidth)))
+        {
+            SelectedRange = null;
+            SelectedSha = Rows[row].Commit.Sha;
+            PersonFoldToggleRequested?.Invoke(personFold.Email);
+            e.Handled = true;
+            return;
+        }
         if (row >= 0 && point.Properties.IsLeftButtonPressed && Data?.Folds.ContainsKey(Rows[row].Commit.Sha) == true
             && (e.ClickCount == 2 || (point.Position.X >= MessageLeft - 4 && point.Position.X <= MessageLeft + FoldChevronWidth)))
         {
@@ -786,7 +799,9 @@ public sealed class CommitGraphView : Control
         else if (overNode && !_tipSuppressed && !Rows[row].Commit.IsWorkingTree)
         {
             var c = Rows[row].Commit;
-            ShowTip(c.NewBranchName is { } name
+            ShowTip(Data?.PersonFolds.GetValueOrDefault(c.Sha) is { } folded
+                ? $"{folded.Name}'s own branches are folded into this row: {Counted(folded.Commits, "commit")} that nobody else has built on.\nDouble-click to {(folded.Open ? "fold them again" : "show them")}."
+                : c.NewBranchName is { } name
                 ? $"{name} has no commits yet." + (Data?.NewBranches.GetValueOrDefault(c.Sha)?.BaseName is { } from ? $" It was made from {from}." : "")
                 : $"{c.Sha}\n{c.AuthorName} <{c.AuthorEmail}>\n{c.AuthorDate.LocalDateTime:f}\n\n{c.MessageShort}");
         }
@@ -1138,7 +1153,9 @@ public sealed class CommitGraphView : Control
         var inner = NodeRadius - 2;
         var rect = new Rect(center.X - inner, center.Y - inner, inner * 2, inner * 2);
 
-        if (_avatarCache?.TryGet(row.Commit.AuthorEmail, Data?.GitHubRepo, row.Commit.Sha) is { } bitmap)
+        // A folded person's row isn't a commit: one of their commits finds the avatar.
+        var avatarSha = Data?.PersonFolds.GetValueOrDefault(row.Commit.Sha)?.SampleSha ?? row.Commit.Sha;
+        if (_avatarCache?.TryGet(row.Commit.AuthorEmail, Data?.GitHubRepo, avatarSha) is { } bitmap)
         {
             // Behind the avatar so transparent logos don't pick up the lane colour.
             ctx.DrawEllipse(Palette.NodeHole, null, center, inner, inner);
@@ -1181,7 +1198,11 @@ public sealed class CommitGraphView : Control
         }
 
         var fold = Data?.Folds.GetValueOrDefault(c.Sha);
-        if (fold is not null)
+        if (Data?.PersonFolds.GetValueOrDefault(c.Sha) is { } person)
+        {
+            DrawPersonFoldText(ctx, person, top, messageWidth);
+        }
+        else if (fold is not null)
         {
             DrawFoldText(ctx, fold, c, top, messageWidth);
         }
@@ -1218,6 +1239,31 @@ public sealed class CommitGraphView : Control
         var rest = MessageLeft + width - x;
         if (rest <= 20) return;
         var msg = Text(newest.MessageShort, 13, MutedTextBrush, _typeface, rest);
+        ctx.DrawText(msg, new Point(x, cy - msg.Height / 2));
+    }
+
+    private static string Counted(int n, string one, string? many = null) => n == 1 ? $"1 {one}" : $"{n:N0} {many ?? one + "s"}";
+
+    /// <summary>
+    /// A folded person's row: a chevron to open it (or fold it again), how many branches it holds, then who and how
+    /// many commits, muted.
+    /// </summary>
+    private void DrawPersonFoldText(DrawingContext ctx, PersonFoldInfo person, double top, double width)
+    {
+        var cy = top + RowHeight / 2;
+        DrawIcon(ctx, person.Open ? ChevronDownIcon : ChevronRightIcon, MessageLeft, cy - 7, 14, MutedTextBrush);
+        var x = MessageLeft + FoldChevronWidth;
+        var count = Text(person.Branches == 0 ? Counted(person.Commits, "commit") : Counted(person.Branches, "branch", "branches"),
+            12.5, PrimaryTextBrush, _boldTypeface);
+        var chip = new Rect(x, cy - 9, count.Width + 14, 18);
+        ctx.DrawRectangle(FoldChipBrush, null, new RoundedRect(chip, 9));
+        ctx.DrawText(count, new Point(x + 7, cy - count.Height / 2));
+        x = chip.Right + 8;
+        var rest = MessageLeft + width - x;
+        if (rest <= 20) return;
+        var commits = person.Branches == 0 ? "" : $" · {Counted(person.Commits, "commit")}";
+        var msg = Text(person.Open ? $"by {person.Name}{commits} · showing, double-click to fold again" : $"by {person.Name}{commits} · folded",
+            13, MutedTextBrush, _italicTypeface, rest);
         ctx.DrawText(msg, new Point(x, cy - msg.Height / 2));
     }
 
