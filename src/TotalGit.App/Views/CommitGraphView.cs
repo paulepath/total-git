@@ -907,10 +907,11 @@ public sealed class CommitGraphView : Control
 
         var strong = sha == SelectedSha || sha == _headSha || inRange || _prRows.Contains(i);
         // The band starts with a rounded end centred on the node, so it wraps around the circle. It covers the
-        // commit's line only; the extra lines of a commit with several refs hold just their labels.
+        // commit's line only; the extra lines of a commit with several refs hold just their labels. A node past the
+        // graph column's right edge is cut off there, so its band starts at that edge, not part-way through the message.
         var bandTop = top + 1;
         var bandHeight = RowHeight - 2;
-        var nodeX = LaneX(row.Lane);
+        var nodeX = Math.Min(LaneX(row.Lane), GraphLeft + GraphColumnWidth);
         var band = new StreamGeometry();
         using (var g = band.Open())
         {
