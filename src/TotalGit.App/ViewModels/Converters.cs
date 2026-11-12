@@ -20,7 +20,4 @@ public static class Converters
     /// <summary>A chevron pointing down when expanded, right when collapsed.</summary>
     public static readonly IValueConverter ExpandedRotation =
         new FuncValueConverter<bool, ITransform>(b => new RotateTransform(b ? 90 : 0));
-
-    public static readonly IValueConverter ErrorToBackground =
-        new FuncValueConverter<bool, IBrush>(b => b ? Palette.ErrorBanner : Palette.InfoBanner);
 }

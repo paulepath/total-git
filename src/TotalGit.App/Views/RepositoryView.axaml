@@ -5,7 +5,7 @@
              xmlns:views="using:TotalGit.App.Views"
              x:Class="TotalGit.App.Views.RepositoryView"
              x:DataType="vm:RepositoryViewModel">
-  <!-- One repository tab: toolbar, banner, sidebar, graph/diff and details. -->
+  <!-- One repository tab: toolbar, sidebar, graph/diff and details, status bar and message cards. -->
   <UserControl.Styles>
     <Style Selector="Button.recentTile">
       <Setter Property="Background" Value="{x:Static t:Palette.Panel}" />
@@ -26,6 +26,31 @@
     <!-- The remove button shows on hover, and always on a tile whose folder has gone. -->
     <Style Selector="Button.recentTile:pointerover Button.tileRemove, Button.recentTile.missing Button.tileRemove">
       <Setter Property="Opacity" Value="1" />
+    </Style>
+    <!-- The status message: highlighted while it's new, then quiet. -->
+    <Style Selector="Border.status">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Transitions">
+        <Transitions>
+          <BrushTransition Property="Background" Duration="0:0:0.5" />
+        </Transitions>
+      </Setter>
+    </Style>
+    <Style Selector="Border.status.lit">
+      <Setter Property="Background" Value="{x:Static t:Palette.InfoBanner}" />
+    </Style>
+    <Style Selector="Border.status TextBlock">
+      <Setter Property="Foreground" Value="{x:Static t:Palette.TextMuted}" />
+    </Style>
+    <Style Selector="Border.status.lit TextBlock">
+      <Setter Property="Foreground" Value="{x:Static t:Palette.BannerText}" />
+    </Style>
+    <!-- A card's coloured edge: blue, or red for an error. -->
+    <Style Selector="Border.notice Border.stripe">
+      <Setter Property="Background" Value="{x:Static t:Palette.Accent}" />
+    </Style>
+    <Style Selector="Border.notice.error Border.stripe">
+      <Setter Property="Background" Value="{x:Static t:Palette.Error}" />
     </Style>
   </UserControl.Styles>
   <DockPanel>
@@ -204,39 +229,44 @@
       </Grid>
     </Border>
 
-    <!-- Banner -->
-    <Border x:Name="BannerBar" DockPanel.Dock="Top" IsVisible="{Binding Banner, Converter={x:Static ObjectConverters.IsNotNull}}"
-            Background="{Binding Banner.IsError, Converter={x:Static vm:Converters.ErrorToBackground}, FallbackValue=Transparent}">
-      <Panel>
-      <!-- Counts down to the banner closing itself (banners with actions stay). -->
-      <ProgressBar VerticalAlignment="Bottom" Height="2" MinHeight="0" Minimum="0" Maximum="1" Value="{Binding BannerTimeLeft}"
-                   IsVisible="{Binding BannerClosesItself}" Foreground="{x:Static t:Palette.BannerCountdown}" Background="Transparent" CornerRadius="0" />
-      <Grid ColumnDefinitions="*,Auto,Auto,Auto" Margin="14,8">
-        <SelectableTextBlock Text="{Binding Banner.Message}" TextWrapping="Wrap" VerticalAlignment="Center" Foreground="{x:Static t:Palette.BannerText}" />
-        <!-- Errors: report on GitHub (filled in with the details), or copy them to send another way. -->
-        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" Margin="12,0,0,0" IsVisible="{Binding Banner.CanReport, FallbackValue=False}">
-          <Button Content="Report" Padding="10,3" Command="{Binding ReportErrorCommand}" CommandParameter="{Binding Banner.Message}"
-                  ToolTip.Tip="Open a GitHub issue filled in with this error, Total Git's version and its recent log, for you to check and submit" />
-          <Button Content="Copy details" Padding="10,3" Command="{Binding CopyErrorDetailsCommand}" CommandParameter="{Binding Banner.Message}"
-                  ToolTip.Tip="Copy the same details, to paste into an email or chat" />
-        </StackPanel>
-        <ItemsControl Grid.Column="1" ItemsSource="{Binding Banner.Actions}" Margin="12,0,0,0">
-          <ItemsControl.ItemsPanel>
-            <ItemsPanelTemplate>
-              <StackPanel Orientation="Horizontal" Spacing="6" />
-            </ItemsPanelTemplate>
-          </ItemsControl.ItemsPanel>
-          <ItemsControl.ItemTemplate>
-            <DataTemplate x:DataType="vm:MenuAction">
-              <Button Content="{Binding Header}" Command="{Binding Command}" CommandParameter="{Binding Parameter}" IsEnabled="{Binding IsEnabled}" Padding="10,3" />
-            </DataTemplate>
-          </ItemsControl.ItemTemplate>
-        </ItemsControl>
-        <Button Grid.Column="3" Command="{Binding DismissBannerCommand}" Background="Transparent" Padding="6" Margin="8,0,0,0" ToolTip.Tip="Dismiss">
-          <PathIcon Data="{StaticResource CloseIcon}" Width="12" Height="12" />
+    <!-- Status bar: the latest confirmation (highlighted while it's new), and the history of this tab's messages. -->
+    <Border DockPanel.Dock="Bottom" Height="26" Background="{x:Static t:Palette.Panel}" BorderBrush="{x:Static t:Palette.Border}" BorderThickness="0,1,0,0">
+      <Grid ColumnDefinitions="*,Auto" Margin="6,0">
+        <Border x:Name="StatusMessageBar" Classes="status" Classes.lit="{Binding StatusLit}" HorizontalAlignment="Left" VerticalAlignment="Center"
+                CornerRadius="3" Padding="6,1" IsVisible="{Binding StatusMessage, Converter={x:Static ObjectConverters.IsNotNull}}">
+          <DockPanel>
+            <PathIcon DockPanel.Dock="Left" Data="{StaticResource InfoIcon}" Width="12" Height="12" Margin="0,0,6,0" Foreground="{x:Static t:Palette.Accent}" />
+            <TextBlock Text="{Binding StatusMessage}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip.Tip="{Binding StatusMessage}" />
+          </DockPanel>
+        </Border>
+        <Button Grid.Column="1" x:Name="MessageHistoryButton" Background="Transparent" Padding="6,2" VerticalAlignment="Center"
+                IsEnabled="{Binding HasNoticeHistory}" ToolTip.Tip="Earlier messages in this tab">
+          <StackPanel Orientation="Horizontal" Spacing="5">
+            <PathIcon Data="{StaticResource HistoryIcon}" Width="12" Height="12" Foreground="{x:Static t:Palette.TextSecondary}" />
+            <TextBlock Text="History" FontSize="12" Foreground="{x:Static t:Palette.TextSecondary}" />
+          </StackPanel>
+          <Button.Flyout>
+            <Flyout Placement="TopEdgeAlignedRight">
+              <ScrollViewer Width="460" MaxHeight="360">
+                <ItemsControl ItemsSource="{Binding NoticeHistory}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:NoticeEntry">
+                      <Grid ColumnDefinitions="Auto,*,Auto" Margin="2,4">
+                        <PathIcon Data="{StaticResource InfoIcon}" Width="12" Height="12" Margin="0,2,8,0" VerticalAlignment="Top"
+                                  Foreground="{x:Static t:Palette.Accent}" IsVisible="{Binding !IsError}" />
+                        <PathIcon Data="{StaticResource AlertIcon}" Width="12" Height="12" Margin="0,2,8,0" VerticalAlignment="Top"
+                                  Foreground="{x:Static t:Palette.Error}" IsVisible="{Binding IsError}" />
+                        <SelectableTextBlock Grid.Column="1" Text="{Binding Message}" TextWrapping="Wrap" />
+                        <TextBlock Grid.Column="2" Text="{Binding Time}" Margin="12,0,0,0" VerticalAlignment="Top" Foreground="{x:Static t:Palette.TextMuted}" />
+                      </Grid>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </ScrollViewer>
+            </Flyout>
+          </Button.Flyout>
         </Button>
       </Grid>
-      </Panel>
     </Border>
 
     <Grid x:Name="MainGrid" ColumnDefinitions="240,4,*,4,380">
@@ -534,6 +564,45 @@
           </TextBlock.IsVisible>
         </TextBlock>
       </Panel>
+      <!-- Errors, and messages with something to do: cards over the bottom right of the graph that wait to be dealt with. -->
+      <ItemsControl Grid.Column="2" ZIndex="50" ItemsSource="{Binding Notices}" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                    Margin="12" MaxWidth="400">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <StackPanel Spacing="8" />
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:Notice">
+            <Border Classes="notice" Classes.error="{Binding IsError}" Background="{x:Static t:Palette.Dialog}" BorderBrush="{x:Static t:Palette.Border}"
+                    BorderThickness="1" CornerRadius="6" BoxShadow="0 6 20 0 #50000000">
+              <Grid ColumnDefinitions="3,Auto,*,Auto" RowDefinitions="Auto,Auto">
+                <Border Grid.RowSpan="2" Classes="stripe" CornerRadius="5,0,0,5" />
+                <PathIcon Grid.Column="1" Data="{StaticResource InfoIcon}" Width="14" Height="14" Margin="10,10,0,0" VerticalAlignment="Top"
+                          Foreground="{x:Static t:Palette.Accent}" IsVisible="{Binding !IsError}" />
+                <PathIcon Grid.Column="1" Data="{StaticResource AlertIcon}" Width="14" Height="14" Margin="10,10,0,0" VerticalAlignment="Top"
+                          Foreground="{x:Static t:Palette.Error}" IsVisible="{Binding IsError}" />
+                <SelectableTextBlock Grid.Column="2" Text="{Binding Message}" TextWrapping="Wrap" Margin="8,9,4,9" VerticalAlignment="Center" />
+                <Button Grid.Column="3" Command="{Binding CloseCommand}" Background="Transparent" Padding="6" Margin="0,4,4,0" VerticalAlignment="Top" ToolTip.Tip="Dismiss">
+                  <PathIcon Data="{StaticResource CloseIcon}" Width="10" Height="10" />
+                </Button>
+                <ItemsControl Grid.Row="1" Grid.Column="2" Grid.ColumnSpan="2" ItemsSource="{Binding Actions}" Margin="8,0,10,10" IsVisible="{Binding HasActions}">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <WrapPanel ItemSpacing="6" LineSpacing="6" />
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:MenuAction">
+                      <Button Content="{Binding Header}" Command="{Binding Command}" CommandParameter="{Binding Parameter}" IsEnabled="{Binding IsEnabled}" Padding="10,3" />
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </Grid>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
     </Grid>
   </DockPanel>
 </UserControl>

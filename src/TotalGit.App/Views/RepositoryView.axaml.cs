@@ -57,8 +57,8 @@ public partial class RepositoryView : UserControl
         Graph.PullRequestCardFor = r => _vm?.Sidebar.CardForBranch(r);
 
         Sidebar.NodeActivated += node => _vm?.OnSidebarNodeActivated(node);
-        BannerBar.PointerEntered += (_, _) => _vm?.PauseBannerTimer(true);
-        BannerBar.PointerExited += (_, _) => _vm?.PauseBannerTimer(false);
+        StatusMessageBar.PointerEntered += (_, _) => _vm?.PauseStatusTimer(true);
+        StatusMessageBar.PointerExited += (_, _) => _vm?.PauseStatusTimer(false);
         Sidebar.BehindDoubleTapped += node =>
         {
             if (node.Target is { Kind: RefKind.LocalBranch } t) _vm?.UpdateBranchFromRemoteCommand.Execute(t);

@@ -213,9 +213,6 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
     public partial string? LoadError { get; set; }
 
     [ObservableProperty]
-    public partial Banner? Banner { get; set; }
-
-    [ObservableProperty]
     public partial string? CommitCountText { get; set; }
 
     [ObservableProperty]
@@ -355,7 +352,7 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
                 Details = null;
                 Staging = null;
                 Diff = null;
-                Banner = null;
+                ClearMessages();
             }
 
             _otherWip.Clear();

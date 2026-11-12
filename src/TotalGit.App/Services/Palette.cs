@@ -81,7 +81,6 @@ public static class Palette
     public static readonly SolidColorBrush TextDim = Make("#6B727C", "#818B98");
     /// <summary>Text on a coloured banner.</summary>
     public static readonly SolidColorBrush BannerText = Make("#F0F2F5", "#1F2328");
-    public static readonly SolidColorBrush BannerCountdown = Make("#66FFFFFF", "#33000000");
     /// <summary>The pending badge's text.</summary>
     public static readonly SolidColorBrush PendingBadgeText = Make("#1C1F24", "#7D4E00");
     /// <summary>Under the selected Write / Preview tab.</summary>

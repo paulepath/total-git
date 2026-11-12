@@ -136,13 +136,16 @@ internal static class Screens
                 new PeoplePicturesDialog { DataContext = new PeoplePicturesViewModel(shell.Avatars) }.ShowDialog(main));
         }
 
-        // An error, with its Report and Copy details buttons.
-        if (Wanted("error-banner"))
+        // Messages: a confirmation in the status bar, and cards for a message with a button and an error (with its
+        // Report and Copy details buttons).
+        if (Wanted("notices"))
         {
+            tab.ShowBanner(new Banner("Force pushed feature/e4-2445-layered-local-api-settings.", false, []));
+            tab.ShowBanner(new Banner("Stashed 4 changes so you could switch to master.", false, [new MenuAction("Pop stash", tab.RefreshCommand)]));
             typeof(RepositoryViewModel).GetMethod("ShowError", BindingFlags.NonPublic | BindingFlags.Instance)!
-                .Invoke(tab, ["Commit 0000000 is not in the loaded history."]);
-            await Settle(() => false, 0.5);
-            await Save(main, "error-banner");
+                .Invoke(tab, ["Couldn't push to origin: it has 2 commits you don't have. Pull first, then push again."]);
+            await Settle(() => false, 0.8);
+            await Save(main, "notices");
             tab.DismissBannerCommand.Execute(null);
         }
 
