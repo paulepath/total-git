@@ -427,10 +427,12 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
     /// <summary>Reloads refs, worktrees, status and the loaded history (after commits, fetches, checkouts…).</summary>
     public async Task RefreshRefsAsync()
     {
-        if (_session is not { } session) return;
+        if (_session is null) return;
         await _refreshGate.WaitAsync();
         try
         {
+            // Read after the wait: a reload that held the gate has replaced (and closed) the session we'd have had.
+            if (_session is not { } session) return;
             var target = Math.Max(RepositorySession.PageSize, _commits.Count);
             var (state, worktrees, status, commits) = await Task.Run(async () =>
             {
@@ -453,6 +455,10 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
             await ReloadSelectionAsync();
             _ = RefreshOtherWorktreesAsync();
         }
+        catch (ObjectDisposedException)
+        {
+            // The tab closed or the repository reloaded while this ran: whatever replaced it is up to date.
+        }
         catch (Exception ex) when (ex is LibGit2Sharp.LibGit2SharpException or IOException)
         {
             ShowError(ex.Message);
@@ -466,10 +472,11 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
     /// <summary>Reloads only the working tree status (WIP row and staging panel).</summary>
     public async Task RefreshStatusAsync()
     {
-        if (_session is not { } session) return;
+        if (_session is null) return;
         await _refreshGate.WaitAsync();
         try
         {
+            if (_session is not { } session) return;
             var status = await Task.Run(session.GetStatus);
             if (session != _session) return;
             var wasDirty = _status.IsDirty;
@@ -483,9 +490,9 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
                 SelectedSha = Graph?.NewBranches.FirstOrDefault(kv => kv.Value.Branch.IsCurrent).Key;
             await ReloadDiffAsync();
         }
-        catch (Exception ex) when (ex is LibGit2Sharp.LibGit2SharpException or IOException)
+        catch (Exception ex) when (ex is LibGit2Sharp.LibGit2SharpException or IOException or ObjectDisposedException)
         {
-            // Transient (e.g. index locked mid-write); the next change event retries.
+            // Transient (e.g. index locked mid-write), or the repository reloaded; the next change event retries.
         }
         finally
         {
@@ -503,10 +510,15 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
             await _refreshGate.WaitAsync();
             try
             {
+                if (session != _session) return;
                 var page = await Task.Run(() => session.ReadHistory());
                 if (session != _session) return;
                 _commits.AddRange(page);
                 RebuildGraph();
+            }
+            catch (ObjectDisposedException)
+            {
+                // The repository reloaded while the page was read: the reload has its own history.
             }
             finally
             {
