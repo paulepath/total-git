@@ -153,10 +153,13 @@ public partial class SidebarNode : ObservableObject
         _ => null,
     };
     public bool HasChecks => ChecksBrush is not null;
-    public bool IsApproved => PullRequest?.ReviewDecision == ReviewDecision.Approved;
 
     /// <summary>Approved, checks passed and nothing in the way: a green tick on the row.</summary>
     public bool IsReadyToMerge { get; init; }
+
+    /// <summary>Approved, but something still holds the merge up: an outlined tick, with what's in the way.</summary>
+    public string? ApprovedTip { get; init; }
+    public bool IsApprovedNotReady => ApprovedTip is not null;
     public bool IsChangesRequested => PullRequest?.ReviewDecision == ReviewDecision.ChangesRequested;
 
     /// <summary>This pull request is waiting for your review.</summary>
@@ -460,6 +463,15 @@ public partial class SidebarViewModel : ObservableObject
     private Bitmap? AvatarOf(PrPerson person) =>
         person.Login is null && person.AvatarUrl is null ? null : _avatars?.TryGetUser(person.Login, person.AvatarUrl);
 
+    /// <summary>What an approved pull request is still waiting on, or null when it isn't approved or is ready to merge.</summary>
+    private static string? ApprovedTip(PullRequestSummary pr)
+    {
+        if (!PullRequestTriage.IsApproved(pr) || PullRequestTriage.IsReadyToMerge(pr)) return null;
+        var problems = PullRequestTriage.MergeProblems(pr);
+        return problems.Count > 0 ? "Approved, but not ready to merge: " + string.Join(", ", problems)
+            : "Approved, but GitHub isn't ready to merge it yet";
+    }
+
     private PrPerson Person(string name, string? login, string? url, string toolTip, ReviewState state = ReviewState.None)
     {
         var person = new PrPerson(name, login, url, toolTip, state);
@@ -708,6 +720,7 @@ public partial class SidebarViewModel : ObservableObject
                     Ticket = ticket,
                     RailBrush = PrRailColors.For(PullRequestTriage.Rail(p)),
                     IsReadyToMerge = PullRequestTriage.IsReadyToMerge(p),
+                    ApprovedTip = ApprovedTip(p),
                     Card = new PrCardViewModel(p, author, reviewers, ticket),
                     ActiveRunsTip = p.IsCrossRepository ? null : running.GetValueOrDefault(p.HeadRef),
                     ToolTip = $"#{p.Number} {p.Title}" + (PullRequestTriage.IsReadyToMerge(p) ? "\nReady to merge" : ""),

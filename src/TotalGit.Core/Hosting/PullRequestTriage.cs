@@ -44,15 +44,22 @@ public static partial class PullRequestTriage
     }
 
     /// <summary>
+    /// The reviews are in its favour: the host says approved or, where reviews aren't required, someone approved and
+    /// nobody is asking for changes. Says nothing about checks or conflicts (see <see cref="IsReadyToMerge"/>).
+    /// </summary>
+    public static bool IsApproved(PullRequestSummary pr) =>
+        pr.ReviewDecision == ReviewDecision.Approved
+        || pr.ReviewDecision == ReviewDecision.None && pr.Reviewers.Any(r => r.State == ReviewState.Approved)
+                                                    && !pr.Reviewers.Any(r => r.State == ReviewState.ChangesRequested);
+
+    /// <summary>
     /// Approved, its checks passed (or it has none), and the host has nothing against merging it: no conflicts, not
     /// behind its target, not held by the branch's rules. Without required reviews, an approval with no request for
     /// changes counts. A merge state the host hasn't worked out yet doesn't count against it.
     /// </summary>
     public static bool IsReadyToMerge(PullRequestSummary pr) =>
         !pr.IsDraft && pr.State == PullRequestState.Open
-        && (pr.ReviewDecision == ReviewDecision.Approved
-            || pr.ReviewDecision == ReviewDecision.None && pr.Reviewers.Any(r => r.State == ReviewState.Approved)
-                                                        && !pr.Reviewers.Any(r => r.State == ReviewState.ChangesRequested))
+        && IsApproved(pr)
         && pr.Checks is ChecksState.Success or ChecksState.None
         && pr.MergeState is MergeState.Clean or MergeState.Unknown;
 

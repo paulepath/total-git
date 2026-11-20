@@ -46,6 +46,16 @@ public sealed class PullRequestTriageTests
     }
 
     [Fact]
+    public void Approved_does_not_wait_for_checks_or_the_merge_state()
+    {
+        Assert.True(PullRequestTriage.IsApproved(Pr(checks: ChecksState.Pending, merge: MergeState.Behind)));
+        Assert.False(PullRequestTriage.IsApproved(Pr(review: ReviewDecision.ReviewRequired)));
+        Assert.False(PullRequestTriage.IsApproved(Pr(review: ReviewDecision.ChangesRequested)));
+        var bob = new Reviewer("bob", null, ReviewState.Approved, IsRequested: false);
+        Assert.True(PullRequestTriage.IsApproved(Pr(review: ReviewDecision.None, checks: ChecksState.Failure) with { Reviewers = [bob] }));
+    }
+
+    [Fact]
     public void Merge_problems_say_what_is_in_the_way()
     {
         Assert.Empty(PullRequestTriage.MergeProblems(Pr()));

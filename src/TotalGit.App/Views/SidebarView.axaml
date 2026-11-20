@@ -170,6 +170,10 @@
                       ToolTip.Tip="Ready to merge: approved, checks passed, and GitHub has nothing against merging it">
                 <PathIcon Data="{StaticResource CheckIcon}" Width="10" Height="10" Foreground="White" />
               </Border>
+              <Border Width="16" Height="16" CornerRadius="8" Background="Transparent" BorderBrush="{x:Static t:Palette.ReadyBadge}" BorderThickness="1.5"
+                      VerticalAlignment="Center" IsVisible="{Binding IsApprovedNotReady}" ToolTip.Tip="{Binding ApprovedTip}">
+                <PathIcon Data="{StaticResource CheckIcon}" Width="8" Height="8" Foreground="{x:Static t:Palette.ReadyBadge}" />
+              </Border>
               <Ellipse Width="7" Height="7" Fill="{x:Static t:Palette.Success}" VerticalAlignment="Center" IsVisible="{Binding ShowCurrentDot}"
                        ToolTip.Tip="Contains the current branch" />
               <PathIcon Data="{StaticResource RefreshIcon}" Width="10" Height="10" Foreground="{x:Static t:Palette.Pending}" VerticalAlignment="Center"
