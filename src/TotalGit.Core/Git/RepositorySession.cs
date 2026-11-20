@@ -604,8 +604,22 @@ public sealed class RepositorySession : IDisposable
         var from = branch.CreatedFrom is { } name && others.FirstOrDefault(r => r.Name == name) is { } named && Holds(named)
             ? named
             : others.Where(r => r.TargetSha == branch.TargetSha).OrderBy(r => r.Kind == RefKind.LocalBranch ? 0 : 1).FirstOrDefault()
-              ?? others.OrderBy(r => r.Kind == RefKind.LocalBranch ? 0 : 1).FirstOrDefault(Holds);
+              ?? (AnyHolds(tip, others) ? others.OrderBy(r => r.Kind == RefKind.LocalBranch ? 0 : 1).FirstOrDefault(Holds) : null);
         return from is null ? branch with { IsNew = false, CreatedFrom = null } : branch with { CreatedFrom = from.Name };
+    }
+
+    /// <summary>
+    /// Whether any of the branches has the commit, in one walk. Asking each branch in turn costs a merge base apiece,
+    /// which for a commit nothing holds (a branch checked out from a remote branch that has since gone) meant every
+    /// branch, on every refresh: seconds in a repository with a couple of hundred branches.
+    /// </summary>
+    private bool AnyHolds(Commit? tip, IReadOnlyList<RefInfo> branches)
+    {
+        if (tip is null) return false;
+        var tips = branches.Select(r => r.TargetSha).Distinct().Select(sha => _repo.Lookup<Commit>(sha)).OfType<Commit>().Cast<object>().ToList();
+        if (tips.Count == 0) return false;
+        // Nothing of the commit's history is left once the branches' history is taken away: one of them has it.
+        return !_repo.Commits.QueryBy(new CommitFilter { IncludeReachableFrom = tip, ExcludeReachableFrom = tips }).Any();
     }
 
     /// <summary>
