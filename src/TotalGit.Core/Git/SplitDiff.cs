@@ -16,9 +16,9 @@ public static class SplitDiff
 
         void Flush()
         {
-            var n = Math.Max(removed.Count, added.Count);
-            for (var i = 0; i < n; i++)
-                rows.Add(new SplitRow(i < removed.Count ? removed[i] : null, i < added.Count ? added[i] : null, false));
+            // Alike lines share a row; the rest fill rows from the top.
+            foreach (var (r, a) in ChangeAlignment.Rows(removed, added))
+                rows.Add(new SplitRow(r >= 0 ? removed[r] : null, a >= 0 ? added[a] : null, false));
             removed.Clear();
             added.Clear();
         }

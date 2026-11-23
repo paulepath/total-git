@@ -32,44 +32,19 @@ public static class IntraLineDiff
     private const int MaxTokens = 400;
     private const double MinSimilarity = 0.3;
 
-    public static IntraLineHighlights Compute(IReadOnlyList<DiffLine> lines)
+    public static IntraLineHighlights Compute(IReadOnlyList<DiffLine> lines) => Compute(SplitDiff.Build(lines));
+
+    /// <summary>The highlights for a diff whose side-by-side rows are already built: a removed line is compared with the added line on its row.</summary>
+    public static IntraLineHighlights Compute(IReadOnlyList<SplitRow> rows)
     {
         var result = new Dictionary<(bool, int), IReadOnlyList<TextRange>>();
-        var removed = new List<DiffLine>();
-        var added = new List<DiffLine>();
-
-        void Flush()
+        foreach (var row in rows)
         {
-            // Pair lines in order, as the side-by-side view shows them.
-            for (var i = 0; i < Math.Min(removed.Count, added.Count); i++)
-            {
-                if (Compare(removed[i].Text, added[i].Text) is not var (oldRanges, newRanges)) continue;
-                if (oldRanges.Count > 0) result[IntraLineHighlights.Key(removed[i])!.Value] = oldRanges;
-                if (newRanges.Count > 0) result[IntraLineHighlights.Key(added[i])!.Value] = newRanges;
-            }
-            removed.Clear();
-            added.Clear();
+            if (row.Left is not { Kind: DiffLineKind.Removed } removed || row.Right is not { Kind: DiffLineKind.Added } added) continue;
+            if (Compare(removed.Text, added.Text) is not var (oldRanges, newRanges)) continue;
+            if (oldRanges.Count > 0) result[IntraLineHighlights.Key(removed)!.Value] = oldRanges;
+            if (newRanges.Count > 0) result[IntraLineHighlights.Key(added)!.Value] = newRanges;
         }
-
-        foreach (var line in lines)
-        {
-            switch (line.Kind)
-            {
-                case DiffLineKind.Removed:
-                    if (added.Count > 0) Flush();
-                    removed.Add(line);
-                    break;
-                case DiffLineKind.Added:
-                    added.Add(line);
-                    break;
-                case DiffLineKind.NoNewline:
-                    break;
-                default:
-                    Flush();
-                    break;
-            }
-        }
-        Flush();
         return result.Count == 0 ? IntraLineHighlights.None : new IntraLineHighlights(result);
     }
 

@@ -197,7 +197,7 @@ public sealed partial class DiffView : Control
             }
             ResetLayout();
             UpdateMarks();
-            _highlights = diff is not null ? IntraLineDiff.Compute(diff.Lines) : IntraLineHighlights.None;
+            _highlights = diff is not null ? IntraLineDiff.Compute(_splitRows) : IntraLineHighlights.None;
             UpdateSyntax(change.GetOldValue<FileDiff?>(), diff);
             _longestLine = diff?.Lines.Select(l => l.Text.Length + l.Text.Count(c => c == '\t') * 3).DefaultIfEmpty(0).Max() ?? 0;
             var oldPath = change.GetOldValue<FileDiff?>()?.Path;
