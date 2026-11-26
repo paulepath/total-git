@@ -59,7 +59,8 @@
   fix up or drop commits).
 - **Built-in 3-pane merge tool** for conflicts, with continue / skip / abort for merges and rebases in progress.
 - **Add to .gitignore** from a right-click on a file or folder: edit the rule and see which files it will hide.
-- **Stashes** and **tags** (annotated or lightweight, push and delete).
+- **Stashes** and **tags** (annotated or lightweight, push and delete). **Clean up tags not on the remote**
+  lists the local tags the remote doesn't have, to delete the ones you pick.
 - **GitHub Actions** runs in the sidebar as they happen, with re-run and cancel.
 
 **Tabs and worktrees**

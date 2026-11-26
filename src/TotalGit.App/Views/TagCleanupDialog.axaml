@@ -1,0 +1,53 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:t="using:TotalGit.App.Services"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:TotalGit.App.ViewModels"
+        x:Class="TotalGit.App.Views.TagCleanupDialog"
+        x:DataType="vm:TagCleanupViewModel"
+        Title="Clean up tags"
+        Width="760" Height="560" MinWidth="520" MinHeight="360"
+        WindowStartupLocation="CenterOwner"
+        Background="{x:Static t:Palette.Dialog}">
+  <DockPanel Margin="20">
+    <StackPanel DockPanel.Dock="Top" Spacing="8" Margin="0,0,0,12">
+      <TextBlock Text="Clean up tags" FontSize="18" FontWeight="SemiBold" Foreground="{x:Static t:Palette.TextPrimary}" />
+      <TextBlock Foreground="{x:Static t:Palette.TextSecondary}" TextWrapping="Wrap" Text="{Binding Intro}" />
+    </StackPanel>
+
+    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,12,0,0">
+      <Button Content="Cancel" IsCancel="True" Click="OnCancel" />
+      <Button Content="{Binding DeleteText}" IsDefault="True" Classes="accent" IsEnabled="{Binding CanDelete}" Click="OnDelete" />
+    </StackPanel>
+
+    <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*" Margin="10,0,0,4">
+      <CheckBox IsChecked="{Binding AllChecked}" Content="Select all" Foreground="{x:Static t:Palette.TextPrimary}" />
+      <TextBlock Grid.Column="1" Text="{Binding SelectionText}" Foreground="{x:Static t:Palette.TextMuted}" HorizontalAlignment="Right" VerticalAlignment="Center" />
+    </Grid>
+
+    <Border Background="{x:Static t:Palette.Well}" CornerRadius="4">
+      <ListBox ItemsSource="{Binding Items}" Background="Transparent" SelectionMode="Single">
+        <ListBox.Styles>
+          <Style Selector="ListBoxItem">
+            <Setter Property="Padding" Value="10,6" />
+          </Style>
+        </ListBox.Styles>
+        <ListBox.ItemTemplate>
+          <DataTemplate x:DataType="vm:TagCleanupItem">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <CheckBox IsChecked="{Binding IsChecked}" VerticalAlignment="Top" Margin="0,-4,4,0" />
+              <StackPanel Grid.Column="1" Spacing="2">
+                <!-- One wrapping block, so a long name wraps instead of running under the date. -->
+                <TextBlock TextWrapping="Wrap">
+                  <Run Text="{Binding Name}" FontWeight="SemiBold" Foreground="{x:Static t:Palette.TextPrimary}" /><Run Text="  " /><Run Text="{Binding Where}" FontSize="12" Foreground="{x:Static t:Palette.TextMuted}" />
+                </TextBlock>
+                <TextBlock Text="{Binding Subject}" FontSize="12" Foreground="{x:Static t:Palette.TextSecondary}" TextTrimming="CharacterEllipsis" />
+                <TextBlock Text="{Binding LooseText}" IsVisible="{Binding IsLoose}" FontSize="12" Foreground="{x:Static t:Palette.Warning}" TextWrapping="Wrap" />
+              </StackPanel>
+              <TextBlock Grid.Column="2" Text="{Binding When}" FontSize="12" Foreground="{x:Static t:Palette.TextMuted}" VerticalAlignment="Top" Margin="12,0,0,0" />
+            </Grid>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+    </Border>
+  </DockPanel>
+</Window>

@@ -766,4 +766,70 @@ public partial class RepositoryViewModel
         await RunGitAsync($"Deleting {tag.Name} from {remote}…", () => GitActions.DeleteRemoteTagAsync(wt, remote, tag.Name),
             $"Deleted tag {tag.Name} from {remote}.");
     }
+
+    /// <summary>
+    /// Asks the remote which tags it has, then lets the user pick which local tags it doesn't have to delete.
+    /// Only local tags go; the remote isn't changed.
+    /// </summary>
+    [RelayCommand]
+    private async Task CleanUpTagsAsync()
+    {
+        if (_state is null || Dialogs is null) return;
+        var wt = _state.WorkingDirectory;
+        if (await GitActions.DefaultRemoteAsync(wt) is not { } remote)
+        {
+            ShowInfo("This repository has no remote to compare its tags with.");
+            return;
+        }
+
+        IReadOnlyList<TagSummary> tags;
+        IsBusy = true;
+        BusyText = $"Checking the tags on {remote}…";
+        try
+        {
+            tags = await GitActions.TagsNotOnRemoteAsync(wt, remote);
+        }
+        catch (Exception ex) when (ex is GitCommandException or IOException or System.ComponentModel.Win32Exception)
+        {
+            // Without the remote's list every tag would look local, so nothing is offered.
+            ShowError($"Couldn't read the tags on {remote}: {ex.Message.Trim()}");
+            return;
+        }
+        finally
+        {
+            IsBusy = false;
+            BusyText = null;
+        }
+        if (tags.Count == 0)
+        {
+            ShowInfo($"Every local tag is on {remote}. Nothing to clean up.");
+            return;
+        }
+
+        var dialog = new TagCleanupViewModel(tags, remote);
+        if (!await Dialogs.ShowTagCleanupAsync(dialog)) return;
+        var selected = dialog.Selected.Select(i => i.Name).ToList();
+
+        string? error;
+        IsBusy = true;
+        BusyText = $"Deleting {selected.Count} tag{(selected.Count == 1 ? "" : "s")}…";
+        try
+        {
+            error = await GitActions.DeleteTagsAsync(wt, selected);
+        }
+        finally
+        {
+            IsBusy = false;
+            BusyText = null;
+        }
+        await RefreshRefsAsync();
+
+        // What's still there is what couldn't be deleted.
+        var left = _state is { } now ? selected.Where(n => now.Refs.Any(r => r.Kind == RefKind.Tag && r.Name == n)).ToList() : [];
+        var deleted = selected.Count - left.Count;
+        var message = $"Deleted {deleted} local tag{(deleted == 1 ? "" : "s")}.";
+        if (left.Count == 0) ShowInfo(message);
+        else ShowError($"{message} Couldn't delete {string.Join(", ", left.Take(10))}{(left.Count > 10 ? $" and {left.Count - 10} more" : "")}"
+                       + (error is null ? "." : $": {error}"));
+    }
 }

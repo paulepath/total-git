@@ -1741,6 +1741,8 @@ public partial class RepositoryViewModel : ObservableObject, IDisposable
                     CleanUpBranchesCommand, Icon: MenuIcons.Delete),
             ];
         }
+        if (node.IsSection && node.Label == "TAGS")
+            return [new MenuAction("Clean up tags not on the remote…", CleanUpTagsCommand, Icon: MenuIcons.Delete)];
         if (node.Stash is { } stash)
         {
             return

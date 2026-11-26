@@ -1,4 +1,3 @@
-using System.Collections.ObjectModel;
 using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using TotalGit.App.Services;
@@ -11,7 +10,7 @@ namespace TotalGit.App.ViewModels;
 public sealed record BranchCleanupWorktree(string Path, string Name, bool IsMissing, int Changes);
 
 /// <summary>One local branch whose remote branch was deleted (or, with no upstream, whose pull request was merged).</summary>
-public sealed partial class BranchCleanupItem : ObservableObject
+public sealed partial class BranchCleanupItem : ObservableObject, ICleanupItem
 {
     public BranchCleanupItem(string name, string? upstream, string subject, DateTimeOffset? lastCommit, int unpushed, string? blockedReason,
         BranchCleanupWorktree? worktree = null, int? mergedPullRequest = null)
@@ -74,65 +73,8 @@ public sealed partial class BranchCleanupItem : ObservableObject
 }
 
 /// <summary>The "Clean up branches" dialog: pick which branches with a deleted remote branch to delete.</summary>
-public sealed partial class BranchCleanupViewModel : ObservableObject
+public sealed class BranchCleanupViewModel(IEnumerable<BranchCleanupItem> items, bool fetchFailed)
+    : CleanupListViewModel<BranchCleanupItem>(items, "branch", "branches")
 {
-    private bool _updatingAll;
-
-    public BranchCleanupViewModel(IEnumerable<BranchCleanupItem> items, bool fetchFailed)
-    {
-        Items = new ObservableCollection<BranchCleanupItem>(items);
-        FetchFailed = fetchFailed;
-        foreach (var item in Items) item.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName == nameof(BranchCleanupItem.IsChecked)) OnSelectionChanged();
-        };
-        OnSelectionChanged();
-    }
-
-    public ObservableCollection<BranchCleanupItem> Items { get; }
-
-    public bool FetchFailed { get; }
-
-    public IReadOnlyList<BranchCleanupItem> Selected => Items.Where(i => i.IsSelectable && i.IsChecked).ToList();
-
-    private int SelectableCount => Items.Count(i => i.IsSelectable);
-
-    public string SelectionText => $"{Selected.Count} of {SelectableCount} selected";
-
-    public bool CanDelete => Selected.Count > 0;
-
-    public string DeleteText => Selected.Count switch
-    {
-        0 => "Delete",
-        1 => "Delete 1 branch",
-        var n => $"Delete {n} branches",
-    };
-
-    /// <summary>Select all: checks or unchecks every deletable branch; shows "mixed" (null) for a partial selection.</summary>
-    [ObservableProperty]
-    public partial bool? AllChecked { get; set; }
-
-    partial void OnAllCheckedChanged(bool? oldValue, bool? newValue)
-    {
-        if (_updatingAll) return;
-        // Clicking a mixed box selects all (the checkbox itself would go to "none").
-        var check = oldValue is null || newValue != false;
-        _updatingAll = true;
-        foreach (var item in Items.Where(i => i.IsSelectable)) item.IsChecked = check;
-        _updatingAll = false;
-        OnSelectionChanged();
-    }
-
-    private void OnSelectionChanged()
-    {
-        if (_updatingAll) return;
-        var selected = Selected.Count;
-        _updatingAll = true;
-        AllChecked = selected == 0 ? false : selected == SelectableCount ? true : null;
-        _updatingAll = false;
-        OnPropertyChanged(nameof(Selected));
-        OnPropertyChanged(nameof(SelectionText));
-        OnPropertyChanged(nameof(CanDelete));
-        OnPropertyChanged(nameof(DeleteText));
-    }
+    public bool FetchFailed { get; } = fetchFailed;
 }

@@ -110,6 +110,7 @@ internal static class Screens
         await Dialog(main, "dialog-branchrules", () => Run(tab.EditBranchRulesCommand, null));
         await Dialog(main, "dialog-cleanup", () => Run(tab.CleanUpBranchesCommand));
         await Dialog(main, "dialog-leftovers", () => Run(tab.CleanUpWorktreesCommand));
+        await Dialog(main, "dialog-tagcleanup", () => Run(tab.CleanUpTagsCommand));
         await Dialog(main, "dialog-worktree", () => Run(tab.CreateWorktreeCommand, null));
         // Deleting a local branch that's on the remote too (one not checked out, when there is one).
         if (Git(o.Repo, "for-each-ref", "--format=%(refname:short) %(objectname) %(upstream:short) %(HEAD)", "refs/heads").Split('\n')

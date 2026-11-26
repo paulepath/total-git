@@ -33,6 +33,13 @@ public enum PushRejection
 /// <param name="UnpushedCount">Commits on the branch that no remote branch contains.</param>
 public sealed record BranchSummary(string Name, DateTimeOffset LastCommit, string Subject, int UnpushedCount);
 
+/// <summary>A local tag, for the tag clean-up list.</summary>
+/// <param name="Sha">The commit it tags (an annotated tag's own object is looked through).</param>
+/// <param name="Created">When an annotated tag was made, or its commit's date.</param>
+/// <param name="Subject">An annotated tag's message, or its commit's, first line only.</param>
+/// <param name="OnNoBranch">Its commit is on no local or remote branch: only tags keep it.</param>
+public sealed record TagSummary(string Name, string Sha, bool IsAnnotated, DateTimeOffset? Created, string Subject, bool OnNoBranch);
+
 /// <summary>Write operations, executed with the git CLI in a worktree folder.</summary>
 public static class GitActions
 {
@@ -281,6 +288,59 @@ public static class GitActions
             : GitCli.RunAsync(worktree, ["tag", "-a", name, sha, "--cleanup=strip", "-F", "-"], stdin: message);
 
     public static Task DeleteTagAsync(string worktree, string name) => GitCli.RunAsync(worktree, "tag", "-d", name);
+
+    /// <summary>
+    /// Deletes local tags, carrying on past one that won't go. Returns what git said about those it couldn't
+    /// delete, or null when all went.
+    /// </summary>
+    public static async Task<string?> DeleteTagsAsync(string worktree, IEnumerable<string> names)
+    {
+        var errors = new List<string>();
+        // In batches, so hundreds of tags stay within the command line's length limit.
+        foreach (var batch in names.Chunk(100))
+        {
+            var result = await GitCli.RunAsync(worktree, ["tag", "-d", "--", .. batch], throwOnError: false);
+            if (result.ExitCode != 0 && result.StdErr.Trim() is { Length: > 0 } error) errors.Add(error);
+        }
+        return errors.Count == 0 ? null : string.Join('\n', errors);
+    }
+
+    /// <summary>
+    /// The local tags <paramref name="remote"/> doesn't have, newest first: never pushed, or deleted there since
+    /// (git keeps no record of which). Asks the remote, so it throws when the remote can't be reached.
+    /// </summary>
+    public static async Task<IReadOnlyList<TagSummary>> TagsNotOnRemoteAsync(string worktree, string remote)
+    {
+        // --refs leaves out the "^{}" lines that repeat each annotated tag.
+        var listed = await GitCli.RunAsync(worktree, "ls-remote", "--tags", "--refs", remote);
+        var onRemote = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var line in listed.StdOut.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            const string prefix = "refs/tags/";
+            if (line.IndexOf(prefix, StringComparison.Ordinal) is var at and >= 0) onRemote.Add(line[(at + prefix.Length)..].TrimEnd('\r'));
+        }
+
+        var refs = await GitCli.RunAsync(worktree, "for-each-ref",
+            "--format=%(refname:strip=2)%09%(objecttype)%09%(creatordate:unix)%09%(if)%(*objectname)%(then)%(*objectname)%(else)%(objectname)%(end)%09%(contents:subject)",
+            "refs/tags");
+        var tags = new List<TagSummary>();
+        foreach (var line in refs.StdOut.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var parts = line.TrimEnd('\r').Split('\t', 5);
+            if (parts.Length < 4 || onRemote.Contains(parts[0])) continue;
+            DateTimeOffset? created = long.TryParse(parts[2], out var unix) ? DateTimeOffset.FromUnixTimeSeconds(unix) : null;
+            tags.Add(new TagSummary(parts[0], parts[3], parts[1] == "tag", created, parts.Length > 4 ? parts[4] : "", false));
+        }
+        if (tags.Count == 0) return tags;
+
+        // Commits only tags reach: deleting such a tag can leave its commit with nothing holding it.
+        var loose = await GitCli.RunAsync(worktree, ["rev-list", "--tags", "--not", "--branches", "--remotes"], throwOnError: false);
+        var onNoBranch = loose.ExitCode == 0
+            ? loose.StdOut.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToHashSet(StringComparer.Ordinal)
+            : [];
+        return [.. tags.Select(t => t with { OnNoBranch = onNoBranch.Contains(t.Sha) })
+            .OrderByDescending(t => t.Created ?? DateTimeOffset.MinValue).ThenByDescending(t => t.Name, StringComparer.OrdinalIgnoreCase)];
+    }
 
     /// <summary>Checks out a commit without a branch (detached HEAD). Uncommitted changes come along, as with a branch switch.</summary>
     public static Task CheckoutDetachedAsync(string worktree, string sha, LocalChanges changes = LocalChanges.Keep) =>

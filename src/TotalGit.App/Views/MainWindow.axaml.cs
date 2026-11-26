@@ -368,6 +368,9 @@ public partial class MainWindow : Window, IDialogService
     public Task<bool> ShowBranchCleanupAsync(BranchCleanupViewModel viewModel) =>
         Zoomed(new BranchCleanupDialog { DataContext = viewModel }).ShowDialog<bool>(this);
 
+    public Task<bool> ShowTagCleanupAsync(TagCleanupViewModel viewModel) =>
+        Zoomed(new TagCleanupDialog { DataContext = viewModel }).ShowDialog<bool>(this);
+
     public Task<bool> ShowRebaseCommitsAsync(RebaseCommitsViewModel viewModel) =>
         Zoomed(new RebaseCommitsDialog { DataContext = viewModel }).ShowDialog<bool>(this);
 

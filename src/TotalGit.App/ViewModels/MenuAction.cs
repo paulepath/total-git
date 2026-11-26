@@ -94,6 +94,7 @@ public interface IDialogService
     Task<bool> ShowInteractiveRebaseAsync(InteractiveRebaseViewModel viewModel);
     Task<bool> ShowAddIgnoreAsync(AddIgnoreViewModel viewModel);
     Task<bool> ShowBranchCleanupAsync(BranchCleanupViewModel viewModel);
+    Task<bool> ShowTagCleanupAsync(TagCleanupViewModel viewModel);
     Task<bool> ShowRebaseCommitsAsync(RebaseCommitsViewModel viewModel);
     Task<bool> ShowBranchRulesAsync(BranchRulesViewModel viewModel);
     Task<bool> ShowTabStyleAsync(TabStyleViewModel viewModel);
