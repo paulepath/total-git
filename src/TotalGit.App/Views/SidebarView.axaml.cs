@@ -21,6 +21,12 @@ public partial class SidebarView : UserControl
         Tree.AddHandler(DoubleTappedEvent, (_, e) =>
         {
             if (NodeFrom(e.Source) is not { } node) return;
+            // A ticket chip opens its ticket; a second click on it mustn't also check the branch out.
+            if (MarkerAt(e.Source, "ticket"))
+            {
+                e.Handled = true;
+                return;
+            }
             if (e.Handled)
             {
                 if (!node.IsBranch || node.Children.Count == 0) return;
@@ -80,7 +86,7 @@ public partial class SidebarView : UserControl
     /// <summary>The pin was clicked: true to keep the sidebar open, false to fold it away.</summary>
     public event Action<bool>? PinToggled;
 
-    /// <summary>A pull request's ticket was clicked (its key, e.g. "E4-2361").</summary>
+    /// <summary>The ticket on a pull request's, branch's or worktree's row was clicked (its key, e.g. "E4-2361").</summary>
     public event Action<string>? TicketClicked;
 
     private void OnTicketClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)

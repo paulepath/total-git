@@ -58,6 +58,12 @@ public interface IPullRequestProvider
     /// </summary>
     Task<IReadOnlyList<MergedPullRequest>> FindMergedAsync(IReadOnlyList<string> branches, CancellationToken ct = default);
 
+    /// <summary>
+    /// Whether pull request <paramref name="number"/> is open, merged or closed; null when the repository has no pull
+    /// request with that number.
+    /// </summary>
+    Task<PullRequestState?> GetStateAsync(int number, CancellationToken ct = default);
+
     /// <summary>One pull request with its reviewers, checks, line comment threads and conversation.</summary>
     Task<PullRequestDetails> GetPullRequestAsync(int number, CancellationToken ct = default);
 

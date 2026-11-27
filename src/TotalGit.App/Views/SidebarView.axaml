@@ -151,15 +151,26 @@
               </StackPanel>
               <Image Source="{Binding KindIcon}" IsVisible="{Binding HasKindIcon}" Width="14" Height="14" Margin="-1,0,5,0" />
             </Panel>
+            <!-- A worktree made to review a pull request: its number in a pill, coloured by where the pull request stands. -->
+            <Panel IsVisible="{Binding HasReview}" Height="16" Margin="0,0,6,0" VerticalAlignment="Center" Background="Transparent"
+                   ToolTip.Tip="{Binding ReviewTip}">
+              <Border CornerRadius="8" BorderThickness="1" BorderBrush="{Binding ReviewBrush}" Opacity="0.55" />
+              <StackPanel Orientation="Horizontal" Spacing="3" Margin="5,0,6,0" VerticalAlignment="Center">
+                <PathIcon Data="{StaticResource PullRequestIcon}" Width="10" Height="10" Foreground="{Binding ReviewBrush}" />
+                <TextBlock Text="{Binding ReviewNumber}" FontFamily="Cascadia Mono, Consolas, monospace" FontSize="10" VerticalAlignment="Center"
+                           Foreground="{Binding ReviewBrush}" />
+              </StackPanel>
+            </Panel>
+            <!-- A branch's or worktree's ticket, as on the pull request rows (which have theirs after the author, above). -->
+            <Button Classes="ticket" Content="{Binding Ticket}" IsVisible="{Binding ShowLeadTicket}" Click="OnTicketClick" VerticalAlignment="Center"
+                    ToolTip.Tip="{Binding Ticket, StringFormat='Open {0} in Jira'}" />
             </StackPanel>
 
             <!-- The label always wins; the markers and grey subtitle only appear when they fit whole
                  (they are in the tooltip too). -->
             <views:PriorityRowPanel Grid.Column="1" VerticalAlignment="Center" ClipToBounds="True">
               <TextBlock Classes="label" Classes.section="{Binding IsSection}" Classes.dimmed="{Binding IsDimmed}" Classes.group="{Binding IsPrGroup}"
-                         Classes.current="{Binding IsCurrent}" FontSize="12" TextTrimming="CharacterEllipsis">
-                <Run Text="{Binding LabelBefore}" /><Run Text="{Binding LabelKey}" Foreground="{x:Static t:Palette.Accent}" FontWeight="SemiBold" /><Run Text="{Binding LabelAfter}" />
-              </TextBlock>
+                         Classes.current="{Binding IsCurrent}" FontSize="12" TextTrimming="CharacterEllipsis" Text="{Binding Text}" />
               <PathIcon Data="{StaticResource CheckIcon}" Width="11" Height="11" Foreground="{x:Static t:Palette.Success}" IsVisible="{Binding IsCurrent}" />
               <PathIcon Data="{StaticResource WorktreeIcon}" Width="11" Height="11" Foreground="{x:Static t:Palette.TextMuted}" IsVisible="{Binding HasWorktree}" />
               <TextBlock Text="{Binding Subtitle}" FontSize="11" Foreground="{x:Static t:Palette.TextDim}" IsVisible="{Binding HasSubtitle}" />

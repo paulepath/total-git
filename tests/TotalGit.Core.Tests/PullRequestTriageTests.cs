@@ -110,4 +110,48 @@ public sealed class PullRequestTriageTests
         Assert.Null(PullRequestTriage.TicketFromBranch("hot-fix/sync-2", known));
         Assert.Null(PullRequestTriage.TicketFromBranch("feature/e4x-2361", known));
     }
+
+    [Theory]
+    [InlineData("e4-2361-docker", "docker")]
+    [InlineData("E4-2361_docker", "docker")]
+    [InlineData("team/e4-2361-docker", "team/docker")]
+    [InlineData("e4-2361", "")]
+    public void A_name_reads_without_its_ticket(string name, string rest)
+    {
+        var key = PullRequestTriage.KeyInBranch(name, new HashSet<string> { "E4" })!.Value;
+
+        Assert.Equal(rest, PullRequestTriage.WithoutKey(name, key.Start, key.Length));
+    }
+
+    [Theory]
+    [InlineData("pr-305-e4-2586-crm-over-time", 305, "e4-2586-crm-over-time")]
+    [InlineData("PR-64-tracker", 64, "tracker")]
+    [InlineData("pr_72_reviews", 72, "reviews")]
+    [InlineData("pr311", 311, "")]
+    public void A_worktree_named_for_a_pull_request_gives_its_number(string name, int number, string rest)
+    {
+        Assert.Equal((number, rest), PullRequestTriage.ReviewWorktree(name));
+    }
+
+    [Theory]
+    [InlineData("e4-2586-crm-over-time")]
+    [InlineData("prototype-2")]
+    [InlineData("pr-notes")]
+    [InlineData("pr-305.1-thing")]
+    [InlineData("spr-12-thing")]
+    public void Other_worktree_names_are_not_pull_requests(string name)
+    {
+        Assert.Null(PullRequestTriage.ReviewWorktree(name));
+    }
+
+    [Fact]
+    public void A_pull_request_worktree_gives_up_its_ticket_once_the_prefix_is_off()
+    {
+        var known = new HashSet<string> { "E4" };
+
+        // "pr-305" sits where the key would be, so the ticket is only found in what follows it.
+        Assert.Null(PullRequestTriage.KeyInBranch("pr-305-e4-2586-crm", known));
+        var (_, rest) = PullRequestTriage.ReviewWorktree("pr-305-e4-2586-crm")!.Value;
+        Assert.Equal("E4-2586", PullRequestTriage.KeyInBranch(rest, known)?.Key);
+    }
 }

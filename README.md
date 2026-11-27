@@ -30,12 +30,12 @@
   and colours, and which branches count as main lines.
 - **Owners of remote branches**: each remote branch shows the avatar of whoever wrote most of its own commits
   (or its pull request's author).
-- **Jira keys** in branch names are highlighted, and the right-click menu opens the ticket.
+- **Jira tickets** in branch and worktree names show as a chip that opens the ticket, as on pull requests.
 - **Delete branches from the remote**, with a warning when a pull request uses the branch.
 
 **Reviews**
-- **Pull requests** (GitHub) in the sidebar, grouped into Needs your review, Yours, Others and Drafts, with
-  checks, review state and the ticket each one is for.
+- **Pull requests** (GitHub) in the sidebar, grouped into Needs your review, Yours, Others and Drafts and listed
+  by number, with checks, review state and the ticket each one is for.
 - **A review window for each pull request**: the files in a tree, one file at a time, a box to tick on each
   (kept in sync with GitHub's Viewed), line comments and submitting your review.
 - **What changed since you reviewed**: files you'd ticked show as part-reviewed when they change, with the new
@@ -70,6 +70,8 @@
 - **Worktrees** under `.worktrees/<name>`, opened in a tab, in VS Code or in Visual Studio. **Clean up
   leftovers** deletes, in one go, the folders left behind when a removal was interrupted by a file in use.
 - **Clean up branches deleted on remote** removes a branch's worktree along with the branch.
+- **Pull request worktrees** (folders named `pr-<number>-…`) show the number in a pill: green while the pull
+  request is open, purple once it's merged.
 - **VS Code and Visual Studio extensions** list the worktrees and switch between them (see below).
 
 | Reviewing changes | Recent repositories and coloured tabs |

@@ -75,6 +75,27 @@ public sealed class GitHubPullRequestProvider : IPullRequestProvider
         return found;
     }
 
+    public async Task<PullRequestState?> GetStateAsync(int number, CancellationToken ct = default)
+    {
+        var variables = RepoVariables();
+        variables["n"] = number;
+        try
+        {
+            var pr = (await _http.GraphQLAsync(GitHubQueries.State, variables, ct)).Obj("repository")?.Obj("pullRequest");
+            return pr?.Str("state") switch
+            {
+                "OPEN" => PullRequestState.Open,
+                "MERGED" => PullRequestState.Merged,
+                "CLOSED" => PullRequestState.Closed,
+                _ => null,
+            };
+        }
+        catch (HostException ex) when (ex.Kind == HostErrorKind.NotFound)
+        {
+            return null; // no pull request has that number (an issue may)
+        }
+    }
+
     public async Task<PullRequestDetails> GetPullRequestAsync(int number, CancellationToken ct = default)
     {
         var variables = RepoVariables();

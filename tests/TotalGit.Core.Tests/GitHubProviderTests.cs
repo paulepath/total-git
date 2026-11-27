@@ -228,6 +228,31 @@ public class GitHubProviderTests
         Assert.Equal(3, http.Requests.Count);
     }
 
+    [Theory]
+    [InlineData("OPEN", PullRequestState.Open)]
+    [InlineData("MERGED", PullRequestState.Merged)]
+    [InlineData("CLOSED", PullRequestState.Closed)]
+    public async Task Says_whether_a_pull_request_is_open_merged_or_closed(string state, PullRequestState expected)
+    {
+        var (provider, http) = Create();
+        http.Route(GraphQL, () => FakeHttpHandler.Json("""{"data":{"repository":{"pullRequest":{"state":"STATE"}}}}""".Replace("STATE", state)));
+
+        Assert.Equal(expected, await provider.GetStateAsync(58));
+        Assert.Equal(58, Body(http).GetProperty("variables").GetProperty("n").GetInt32());
+    }
+
+    [Fact]
+    public async Task A_number_with_no_pull_request_has_no_state()
+    {
+        var (provider, http) = Create();
+        http.Route(GraphQL, () => FakeHttpHandler.Json("""
+            {"data":{"repository":{"pullRequest":null}},
+             "errors":[{"type":"NOT_FOUND","path":["repository","pullRequest"],"message":"Could not resolve to a PullRequest with the number of 9999."}]}
+            """));
+
+        Assert.Null(await provider.GetStateAsync(9999));
+    }
+
     private const string DetailsJson = """
         {"data":{"viewer":{"login":"me"},"repository":{"pullRequest":{
           "number":7,"title":"Widgets","isDraft":false,"state":"OPEN","baseRefName":"main","headRefName":"feature/x",

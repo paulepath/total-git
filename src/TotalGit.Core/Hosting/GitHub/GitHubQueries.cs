@@ -163,6 +163,11 @@ internal static class GitHubQueries
         }
         """;
 
+    /// <summary>Whether one pull request is open, merged or closed.</summary>
+    public const string State = """
+        query($owner: String!, $repo: String!, $n: Int!) { repository(owner: $owner, name: $repo) { pullRequest(number: $n) { state } } }
+        """;
+
     public const string PullRequestId = """
         query($owner: String!, $repo: String!, $n: Int!) { repository(owner: $owner, name: $repo) { pullRequest(number: $n) { id } } }
         """;

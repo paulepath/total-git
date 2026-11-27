@@ -17,7 +17,7 @@ namespace TotalGit.App.Screens;
 /// <summary>
 /// Saves screenshots of Total Git's windows, drawn off-screen, in one theme:
 /// <c>dotnet run -- --repo &lt;clone&gt; --out &lt;folder&gt; --theme Dark|Light [--pr &lt;number&gt;] [--commit &lt;rev&gt;]
-/// [--conflict &lt;file with conflict markers&gt;] [--only &lt;scene prefix&gt;]</c>.
+/// [--conflict &lt;file with conflict markers&gt;] [--only &lt;scene prefix&gt;] [--sidebar &lt;width&gt;]</c>.
 /// The repository should be a throwaway clone: opening it fetches. Settings live in a scratch data folder, so the
 /// real Total Git's are never read or written.
 /// </summary>
@@ -63,7 +63,7 @@ internal static class Program
     }
 }
 
-internal sealed record Options(string Repo, string Out, ThemeVariant Theme, int? Pr, string? Only, int Width, int Height, string? Commit, string? Conflict)
+internal sealed record Options(string Repo, string Out, ThemeVariant Theme, int? Pr, string? Only, int Width, int Height, string? Commit, string? Conflict, int? Sidebar)
 {
     public static Options Parse(string[] args)
     {
@@ -78,7 +78,8 @@ internal sealed record Options(string Repo, string Out, ThemeVariant Theme, int?
         return new Options(Path.GetFullPath(Arg("--repo")), Path.GetFullPath(Arg("--out")), theme, pr, only,
             int.Parse(Arg("--width", "1600")), int.Parse(Arg("--height", "1000")),
             Arg("--commit", "") is { Length: > 0 } c ? c : null,
-            Arg("--conflict", "") is { Length: > 0 } f ? Path.GetFullPath(f) : null);
+            Arg("--conflict", "") is { Length: > 0 } f ? Path.GetFullPath(f) : null,
+            Arg("--sidebar", "") is { Length: > 0 } s ? int.Parse(s) : null);
     }
 }
 

@@ -107,12 +107,12 @@ public partial class SidebarNode : ObservableObject
 
     public bool HasOwner => Owner is not null;
 
-    /// <summary>A ticket key in the branch's label ("E4-2361"), drawn highlighted; the label is split around it.</summary>
-    public (int Start, int Length, string Key)? LabelTicket { get; init; }
-    public string? TicketKey => LabelTicket?.Key;
-    public string LabelBefore => LabelTicket is { } t ? Label[..t.Start] : Label;
-    public string LabelKey => LabelTicket is { } t ? Label.Substring(t.Start, t.Length) : "";
-    public string LabelAfter => LabelTicket is { } t ? Label[(t.Start + t.Length)..] : "";
+    /// <summary>
+    /// What the row reads as when that isn't the whole <see cref="Label"/>: a branch or worktree's name without its
+    /// ticket (shown as a chip) and without a "pr-305-" prefix (shown as a number).
+    /// </summary>
+    public string? ShortLabel { get; init; }
+    public string Text => ShortLabel ?? Label;
 
     public bool IsWorkflowsSection { get; init; }
     public bool IsRun => Kind == SidebarNodeKind.WorkflowRun;
@@ -137,9 +137,20 @@ public partial class SidebarNode : ObservableObject
     /// <summary>"#45" on a pull request row.</summary>
     public string? NumberText { get; init; }
 
-    /// <summary>The issue-tracker ticket a pull request is for ("E4-2361"), shown as a link.</summary>
+    /// <summary>The issue-tracker ticket a pull request, branch or worktree is for ("E4-2361"), shown as a link.</summary>
     public string? Ticket { get; init; }
     public bool HasTicket => Ticket is not null;
+
+    /// <summary>On a pull request's row the ticket follows its author; on a branch's or worktree's, the row's icon.</summary>
+    public bool ShowLeadTicket => HasTicket && !HasRail;
+
+    /// <summary>The pull request a worktree was made to review ("305"), in a pill coloured by where it stands.</summary>
+    public string? ReviewNumber { get; init; }
+    public bool HasReview => ReviewNumber is not null;
+
+    /// <summary>Green while the pull request is open, purple once merged, red when closed, grey when not known.</summary>
+    public IBrush? ReviewBrush { get; init; }
+    public string? ReviewTip { get; init; }
 
     /// <summary>A heading inside PULL REQUESTS ("Needs your review").</summary>
     public bool IsPrGroup { get; init; }
@@ -511,6 +522,20 @@ public partial class SidebarViewModel : ObservableObject
         Rebuild();
     }
 
+    // Pull requests that worktrees were made to review and that aren't open any more.
+    private Dictionary<int, PullRequestState> _reviewStates = [];
+
+    /// <summary>
+    /// Which of the pull requests that worktrees were made to review ("pr-305-…") have been merged or closed, shown
+    /// on their rows; rebuilds only when that changes.
+    /// </summary>
+    public void SetReviewStates(IReadOnlyDictionary<int, PullRequestState> states)
+    {
+        if (states.Count == _reviewStates.Count && states.All(kv => _reviewStates.TryGetValue(kv.Key, out var s) && s == kv.Value)) return;
+        _reviewStates = new Dictionary<int, PullRequestState>(states);
+        Rebuild();
+    }
+
     private int ChangesIn(string worktreePath) =>
         _worktreeChanges.FirstOrDefault(kv => WorktreeService.SamePath(kv.Key, worktreePath)).Value;
 
@@ -540,6 +565,7 @@ public partial class SidebarViewModel : ObservableObject
         _worktrees = [];
         _leftovers = [];
         _worktreeChanges.Clear();
+        _reviewStates.Clear();
         Nodes.Clear();
     }
 
@@ -573,7 +599,8 @@ public partial class SidebarViewModel : ObservableObject
             localTree.Add(r.Name, leaf => new SidebarNode(SidebarNodeKind.LocalBranch, leaf)
             {
                 KindIcon = BranchIcons.ForBranch(r.Name),
-                LabelTicket = PullRequestTriage.KeyInBranch(leaf, projects),
+                Ticket = TicketIn(leaf, projects).Ticket,
+                ShortLabel = TicketIn(leaf, projects).Name,
                 Target = BranchTarget.From(r, wt),
                 IsCurrent = r.IsCurrent,
                 Ahead = r.Ahead > 0 ? $"{r.Ahead}↑" : null,
@@ -602,7 +629,8 @@ public partial class SidebarViewModel : ObservableObject
                 remoteTree.Add(r.ShortName, leaf => new SidebarNode(SidebarNodeKind.RemoteBranch, leaf)
                 {
                     KindIcon = BranchIcons.ForBranch(r.ShortName),
-                    LabelTicket = PullRequestTriage.KeyInBranch(leaf, projects),
+                    Ticket = TicketIn(leaf, projects).Ticket,
+                    ShortLabel = TicketIn(leaf, projects).Name,
                     Target = target,
                     ToolTip = r.Name,
                     ActiveRunsTip = running.GetValueOrDefault(r.ShortName),
@@ -640,29 +668,68 @@ public partial class SidebarViewModel : ObservableObject
             IsWorktreesSection = true,
             IsExpanded = !_collapsed.Contains("WORKTREES") || filter.Length > 0,
         };
+        // A worktree made to review a pull request ("pr-305-…") shows the number in a pill; those keep their places
+        // in the list, in number order.
+        var open = _pullRequests.Select(p => p.Number).ToHashSet();
+        var rows = new List<(int? Review, SidebarNode Node)>();
         foreach (var w in worktrees)
         {
             var isCurrent = WorktreeService.SamePath(w.Path, _currentWorktree ?? "");
             var branchRef = w.Branch is null ? null : _refs.FirstOrDefault(r => r.Kind == RefKind.LocalBranch && r.Name == w.Branch);
             var state = w.IsPrunable ? " (missing)" : w.IsLocked ? " (locked)" : "";
             var changes = ChangesIn(w.Path);
-            wtSection.Children.Add(new SidebarNode(SidebarNodeKind.Worktree, w.IsMain ? $"{w.Name} (main)" : w.Name)
+            var review = w.IsMain ? null : PullRequestTriage.ReviewWorktree(w.Name);
+            PullRequestState? reviewState = review is not { } pr ? null
+                : open.Contains(pr.Number) ? PullRequestState.Open
+                : _reviewStates.TryGetValue(pr.Number, out var finished) ? finished
+                : null;
+            var name = review?.Name ?? w.Name;
+            var (ticket, rest) = TicketIn(name, projects);
+            // The branch is only worth its space when it says more than the folder's name (and the row's icon) do.
+            var repeatsName = w.Branch is { } b && (b.Equals(name, StringComparison.OrdinalIgnoreCase) || b.EndsWith("/" + name, StringComparison.OrdinalIgnoreCase));
+            rows.Add((review?.Number, new SidebarNode(SidebarNodeKind.Worktree, w.IsMain ? $"{w.Name} (main)" : w.Name)
             {
+                ShortLabel = w.IsMain ? $"{rest ?? name} (main)" : rest ?? name,
+                ReviewNumber = review?.Number.ToString(),
+                ReviewBrush = reviewState switch
+                {
+                    PullRequestState.Open => Palette.Success,
+                    PullRequestState.Merged => Palette.Purple,
+                    PullRequestState.Closed => Palette.Failure,
+                    _ => Palette.TextMuted,
+                },
+                ReviewTip = review is null ? null : $"Pull request #{review.Value.Number}" + reviewState switch
+                {
+                    PullRequestState.Open => " is open",
+                    PullRequestState.Merged => " was merged",
+                    PullRequestState.Closed => " was closed without merging",
+                    _ => "",
+                },
+                Ticket = ticket,
                 ChangesText = changes > 0 ? changes.ToString() : null,
                 Worktree = w,
                 KindIcon = BranchIcons.ForBranch(w.Branch),
                 Target = branchRef is not null ? BranchTarget.From(branchRef, w) : w.HeadSha is not null ? new BranchTarget(RefKind.DetachedHead, "HEAD", w.HeadSha, Worktree: w) : null,
                 IsCurrent = isCurrent,
                 IsDimmed = w.IsPrunable || w.IsLocked,
-                Subtitle = w.Branch ?? (w.IsDetached ? "detached" : null),
+                Subtitle = reviewState == PullRequestState.Merged ? "merged"
+                    : reviewState == PullRequestState.Closed ? "closed"
+                    : repeatsName ? null
+                    : w.Branch ?? (w.IsDetached ? "detached" : null),
                 ToolTip = $"{w.Path}\n{(w.Branch is null ? "detached HEAD" : w.Branch)}{state}",
-            });
+            }));
         }
+        var byNumber = new Queue<SidebarNode>(rows.Where(r => r.Review is not null)
+            .OrderBy(r => r.Review).ThenBy(r => r.Node.Label, StringComparer.OrdinalIgnoreCase).Select(r => r.Node));
+        foreach (var (review, node) in rows) wtSection.Children.Add(review is null ? node : byNumber.Dequeue());
         wtSection.ContainsCurrent = wtSection.Children.Any(c => c.IsCurrent);
         foreach (var path in leftovers)
         {
-            wtSection.Children.Add(new SidebarNode(SidebarNodeKind.Worktree, Path.GetFileName(path))
+            var folder = Path.GetFileName(path);
+            wtSection.Children.Add(new SidebarNode(SidebarNodeKind.Worktree, folder)
             {
+                Ticket = TicketIn(folder, projects).Ticket,
+                ShortLabel = TicketIn(folder, projects).Name,
                 LeftoverPath = path,
                 IsDimmed = true,
                 Subtitle = "leftover",
@@ -677,7 +744,6 @@ public partial class SidebarViewModel : ObservableObject
             return;
         }
         var prs = _pullRequests.Where(p => Match($"#{p.Number} {p.Title}") || Match(p.Author.Login) || Match(p.Author.Name ?? "") || Match(p.HeadRef)).ToList();
-        // Within each group, those ready to merge first, then the most recently updated (the order GitHub lists them in).
         var prSection = new SidebarNode(SidebarNodeKind.Section, "PULL REQUESTS")
         {
             Count = prs.Count,
@@ -704,8 +770,8 @@ public partial class SidebarViewModel : ObservableObject
                 FolderKey = key,
                 IsExpanded = !_collapsed.Contains(key) || filter.Length > 0,
             };
-            // Ready to merge first; otherwise as GitHub lists them (stable sort).
-            foreach (var p in group.OrderByDescending(PullRequestTriage.IsReadyToMerge))
+            // Ready to merge first, then by number.
+            foreach (var p in group.OrderByDescending(PullRequestTriage.IsReadyToMerge).ThenBy(p => p.Number))
             {
                 var (ticket, title) = titled[p.Number];
                 ticket ??= PullRequestTriage.TicketFromBranch(p.HeadRef, projects);
@@ -781,6 +847,15 @@ public partial class SidebarViewModel : ObservableObject
         }
         Nodes.Add(section);
     }
+
+    /// <summary>
+    /// The ticket in a branch's or worktree's name ("E4-2361") and the name without it, for a row that shows the
+    /// ticket as a chip; nulls when it has none.
+    /// </summary>
+    private static (string? Ticket, string? Name) TicketIn(string name, IReadOnlySet<string> projects) =>
+        PullRequestTriage.KeyInBranch(name, projects) is { } key
+            ? (key.Key, PullRequestTriage.WithoutKey(name, key.Start, key.Length))
+            : (null, null);
 
     private SidebarNode Section(string name, int count) => new(SidebarNodeKind.Section, name)
     {

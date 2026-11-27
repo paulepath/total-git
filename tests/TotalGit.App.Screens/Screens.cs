@@ -35,6 +35,7 @@ internal static class Screens
 
         var avatars = new AvatarService(Path.Combine(AppSettings.DataDirectory, "avatars"));
         var settings = AppSettings.Load();
+        if (o.Sidebar is { } sidebarWidth) settings.SidebarWidth = sidebarWidth;
         var pullRequests = new GitHubProviderFactory(ChainedCredentialSource.Default());
         var shell = new ShellViewModel(avatars, settings, null, pullRequests, workflows: pullRequests);
         var main = new MainWindow { DataContext = shell, Width = o.Width, Height = o.Height };

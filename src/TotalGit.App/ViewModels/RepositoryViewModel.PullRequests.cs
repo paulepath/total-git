@@ -43,6 +43,7 @@ public partial class RepositoryViewModel
         _prHighlight = null;
         _mergedBranches.Clear();
         _mergedAsked.Clear();
+        _finishedReviews.Clear();
         CloseReviewWindows();
         if (_prProvider is null)
         {
@@ -72,6 +73,7 @@ public partial class RepositoryViewModel
             UpdatePullRequestHighlight();
             // The branch labels' pull request chips.
             if (_state is not null) RebuildGraph();
+            await FindFinishedReviewsAsync();
             await FindMergedBranchesAsync();
         }
         catch (HostException ex)
@@ -145,6 +147,42 @@ public partial class RepositoryViewModel
         var changed = found.Count != _mergedBranches.Count || found.Any(kv => !_mergedBranches.TryGetValue(kv.Key, out var m) || m != kv.Value);
         _mergedBranches = found;
         if (changed) await RefreshRefsAsync();
+    }
+
+    /// <summary>Pull requests that worktrees named "pr-305-…" were made to review and that have been merged or closed.</summary>
+    private readonly Dictionary<int, PullRequestState> _finishedReviews = [];
+
+    /// <summary>
+    /// Asks the host about the pull requests of review worktrees ("pr-305-…") that aren't in the open list, so their
+    /// rows can say merged or closed. Each is asked once: a merged or closed pull request rarely changes again.
+    /// </summary>
+    private async Task FindFinishedReviewsAsync()
+    {
+        if (_prProvider is not { } provider) return;
+        var open = _pullRequests.Select(p => p.Number).ToHashSet();
+        // One that was reopened is in the open list again.
+        var changed = false;
+        foreach (var reopened in _finishedReviews.Keys.Where(open.Contains).ToList()) changed |= _finishedReviews.Remove(reopened);
+        var ask = _worktrees.Where(w => !w.IsMain).Select(w => PullRequestTriage.ReviewWorktree(w.Name)?.Number).OfType<int>()
+            .Where(n => !open.Contains(n) && !_finishedReviews.ContainsKey(n)).Distinct().ToList();
+        foreach (var number in ask)
+        {
+            try
+            {
+                var state = await Task.Run(() => provider.GetStateAsync(number));
+                if (provider != _prProvider) return;
+                if (state is PullRequestState.Merged or PullRequestState.Closed)
+                {
+                    _finishedReviews[number] = state.Value;
+                    changed = true;
+                }
+            }
+            catch (HostException)
+            {
+                break; // the pull request list shows what went wrong; the rows stay as they are
+            }
+        }
+        if (changed) Sidebar.SetReviewStates(_finishedReviews);
     }
 
     /// <summary>

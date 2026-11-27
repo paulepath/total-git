@@ -135,6 +135,23 @@ public static partial class PullRequestTriage
         return null;
     }
 
+    /// <summary>
+    /// A branch or worktree name as it reads beside its ticket: without the key (found by <see cref="KeyInBranch"/>)
+    /// and the separator after it ("e4-2361-docker" → "docker"). Empty when the name is only the key.
+    /// </summary>
+    public static string WithoutKey(string name, int start, int length) =>
+        name[..start] + name[(start + length)..].TrimStart('-', '_');
+
+    /// <summary>
+    /// The pull request a worktree was made to review, from its folder name ("pr-305-e4-2586-crm" → 305 and
+    /// "e4-2586-crm"); null for any other name.
+    /// </summary>
+    public static (int Number, string Name)? ReviewWorktree(string name)
+    {
+        var m = ReviewName().Match(name);
+        return m.Success && int.TryParse(m.Groups["number"].Value, out var number) ? (number, m.Groups["rest"].Value) : null;
+    }
+
     /// <summary>The project part of a key ("E4" for "E4-2007").</summary>
     public static string Project(string key) => key[..key.IndexOf('-')];
 
@@ -146,4 +163,7 @@ public static partial class PullRequestTriage
 
     [GeneratedRegex(@"(?:^|/)(?<key>[A-Za-z][A-Za-z0-9]{0,9}-\d+)(?=$|[-_/])")]
     private static partial Regex BranchKey();
+
+    [GeneratedRegex(@"^pr[-_]?(?<number>\d{1,9})(?:[-_](?<rest>.*))?$", RegexOptions.IgnoreCase)]
+    private static partial Regex ReviewName();
 }
